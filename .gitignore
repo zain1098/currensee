@@ -1,0 +1,42 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+*.DS_Store
+*.atom/
+*.tmLanguage.cache
+
+# IntelliJ
+.idea/
+*.iml
+*.ipr
+
+# Flutter/Dart
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+
+# Android
+android/app/src/main/assets/flutter_assets/
+android/app/build/
+android/build/
+android/.gradle/
+android/gradle/
+android/local.properties
+
+# iOS
+ios/Pods/
+ios/Flutter/App.framework
+ios/Flutter/engine_version
+ios/.symlinks/
+
+# Windows
+windows/flutter/ephemeral/
+windows/flutter/generated_*.h
+windows/flutter/generated_*.cc
+windows/runner/Debug/
+windows/runner/Release/
+windows/runner/Profile/

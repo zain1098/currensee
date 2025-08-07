@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "455542611420",
+    "project_id": "currensee-f1718",
+    "storage_bucket": "currensee-f1718.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:455542611420:android:6e7efacbed4e8eeafa8319",
+        "android_client_info": {
+          "package_name": "Curren.See"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "455542611420-k6cigrm66fpd73m7f048ioov5atc33o5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "Curren.See",
+            "certificate_hash": "c9977410d0e4cb5e354ed0d618bdd1f0d66c2ed9"
+          }
+        },
+        {
+          "client_id": "455542611420-oor09omint210uorsentkh6mvv8te3sg.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD1IQ5oJKPTu1r06mjWhcukh7xvDa81rao"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "455542611420-oor09omint210uorsentkh6mvv8te3sg.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

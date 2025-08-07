@@ -1,0 +1,11 @@
+{
+    "flutterTools.displayGetxContextMenu": false,
+    "flutterTools.displayMobxContextMenu": false,
+    "flutterTools.displayRiverpodContextMenu": false,
+    "flutterTools.displayModularContextMenu": false,
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "Codegeex.Chat.LanguagePreference": "中文",
+    "Codegeex.Comment.LanguagePreference": "中文",
+    "Codegeex.GenerationPreference": "automatic",
+    "Codegeex.CommitMessage.LanguagePreference": "中文"
+}

@@ -1,0 +1,1542 @@
+import 'dart:async';
+import 'dart:math' as math;
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'main.dart'; // For CustomAppBar
+import 'news_page.dart';
+import 'trend_chart.dart';
+import 'rate_list_page.dart';
+import 'package:provider/provider.dart';
+import 'calculator_page.dart';
+import 'setting_page.dart';
+import 'multi_currency_page.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:lottie/lottie.dart';
+import 'support_help_screen.dart';
+
+class WorldClockPage extends StatefulWidget {
+  const WorldClockPage({super.key});
+
+  @override
+  _WorldClockPageState createState() => _WorldClockPageState();
+}
+
+class _WorldClockPageState extends State<WorldClockPage>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final List<ClockLocation> allLocations = [
+    ClockLocation(
+      timezone: 'America/New_York',
+      city: 'New York',
+      utcOffset: '-5',
+    ),
+    ClockLocation(timezone: 'Europe/London', city: 'London', utcOffset: '+0'),
+    ClockLocation(timezone: 'Europe/Paris', city: 'Paris', utcOffset: '+1'),
+    ClockLocation(
+      timezone: 'America/Los_Angeles',
+      city: 'Los Angeles',
+      utcOffset: '-8',
+    ),
+    ClockLocation(timezone: 'Asia/Tokyo', city: 'Tokyo', utcOffset: '+9'),
+    ClockLocation(timezone: 'Asia/Dubai', city: 'Dubai', utcOffset: '+4'),
+    ClockLocation(
+      timezone: 'Australia/Sydney',
+      city: 'Sydney',
+      utcOffset: '+10',
+    ),
+    ClockLocation(timezone: 'Asia/Shanghai', city: 'Shanghai', utcOffset: '+8'),
+    ClockLocation(timezone: 'Europe/Moscow', city: 'Moscow', utcOffset: '+3'),
+    ClockLocation(
+      timezone: 'America/Sao_Paulo',
+      city: 'Sao Paulo',
+      utcOffset: '-3',
+    ),
+    ClockLocation(timezone: 'Africa/Cairo', city: 'Cairo', utcOffset: '+2'),
+    ClockLocation(
+      timezone: 'Asia/Kolkata',
+      city: 'New Delhi',
+      utcOffset: '+5.5',
+    ),
+    ClockLocation(timezone: 'Asia/Karachi', city: 'Karachi', utcOffset: '+5'),
+    ClockLocation(timezone: 'Asia/Karachi', city: 'Islamabad', utcOffset: '+5'),
+    ClockLocation(timezone: 'Asia/Karachi', city: 'Lahore', utcOffset: '+5'),
+    // ... (add more as needed)
+  ];
+
+  List<ClockLocation> locations = [];
+  bool is24HourFormat = false;
+  bool showAnalog = false;
+  bool showDate = true;
+  bool showDayProgress = true;
+  bool showWeather = true;
+  Timer? _timer;
+  String _selectedTimezone = '';
+  final ScrollController _scrollController = ScrollController();
+  late AnimationController _listController;
+  late Animation<Offset> _listAnimation;
+  late Animation<double> _listScaleAnimation;
+  final TextEditingController _searchController = TextEditingController();
+
+  List<ClockLocation> _searchResults = [];
+  bool _showAddLocation = false;
+  late AnimationController _fabController;
+  late AnimationController _clockChangeController;
+  late Animation<double> _clockChangeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadPreferences();
+    _listController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _listAnimation = Tween<Offset>(
+      begin: const Offset(0, 1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _listController, curve: Curves.easeOut));
+    _listScaleAnimation = Tween<double>(
+      begin: 0.95,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _listController, curve: Curves.easeOut));
+    _fabController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _clockChangeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    )..value = 1.0;
+    _clockChangeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _clockChangeController, curve: Curves.easeInOut),
+    );
+    _updateAllTimes();
+    _startTimer();
+    _listController.forward();
+  }
+
+  @override
+  void didChangeMetrics() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _timer?.cancel();
+    _scrollController.dispose();
+    _listController.dispose();
+    _fabController.dispose();
+    _clockChangeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      is24HourFormat = prefs.getBool('24hour') ?? false;
+      showAnalog = prefs.getBool('analog') ?? false;
+      showDate = prefs.getBool('showDate') ?? true;
+      showDayProgress = prefs.getBool('showDayProgress') ?? true;
+      showWeather = prefs.getBool('showWeather') ?? true;
+      final savedLocations = prefs.getStringList('savedLocations') ?? [];
+      locations =
+          allLocations
+              .where((loc) => savedLocations.contains(loc.timezone))
+              .toList();
+      if (locations.isEmpty) {
+        locations = [allLocations[0]];
+        _selectedTimezone = allLocations[0].timezone;
+      } else {
+        _selectedTimezone = locations[0].timezone;
+      }
+    });
+  }
+
+  Future<void> _saveLocations() async {
+    final prefs = await SharedPreferences.getInstance();
+    prefs.setStringList(
+      'savedLocations',
+      locations.map((loc) => loc.timezone).toList(),
+    );
+  }
+
+  void _startTimer() {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        _updateAllTimes();
+      }
+    });
+  }
+
+  void _updateAllTimes() {
+    setState(() {
+      for (var location in locations) {
+        location.calculateLocalTime(is24HourFormat);
+      }
+    });
+  }
+
+  bool _isNightTime(DateTime time) {
+    final hour = time.hour;
+    return hour < 6 || hour >= 18;
+  }
+
+  void _selectLocation(ClockLocation location) {
+    _clockChangeController.reset();
+    setState(() {
+      _selectedTimezone = location.timezone;
+    });
+    _clockChangeController.forward();
+    final index = locations.indexWhere(
+      (loc) => loc.timezone == location.timezone,
+    );
+    if (index != -1) {
+      final screenWidth = MediaQuery.of(context).size.width;
+      final itemWidth = 100.0;
+      final offset = (index * itemWidth) - (screenWidth / 2) + (itemWidth / 2);
+      _scrollController.animateTo(
+        offset,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  void _searchLocations(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        _searchResults.clear();
+      } else {
+        _searchResults =
+            allLocations
+                .where(
+                  (loc) => loc.city.toLowerCase().contains(query.toLowerCase()),
+                )
+                .toList();
+      }
+    });
+  }
+
+  void _toggleAddLocation() {
+    setState(() {
+      _showAddLocation = !_showAddLocation;
+      if (_showAddLocation) {
+        _fabController.forward();
+      } else {
+        _fabController.reverse();
+      }
+    });
+  }
+
+  void _addLocation(ClockLocation location) {
+    if (!locations.any((loc) => loc.timezone == location.timezone)) {
+      setState(() {
+        locations.add(location);
+        _selectedTimezone = location.timezone;
+        _saveLocations();
+      });
+      _toggleAddLocation();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${location.city} is already added')),
+      );
+    }
+  }
+
+  void _removeLocation(ClockLocation location) {
+    if (locations.length > 1) {
+      showDialog(
+        context: context,
+        builder:
+            (context) => AlertDialog(
+              title: Text('Remove ${location.city}?'),
+              content: const Text(
+                'This location will be removed from your list',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      locations.remove(location);
+                      if (_selectedTimezone == location.timezone) {
+                        _selectedTimezone = locations.first.timezone;
+                      }
+                      _saveLocations();
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: const Text(
+                    'Remove',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ),
+              ],
+            ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('At least one location must remain')),
+      );
+    }
+  }
+
+  void _navigateAndClose(BuildContext context, Widget page) {
+    Navigator.pop(context); // Close drawer
+    Navigator.push(context, MaterialPageRoute(builder: (context) => page));
+  }
+
+  void _logout() async {
+    await FirebaseAuth.instance.signOut();
+    Navigator.of(context).pushNamedAndRemoveUntil('/signin', (route) => false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedLocation = locations.firstWhere(
+      (loc) => loc.timezone == _selectedTimezone,
+      orElse: () => locations.first,
+    );
+    final isNight = _isNightTime(selectedLocation.localTime ?? DateTime.now());
+    final mediaQuery = MediaQuery.of(context);
+    final bottomPadding = mediaQuery.viewInsets.bottom;
+    final isKeyboardVisible = bottomPadding > 0;
+
+    return Scaffold(
+      key: _scaffoldKey,
+      appBar: CustomAppBar(
+        title: 'World Clock',
+        onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
+      ),
+      drawer: Drawer(
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+            ),
+          ),
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              // Professional Drawer Header
+              Container(
+                height: 180,
+                padding: const EdgeInsets.all(20),
+                decoration: const BoxDecoration(
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(20),
+                    bottomRight: Radius.circular(20),
+                  ),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // App Icon with subtle animation
+                    Container(
+                      width: 70,
+                      height: 70,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withOpacity(0.2),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                          width: 2,
+                        ),
+                      ),
+                      child: Center(
+                        child: Lottie.asset(
+                          'assets/Menu Icon.json', // Your app icon animation
+                          width: 50,
+                          height: 50,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // App Name
+                    const Text(
+                      'CurrenSee Pro',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    // Version text with fade-in animation
+                    TweenAnimationBuilder(
+                      tween: Tween<double>(begin: 0, end: 1),
+                      duration: const Duration(milliseconds: 800),
+                      builder: (context, value, child) {
+                        return Opacity(
+                          opacity: value,
+                          child: const Text(
+                            'Version 2.0.0',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              // Menu Items
+              _buildDrawerItem(
+                context,
+                icon: Icons.currency_exchange,
+                title: 'Currency Converter',
+                onTap: () => _navigateAndClose(context, const MainScreen()),
+              ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.newspaper,
+                title: 'Market News',
+                onTap: () => _navigateAndClose(context, const NewsScreen()),
+              ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.calculate,
+                title: 'Multi-Currency',
+                onTap:
+                    () => _navigateAndClose(
+                      context,
+                      const MultiCurrencyConverter(),
+                    ),
+              ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.trending_up,
+                title: 'Trend Analysis',
+                onTap:
+                    () => _navigateAndClose(context, const CurrencyChartPage()),
+              ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.timer,
+                title: 'World Clock',
+                onTap: () => _navigateAndClose(context, const WorldClockPage()),
+              ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.list_alt,
+                title: 'Rate List',
+                onTap: () => _navigateAndClose(context, const RateListPage()),
+              ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.calculate_outlined,
+                title: 'Calculator',
+                onTap:
+                    () => _navigateAndClose(context, const CalculatorsScreen()),
+              ),
+              const SizedBox(height: 16),
+              const Divider(color: Colors.white24, height: 1),
+              const SizedBox(height: 16),
+              // Settings Section
+              _buildDrawerItem(
+                context,
+                icon: Icons.settings,
+                title: 'Settings',
+                onTap:
+                    () => _navigateAndClose(
+                      context,
+                      SettingsPage(
+                        onThemeChanged: (isDark) {
+                          Provider.of<AppSettings>(
+                            context,
+                            listen: false,
+                          ).setDarkMode(isDark);
+                        },
+                        onDecimalChanged: (decimalPlaces) {
+                          Provider.of<AppSettings>(
+                            context,
+                            listen: false,
+                          ).setDecimalPlaces(decimalPlaces);
+                        },
+                        onBaseCurrencyChanged: (currency) {
+                          Provider.of<AppSettings>(
+                            context,
+                            listen: false,
+                          ).setBaseCurrency(currency);
+                        },
+                        onAutoUpdateChanged: (autoUpdate) {
+                          Provider.of<AppSettings>(
+                            context,
+                            listen: false,
+                          ).setAutoUpdateRates(autoUpdate);
+                        },
+                        onBiometricChanged: (useBiometric) {
+                          Provider.of<AppSettings>(
+                            context,
+                            listen: false,
+                          ).setBiometricAuth(useBiometric);
+                        },
+                        onVibrationChanged: (vibration) {
+                          Provider.of<AppSettings>(
+                            context,
+                            listen: false,
+                          ).setHapticFeedback(vibration);
+                        },
+                        onCalculatorChanged: (showCalculator) {
+                          Provider.of<AppSettings>(
+                            context,
+                            listen: false,
+                          ).setShowCalculator(showCalculator);
+                        },
+                      ),
+                    ),
+              ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.help_center,
+                title: 'Help & Support',
+                onTap:
+                    () => _navigateAndClose(context, const SupportHelpScreen()),
+              ),
+              const SizedBox(height: 16),
+              const Divider(color: Colors.white24, height: 1),
+              const SizedBox(height: 16),
+              _buildDrawerItem(
+                context,
+                icon: Icons.logout,
+                title: 'Logout',
+                onTap: _logout,
+              ),
+            ],
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 8.0,
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Search cities...',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () {
+                          _searchController.clear();
+                          _searchResults.clear();
+                          setState(() {});
+                        },
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                      filled: true,
+                      fillColor: Theme.of(context).cardColor,
+                    ),
+                    onChanged: _searchLocations,
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.only(
+                      bottom: isKeyboardVisible ? 0 : 180, // Increased padding to prevent overflow
+                    ),
+                    child: Center(
+                      child: ScaleTransition(
+                        scale: _clockChangeAnimation,
+                        child: FadeTransition(
+                          opacity: _clockChangeAnimation,
+                          child: _ClockCard(
+                            location: selectedLocation,
+                            isNight: isNight,
+                            showAnalog: showAnalog,
+                            showDate: showDate,
+                            showDayProgress: showDayProgress,
+                            showWeather: showWeather,
+                            isMainClock: true,
+                            onSettingsPressed: _showSettingsDialog,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (!isKeyboardVisible)
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  height: 180, // Increased height to prevent overflow
+                  padding: const EdgeInsets.only(
+                    top: 12,
+                    bottom: 20,
+                  ), // Increased bottom padding
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).scaffoldBackgroundColor,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(24),
+                      topRight: Radius.circular(24),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 15,
+                        offset: const Offset(0, -5),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'My Locations',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color:
+                                    Theme.of(
+                                      context,
+                                    ).textTheme.bodyLarge?.color,
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: _toggleAddLocation,
+                              child: Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Theme.of(context).colorScheme.primary,
+                                      Theme.of(context).colorScheme.secondary,
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary.withOpacity(0.18),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.add,
+                                  color: Colors.white,
+                                  size: 28,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 100, // Increased height for better spacing
+                        child: ListView.separated(
+                          controller: _scrollController,
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: locations.length,
+                          separatorBuilder:
+                              (context, i) => const SizedBox(width: 16),
+                          itemBuilder: (context, index) {
+                            final location = locations[index];
+                            final isSelected =
+                                _selectedTimezone == location.timezone;
+                            return GestureDetector(
+                              onTap: () => _selectLocation(location),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
+                                width:
+                                    isSelected
+                                        ? 85
+                                        : 75, // Reduced size slightly
+                                height:
+                                    isSelected
+                                        ? 85
+                                        : 75, // Reduced size slightly
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient:
+                                      isSelected
+                                          ? LinearGradient(
+                                            colors: [
+                                              Theme.of(
+                                                context,
+                                              ).colorScheme.primary,
+                                              Theme.of(
+                                                context,
+                                              ).colorScheme.secondary,
+                                            ],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          )
+                                          : LinearGradient(
+                                            colors: [
+                                              Theme.of(context).cardColor,
+                                              Theme.of(context).cardColor,
+                                            ],
+                                          ),
+                                  boxShadow:
+                                      isSelected
+                                          ? [
+                                            BoxShadow(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .primary
+                                                  .withOpacity(0.25),
+                                              blurRadius: 12,
+                                              offset: const Offset(0, 3),
+                                            ),
+                                          ]
+                                          : null,
+                                  border: Border.all(
+                                    color:
+                                        isSelected
+                                            ? Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                                .withOpacity(0.8)
+                                            : Theme.of(
+                                              context,
+                                            ).dividerColor.withOpacity(0.2),
+                                    width: isSelected ? 2.5 : 1.0,
+                                  ),
+                                ),
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Center(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            location.flag,
+                                            style: TextStyle(
+                                              fontSize:
+                                                  isSelected
+                                                      ? 32
+                                                      : 28, // Reduced font sizes
+                                              shadows:
+                                                  isSelected
+                                                      ? [
+                                                        Shadow(
+                                                          color: Colors.black
+                                                              .withOpacity(0.2),
+                                                          blurRadius: 2,
+                                                          offset: const Offset(
+                                                            0,
+                                                            1,
+                                                          ),
+                                                        ),
+                                                      ]
+                                                      : null,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            location.city,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize:
+                                                  isSelected
+                                                      ? 12
+                                                      : 10, // Reduced font sizes
+                                              color:
+                                                  isSelected
+                                                      ? Colors.white
+                                                      : Theme.of(context)
+                                                          .textTheme
+                                                          .bodyLarge
+                                                          ?.color,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          Text(
+                                            'UTC${location.utcOffset}',
+                                            style: TextStyle(
+                                              fontSize:
+                                                  isSelected
+                                                      ? 10
+                                                      : 8, // Reduced font sizes
+                                              color:
+                                                  isSelected
+                                                      ? Colors.white
+                                                          .withOpacity(0.9)
+                                                      : Theme.of(context)
+                                                          .textTheme
+                                                          .bodySmall
+                                                          ?.color,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (isSelected)
+                                      Positioned(
+                                        top: -6, // Reduced top position
+                                        right: -6, // Reduced right position
+                                        child: GestureDetector(
+                                          onTap:
+                                              () => _removeLocation(location),
+                                          child: Container(
+                                            width: 24, // Reduced size
+                                            height: 24, // Reduced size
+                                            decoration: BoxDecoration(
+                                              color: Colors.redAccent,
+                                              shape: BoxShape.circle,
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.redAccent
+                                                      .withOpacity(0.25),
+                                                  blurRadius: 6,
+                                                  offset: const Offset(0, 2),
+                                                ),
+                                              ],
+                                            ),
+                                            child: const Icon(
+                                              Icons.close,
+                                              size: 14, // Reduced icon size
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            if (_searchController.text.isNotEmpty && _searchResults.isNotEmpty)
+              Positioned(
+                top: 80,
+                left: 16,
+                right: 16,
+                child: Material(
+                  elevation: 4,
+                  borderRadius: BorderRadius.circular(12),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    constraints: const BoxConstraints(maxHeight: 300),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).cardColor,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: ListView.builder(
+                      padding: EdgeInsets.zero,
+                      shrinkWrap: true,
+                      itemCount: _searchResults.length,
+                      itemBuilder: (context, index) {
+                        final location = _searchResults[index];
+                        return _SearchResultItem(
+                          location: location,
+                          isAdded: locations.contains(location),
+                          onTap: () {
+                            if (!locations.contains(location)) {
+                              _addLocation(location);
+                            }
+                            _searchController.clear();
+                            _searchResults.clear();
+                            setState(() {});
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            if (_showAddLocation)
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: _toggleAddLocation,
+                  child: Container(
+                    color: Colors.black54,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Material(
+                          elevation: 8,
+                          borderRadius: BorderRadius.circular(16),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            constraints: BoxConstraints(
+                              maxHeight:
+                                  MediaQuery.of(context).size.height * 0.7,
+                            ),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withOpacity(0.1),
+                                  Theme.of(context).cardColor,
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Add Location',
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                                const SizedBox(height: 10),
+                                TextField(
+                                  autofocus: true,
+                                  decoration: InputDecoration(
+                                    hintText: 'Search cities...',
+                                    prefixIcon: const Icon(Icons.search),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8.0),
+                                    ),
+                                    filled: true,
+                                    fillColor:
+                                        Theme.of(
+                                          context,
+                                        ).scaffoldBackgroundColor,
+                                  ),
+                                  onChanged: _searchLocations,
+                                ),
+                                const SizedBox(height: 16),
+                                Expanded(
+                                  child:
+                                      _searchResults.isNotEmpty
+                                          ? ListView.builder(
+                                            itemCount: _searchResults.length,
+                                            itemBuilder: (context, index) {
+                                              final location =
+                                                  _searchResults[index];
+                                              return _SearchResultItem(
+                                                location: location,
+                                                isAdded: locations.contains(
+                                                  location,
+                                                ),
+                                                onTap:
+                                                    () =>
+                                                        _addLocation(location),
+                                              );
+                                            },
+                                          )
+                                          : ListView.builder(
+                                            itemCount: allLocations.length,
+                                            itemBuilder: (context, index) {
+                                              final location =
+                                                  allLocations[index];
+                                              return _SearchResultItem(
+                                                location: location,
+                                                isAdded: locations.contains(
+                                                  location,
+                                                ),
+                                                onTap:
+                                                    () =>
+                                                        _addLocation(location),
+                                              );
+                                            },
+                                          ),
+                                ),
+                                TextButton(
+                                  onPressed: _toggleAddLocation,
+                                  child: const Text('Close'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+      floatingActionButton: ScaleTransition(
+        scale: _fabController,
+        child: FloatingActionButton(
+          onPressed: _toggleAddLocation,
+          backgroundColor: Theme.of(context).colorScheme.secondary,
+          child: const Icon(Icons.add),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showSettingsDialog() async {
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Clock Settings'),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                SwitchListTile(
+                  title: const Text('24-hour format'),
+                  value: is24HourFormat,
+                  onChanged: (value) async {
+                    setState(() => is24HourFormat = value);
+                    (await SharedPreferences.getInstance()).setBool(
+                      '24hour',
+                      value,
+                    );
+                    _updateAllTimes();
+                    Navigator.of(context).pop();
+                  },
+                ),
+                SwitchListTile(
+                  title: const Text('Analog clocks'),
+                  value: showAnalog,
+                  onChanged: (value) async {
+                    setState(() => showAnalog = value);
+                    (await SharedPreferences.getInstance()).setBool(
+                      'analog',
+                      value,
+                    );
+                    Navigator.of(context).pop();
+                  },
+                ),
+                SwitchListTile(
+                  title: const Text('Show date'),
+                  value: showDate,
+                  onChanged: (value) async {
+                    setState(() => showDate = value);
+                    (await SharedPreferences.getInstance()).setBool(
+                      'showDate',
+                      value,
+                    );
+                    Navigator.of(context).pop();
+                  },
+                ),
+                SwitchListTile(
+                  title: const Text('Day progress'),
+                  value: showDayProgress,
+                  onChanged: (value) async {
+                    setState(() => showDayProgress = value);
+                    (await SharedPreferences.getInstance()).setBool(
+                      'showDayProgress',
+                      value,
+                    );
+                    Navigator.of(context).pop();
+                  },
+                ),
+                SwitchListTile(
+                  title: const Text('Weather info'),
+                  value: showWeather,
+                  onChanged: (value) async {
+                    setState(() => showWeather = value);
+                    (await SharedPreferences.getInstance()).setBool(
+                      'showWeather',
+                      value,
+                    );
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Close'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class ClockLocation {
+  final String timezone;
+  final String city;
+  final String utcOffset;
+  String? time;
+  String? date;
+  DateTime? localTime;
+  String get flag => _getFlagForTimezone(timezone);
+
+  ClockLocation({
+    required this.timezone,
+    required this.city,
+    required this.utcOffset,
+    this.time,
+    this.date,
+    this.localTime,
+  });
+
+  void calculateLocalTime(bool is24HourFormat) {
+    try {
+      localTime = DateTime.now().toUtc().add(_getTimeZoneOffset());
+      time = (is24HourFormat ? DateFormat.Hms() : DateFormat.jms()).format(
+        localTime!,
+      );
+      date = DateFormat('EEE, MMM d').format(localTime!);
+    } catch (e) {
+      time = '--:--';
+      date = 'Error';
+      localTime = null;
+    }
+  }
+
+  Duration _getTimeZoneOffset() {
+    final hours = double.parse(utcOffset);
+    final minutes = (hours - hours.truncate()) * 60;
+    return Duration(hours: hours.toInt(), minutes: minutes.toInt());
+  }
+
+  String _getFlagForTimezone(String timezone) {
+    final flagMap = {
+      'Europe/London': '🇬🇧',
+      'Europe/Paris': '🇫🇷',
+      'America/New_York': '🇺🇸',
+      'America/Los_Angeles': '🇺🇸',
+      'Asia/Tokyo': '🇯🇵',
+      'Asia/Dubai': '🇦🇪',
+      'Australia/Sydney': '🇦🇺',
+      'Asia/Shanghai': '🇨🇳',
+      'Europe/Moscow': '🇷🇺',
+      'America/Sao_Paulo': '🇧🇷',
+      'Africa/Cairo': '🇪🇬',
+      'Asia/Kolkata': '🇮🇳',
+      'Asia/Karachi': '🇵🇰',
+      // ... (add more as needed)
+    };
+    return flagMap[timezone] ?? '🌐';
+  }
+}
+
+class _ClockCard extends StatelessWidget {
+  final ClockLocation location;
+  final bool isNight;
+  final bool showAnalog;
+  final bool showDate;
+  final bool showDayProgress;
+  final bool showWeather;
+  final bool isMainClock;
+  final VoidCallback onSettingsPressed;
+
+  const _ClockCard({
+    required this.location,
+    required this.isNight,
+    required this.showAnalog,
+    required this.showDate,
+    required this.showDayProgress,
+    required this.showWeather,
+    this.isMainClock = false,
+    required this.onSettingsPressed,
+  });
+
+  double _calculateDayProgress() {
+    if (location.localTime == null) return 0.0;
+    return (location.localTime!.hour * 60 + location.localTime!.minute) /
+        (24 * 60);
+  }
+
+  String _getWeatherIcon() {
+    final hour = location.localTime?.hour ?? 12;
+    if (hour >= 6 && hour < 18) {
+      return '☀️';
+    } else {
+      return '🌙';
+    }
+  }
+
+  String _getTemperature() {
+    double baseTemp = isNight ? 18.0 : 25.0;
+    if (location.timezone.contains('Asia')) {
+      baseTemp += 5;
+    } else if (location.timezone.contains('Europe')) {
+      baseTemp -= 3;
+    } else if (location.timezone.contains('Australia')) {
+      baseTemp += 7;
+    }
+    final variation = math.Random().nextInt(5);
+    return '${(baseTemp + variation).toStringAsFixed(1)}°C';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = _calculateDayProgress();
+    final cardColor = isNight ? Colors.grey[800]! : Theme.of(context).cardColor;
+    final textColor =
+        isNight ? Colors.white : Theme.of(context).textTheme.bodyLarge!.color!;
+    final secondaryTextColor = isNight ? Colors.grey[300]! : Colors.grey[600]!;
+
+    return Card(
+      elevation: isMainClock ? 8 : 0,
+      color: cardColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(isMainClock ? 24 : 16),
+      ),
+      margin: EdgeInsets.all(isMainClock ? 16 : 8),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(isMainClock ? 16 : 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      location.city,
+                      style: TextStyle(
+                        fontSize: isMainClock ? 20 : 18,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'UTC${location.utcOffset}',
+                      style: TextStyle(
+                        fontSize: isMainClock ? 14 : 12,
+                        color: secondaryTextColor,
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Text(
+                      location.flag,
+                      style: TextStyle(fontSize: isMainClock ? 32 : 28),
+                    ),
+                    if (isMainClock)
+                      IconButton(
+                        icon: Icon(Icons.settings, size: 20, color: textColor),
+                        onPressed: onSettingsPressed,
+                      ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (showAnalog)
+              SizedBox(
+                height: isMainClock ? 120 : 80,
+                child: Center(
+                  child: AnalogClockWidget(
+                    time: location.localTime ?? DateTime.now(),
+                    size: isMainClock ? 120 : 80,
+                  ),
+                ),
+              ),
+            if (!showAnalog)
+              Center(
+                child: Text(
+                  location.time ?? '--:--',
+                  style: TextStyle(
+                    fontSize: isMainClock ? 40 : 32,
+                    fontWeight: FontWeight.w300,
+                    color: textColor,
+                  ),
+                ),
+              ),
+            if (showDate && location.date != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Center(
+                  child: Text(
+                    location.date!,
+                    style: TextStyle(
+                      fontSize: isMainClock ? 14 : 12,
+                      color: secondaryTextColor,
+                    ),
+                  ),
+                ),
+              ),
+            if (showWeather)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _getWeatherIcon(),
+                        style: const TextStyle(fontSize: 20),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _getTemperature(),
+                        style: TextStyle(
+                          fontSize: isMainClock ? 16 : 14,
+                          color: secondaryTextColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            if (showDayProgress) ...[
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 4,
+                  backgroundColor:
+                      isNight ? Colors.grey[700]! : Colors.grey[200]!,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    _getDayProgressColor(progress),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Sunrise 6:30',
+                    style: TextStyle(
+                      fontSize: isMainClock ? 12 : 10,
+                      color: secondaryTextColor,
+                    ),
+                  ),
+                  Text(
+                    'Sunset 18:45',
+                    style: TextStyle(
+                      fontSize: isMainClock ? 12 : 10,
+                      color: secondaryTextColor,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _getDayProgressColor(double progress) {
+    if (isNight) {
+      if (progress < 0.25) return Colors.blueGrey[400]!;
+      if (progress < 0.5) return Colors.blueGrey[300]!;
+      if (progress < 0.75) return Colors.blueGrey[200]!;
+      return Colors.blueGrey[100]!;
+    } else {
+      if (progress < 0.25) return Colors.blue[400]!;
+      if (progress < 0.5) return Colors.lightBlue[300]!;
+      if (progress < 0.75) return Colors.orange[300]!;
+      return Colors.deepPurple[300]!;
+    }
+  }
+}
+
+class AnalogClockWidget extends StatelessWidget {
+  final DateTime time;
+  final double size;
+
+  const AnalogClockWidget({super.key, required this.time, this.size = 80});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(painter: _AnalogClockPainter(time: time)),
+    );
+  }
+}
+
+class _AnalogClockPainter extends CustomPainter {
+  final DateTime time;
+
+  _AnalogClockPainter({required this.time});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+    canvas.drawCircle(center, radius, Paint()..color = Colors.white);
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..color = Colors.grey
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
+    for (var i = 0; i < 12; i++) {
+      final angle = i * math.pi / 6 - math.pi / 2;
+      final markerLength = i % 3 == 0 ? 10.0 : 5.0;
+      final markerStart = Offset(
+        center.dx + (radius - 10) * math.cos(angle),
+        center.dy + (radius - 10) * math.sin(angle),
+      );
+      final markerEnd = Offset(
+        center.dx + (radius - markerLength) * math.cos(angle),
+        center.dy + (radius - markerLength) * math.sin(angle),
+      );
+      canvas.drawLine(
+        markerStart,
+        markerEnd,
+        Paint()
+          ..color = Colors.black
+          ..strokeWidth = 2,
+      );
+    }
+    final hourAngle =
+        (time.hour % 12 + time.minute / 60) * math.pi / 6 - math.pi / 2;
+    canvas.drawLine(
+      center,
+      Offset(
+        center.dx + radius * 0.4 * math.cos(hourAngle),
+        center.dy + radius * 0.4 * math.sin(hourAngle),
+      ),
+      Paint()
+        ..color = Colors.black
+        ..strokeWidth = 4,
+    );
+    final minuteAngle = time.minute * math.pi / 30 - math.pi / 2;
+    canvas.drawLine(
+      center,
+      Offset(
+        center.dx + radius * 0.6 * math.cos(minuteAngle),
+        center.dy + radius * 0.6 * math.sin(minuteAngle),
+      ),
+      Paint()
+        ..color = Colors.black
+        ..strokeWidth = 3,
+    );
+    final secondAngle = time.second * math.pi / 30 - math.pi / 2;
+    canvas.drawLine(
+      center,
+      Offset(
+        center.dx + radius * 0.7 * math.cos(secondAngle),
+        center.dy + radius * 0.7 * math.sin(secondAngle),
+      ),
+      Paint()
+        ..color = Colors.red
+        ..strokeWidth = 1.5,
+    );
+    canvas.drawCircle(center, 5, Paint()..color = Colors.red);
+    canvas.drawCircle(center, 3, Paint()..color = Colors.white);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+class _SearchResultItem extends StatelessWidget {
+  final ClockLocation location;
+  final bool isAdded;
+  final VoidCallback onTap;
+
+  const _SearchResultItem({
+    required this.location,
+    required this.isAdded,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Text(location.flag, style: const TextStyle(fontSize: 24)),
+      title: Text(location.city),
+      subtitle: Text('UTC${location.utcOffset}'),
+      trailing:
+          isAdded
+              ? const Icon(Icons.check, color: Colors.green)
+              : const Icon(Icons.add),
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    );
+  }
+}
+
+Widget _buildDrawerItem(
+  BuildContext context, {
+  required IconData icon,
+  required String title,
+  required VoidCallback onTap,
+}) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    child: Material(
+      borderRadius: BorderRadius.circular(12),
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        splashColor: Colors.white.withOpacity(0.1),
+        highlightColor: Colors.white.withOpacity(0.05),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
+          child: Row(
+            children: [
+              Icon(icon, color: Colors.white, size: 24),
+              const SizedBox(width: 16),
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const Spacer(),
+              const Icon(Icons.chevron_right, color: Colors.white70, size: 20),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}

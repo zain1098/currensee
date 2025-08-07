@@ -1,0 +1,1772 @@
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:io';
+import 'package:path/path.dart' as path;
+import 'package:flutter/services.dart';
+import 'package:lottie/lottie.dart';
+
+import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+import 'main.dart';
+import 'package:local_auth/local_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:share_plus/share_plus.dart';
+import 'support_help_screen.dart';
+import 'dart:convert';
+import 'package:audioplayers/audioplayers.dart';
+
+
+// Add ShineText widget for animated gradient text
+class ShineText extends StatefulWidget {
+  final String text;
+  final TextStyle textStyle;
+  const ShineText({super.key, required this.text, required this.textStyle});
+
+  @override
+  State<ShineText> createState() => _ShineTextState();
+}
+
+class _ShineTextState extends State<ShineText>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<Alignment> _alignAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat(reverse: true);
+
+    _alignAnimation = Tween<Alignment>(
+      begin: const Alignment(-1.5, 0),
+      end: const Alignment(1.5, 0),
+    ).animate(_controller);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return ShaderMask(
+          blendMode: BlendMode.srcIn,
+          shaderCallback: (bounds) {
+            return LinearGradient(
+              colors: [
+                Colors.white,
+                const Color(0xFFD4AF37),
+                Colors.white,
+                const Color(0xFFD4AF37),
+                Colors.white,
+              ],
+              stops: const [0.0, 0.25, 0.5, 0.75, 1.0],
+              begin: _alignAnimation.value,
+              end: _alignAnimation.value + const Alignment(0.3, 0),
+            ).createShader(bounds);
+          },
+          child: Text(widget.text, style: widget.textStyle),
+        );
+      },
+    );
+  }
+}
+
+class SettingsPage extends StatefulWidget {
+  final Function(bool) onThemeChanged;
+  final Function(int) onDecimalChanged;
+  final Function(String) onBaseCurrencyChanged;
+  final Function(bool) onAutoUpdateChanged;
+  final Function(bool) onBiometricChanged;
+  final Function(bool) onVibrationChanged;
+  final Function(bool) onCalculatorChanged;
+
+  const SettingsPage({
+    super.key,
+    required this.onThemeChanged,
+    required this.onDecimalChanged,
+    required this.onBaseCurrencyChanged,
+    required this.onAutoUpdateChanged,
+    required this.onBiometricChanged,
+    required this.onVibrationChanged,
+    required this.onCalculatorChanged,
+  });
+
+  @override
+  _SettingsPageState createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  final ImagePicker _picker = ImagePicker();
+  bool _isUploadingImage = false;
+  bool _darkMode = false;
+  int _decimalPlaces = 2;
+  String _baseCurrency = 'USD';
+  bool _autoUpdateRates = true;
+  bool _biometricAuth = false;
+  bool _hapticFeedback = true;
+  bool _showCalculator = true;
+  bool _historicalData = false;
+  bool _offlineMode = false;
+  String _selectedLanguage = 'English';
+  String _selectedAppearance = 'System';
+  String _notificationSound = ''; // Default sound (set in _loadAvailableSounds)
+  List<String> _availableSounds = [];
+  AudioPlayer? _audioPlayer; // For sound preview
+  String? _playingSound;
+
+  // User profile variables
+  String _userName = '';
+  String _userEmail = '';
+  String _userPhotoUrl = '';
+  bool _isEditingProfile = false;
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _currentPasswordController =
+      TextEditingController();
+  final TextEditingController _newPasswordController = TextEditingController();
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _isUpdatingPassword = false;
+  bool _obscureCurrentPassword = true;
+  bool _obscureNewPassword = true;
+  bool _obscureConfirmPassword = true;
+
+  final List<String> _languages = [
+    'English',
+    'Spanish',
+    'French',
+    'German',
+    'Hindi',
+    'Arabic',
+  ];
+  final List<String> _appearanceOptions = ['System', 'Light', 'Dark'];
+  final List<String> _currencies = [
+    'USD',
+    'EUR',
+    'GBP',
+    'JPY',
+    'INR',
+    'PKR',
+    'CAD',
+    'AUD',
+  ];
+
+  // Lottie animation composition
+  late Future<LottieComposition> _animationComposition;
+  List<Map<String, dynamic>> _notificationHistory = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+    _loadUserProfile();
+    _animationComposition = _loadAnimation();
+    _loadNotificationHistory();
+    _loadAvailableSounds();
+  }
+
+  Future<LottieComposition> _loadAnimation() async {
+    var assetData = await rootBundle.load('assets/user-profile.json');
+    return await LottieComposition.fromByteData(assetData);
+  }
+
+  Future<void> _loadUserProfile() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final userDoc =
+          await FirebaseFirestore.instance
+              .collection('currentUser')
+              .doc(user.uid)
+              .get();
+
+      setState(() {
+        _userName = userDoc.data()?['displayName'] ?? user.displayName ?? '';
+        _userEmail = user.email ?? '';
+        _userPhotoUrl = userDoc.data()?['photoURL'] ?? user.photoURL ?? '';
+        _nameController.text = _userName;
+      });
+    }
+  }
+
+  Future<void> _pickAndUploadImage() async {
+    try {
+      if (Platform.isIOS) {
+        await Permission.photos.request();
+        if (!await Permission.photos.isGranted) {
+          throw Exception('Photo library permission not granted');
+        }
+      }
+
+      final XFile? pickedFile = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 800,
+      );
+
+      if (pickedFile == null) return;
+
+      setState(() => _isUploadingImage = true);
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final String fileName = path.basename(pickedFile.path);
+      final Reference storageRef = FirebaseStorage.instance
+          .ref()
+          .child('user_profile_images')
+          .child(user.uid)
+          .child(fileName);
+
+      final UploadTask uploadTask = storageRef.putFile(File(pickedFile.path));
+      final TaskSnapshot snapshot = await uploadTask.whenComplete(() {});
+      final String downloadUrl = await snapshot.ref.getDownloadURL();
+
+      await user.updatePhotoURL(downloadUrl);
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).update(
+        {'photoURL': downloadUrl},
+      );
+
+      setState(() {
+        _userPhotoUrl = downloadUrl;
+        _isUploadingImage = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile picture updated successfully!')),
+      );
+    } catch (e) {
+      setState(() => _isUploadingImage = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error updating profile: ${e.toString()}')),
+      );
+    }
+  }
+
+  Future<void> _removeProfilePicture() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      setState(() => _isUploadingImage = true);
+
+      await user.updatePhotoURL(null);
+      await FirebaseFirestore.instance
+          .collection('currentUser')
+          .doc(user.uid)
+          .update({'photoURL': null});
+
+      setState(() {
+        _userPhotoUrl = '';
+        _isUploadingImage = false;
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Profile picture removed')));
+    } catch (e) {
+      setState(() => _isUploadingImage = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to remove profile picture: $e')),
+      );
+    }
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final appSettings = Provider.of<AppSettings>(context, listen: false);
+
+    setState(() {
+      _darkMode = appSettings.darkMode;
+      _decimalPlaces = appSettings.decimalPlaces;
+      _baseCurrency = appSettings.baseCurrency;
+      _autoUpdateRates = appSettings.autoUpdateRates;
+      _biometricAuth = appSettings.biometricAuth;
+      _hapticFeedback = appSettings.hapticFeedback;
+      _showCalculator = appSettings.showCalculator;
+      _historicalData = appSettings.historicalData;
+      _offlineMode = appSettings.offlineMode;
+      _selectedLanguage = appSettings.selectedLanguage;
+      _selectedAppearance = appSettings.selectedAppearance;
+    });
+  }
+
+  Future<void> _saveSetting(String key, dynamic value) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (value is bool) {
+      await prefs.setBool(key, value);
+    } else if (value is int) {
+      await prefs.setInt(key, value);
+    } else if (value is String) {
+      await prefs.setString(key, value);
+    }
+  }
+
+  Future<void> _updateProfile() async {
+    if (_formKey.currentState!.validate()) {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        try {
+          await user.updateDisplayName(_nameController.text);
+          await FirebaseFirestore.instance
+              .collection('currentUser')
+              .doc(user.uid)
+              .update({'displayName': _nameController.text});
+
+          setState(() {
+            _userName = _nameController.text;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profile updated successfully')),
+          );
+        } catch (e) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to update profile: $e')),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _updatePassword() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() => _isUpdatingPassword = true);
+      final user = FirebaseAuth.instance.currentUser;
+      final email = user?.email;
+
+      if (user != null && email != null) {
+        try {
+          final credential = EmailAuthProvider.credential(
+            email: email,
+            password: _currentPasswordController.text,
+          );
+
+          await user.reauthenticateWithCredential(credential);
+          await user.updatePassword(_newPasswordController.text);
+
+          _currentPasswordController.clear();
+          _newPasswordController.clear();
+          _confirmPasswordController.clear();
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Password updated successfully')),
+          );
+
+          await FirebaseAuth.instance.signOut();
+          if (!mounted) return;
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            '/signin',
+            (Route<dynamic> route) => false,
+          );
+        } on FirebaseAuthException catch (e) {
+          String errorMessage = 'Failed to update password';
+          if (e.code == 'wrong-password') {
+            errorMessage = 'Current password is incorrect';
+          } else if (e.code == 'weak-password') {
+            errorMessage = 'New password is too weak';
+          }
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$errorMessage: ${e.message}')),
+          );
+        } catch (e) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to update password: $e')),
+          );
+        } finally {
+          setState(() => _isUpdatingPassword = false);
+        }
+      }
+    }
+  }
+
+  Future<void> _deleteAccount() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Delete Account'),
+            content: const Text(
+              'Are you sure you want to delete your account? This action cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await _performAccountDeletion(user);
+                },
+                child: const Text(
+                  'Delete',
+                  style: TextStyle(color: Colors.red),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    }
+  }
+
+  Future<void> _performAccountDeletion(User user) async {
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 20),
+                Text('Deleting account...'),
+              ],
+            ),
+          );
+        },
+      );
+
+      // 1. Get user data before deletion
+      final userDoc =
+          await FirebaseFirestore.instance
+              .collection('currentUser')
+              .doc(user.uid)
+              .get();
+
+      final userData = userDoc.data() ?? {};
+
+      // 2. Save to deleted accounts collection
+      await FirebaseFirestore.instance
+          .collection('deletedAccounts')
+          .doc(user.uid)
+          .set({
+            'uid': user.uid,
+            'email': user.email,
+            'displayName': user.displayName ?? '',
+            'photoURL': user.photoURL ?? '',
+            'isEmailVerified': user.emailVerified,
+            'createdAt': userData['createdAt'],
+            'deletedAt': FieldValue.serverTimestamp(),
+            'deletionReason': 'User requested account deletion',
+            'originalData': userData, // Keep original data for reference
+          });
+
+      // 3. Delete from current users collection
+      await FirebaseFirestore.instance
+          .collection('currentUser')
+          .doc(user.uid)
+          .delete();
+
+      // 4. Delete user authentication
+      await user.delete();
+
+      // 5. Clear local data
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      // 6. Close loading dialog
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      // 7. Navigate to login page
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/signin',
+        (Route<dynamic> route) => false,
+      );
+
+      // 8. Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Account deleted successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      // Close loading dialog
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete account: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadNotificationHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final history = prefs.getStringList('notification_history') ?? [];
+    setState(() {
+      _notificationHistory =
+          history.map((e) => Map<String, dynamic>.from(jsonDecode(e))).toList();
+    });
+  }
+
+  Future<void> _addNotificationToHistory(
+    String title,
+    String body, [
+    String? sound,
+  ]) async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    final entry = {
+      'title': title,
+      'body': body,
+      'timestamp': now.toIso8601String(),
+      if (sound != null) 'sound': sound,
+    };
+    _notificationHistory.insert(0, entry);
+    // Keep only last 50 notifications
+    if (_notificationHistory.length > 50) {
+      _notificationHistory = _notificationHistory.sublist(0, 50);
+    }
+    await prefs.setStringList(
+      'notification_history',
+      _notificationHistory.map((e) => jsonEncode(e)).toList(),
+    );
+    if (mounted) setState(() {}); // Ensure UI updates instantly
+  }
+
+  // Only clear history when user does it from settings, not on alert delete.
+  Future<void> _clearNotificationHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('notification_history');
+    setState(() {
+      _notificationHistory.clear();
+    });
+  }
+
+  Future<void> _loadAvailableSounds() async {
+    // For Android, only show sounds present in res/raw/
+    List<String> rawSounds = [
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_001_41155.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_002_41156.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_003_41157.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_004_41158.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_005_41159.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_006_41160.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_007_41161.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_008_41162.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_009_41163.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_010_41164.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_011_41165.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_012_41166.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_013_41167.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_014_41168.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_015_41169.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_016_41170.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_017_41171.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_018_41181.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_019_41182.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_020_41183.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_021_41184.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_022_41185.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_023_41186.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_024_41187.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_025_41188.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_026_41189.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_027_41190.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_028_41172.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_029_41173.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_030_41191.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_031_41192.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_032_41193.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_033_41194.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_034_41195.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_001_41174.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_002_41175.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_003_41196.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_004_41197.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_005_41198.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_006_41199.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_007_41200.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_008_41201.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_009_41202.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_010_41203.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_011_41204.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_012_41205.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_013_41206.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_014_41207.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_015_41208.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_016_41209.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_017_41210.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_018_41211.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_019_41212.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_020_41213.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_021_41214.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_022_41215.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_023_41216.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_024_41217.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_025_41218.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_026_41219.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_027_41220.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_028_41221.mp3',
+      'notification.mp3',
+    ];
+    // Only show sounds that are present in res/raw/ (for Android)
+    _availableSounds = rawSounds;
+    final prefs = await SharedPreferences.getInstance();
+    String? savedSound = prefs.getString('notificationSound');
+    if (!_availableSounds.contains(savedSound)) {
+      savedSound = _availableSounds.isNotEmpty ? _availableSounds.first : '';
+      await prefs.setString('notificationSound', savedSound);
+    }
+    setState(() {
+      _notificationSound = savedSound!;
+    });
+  }
+
+  Future<void> _saveNotificationSound(String sound) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('notificationSound', sound);
+    setState(() {
+      _notificationSound = sound;
+    });
+  }
+
+  void _deleteNotificationFromHistory(int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _notificationHistory.removeAt(index);
+    });
+    await prefs.setStringList(
+      'notification_history',
+      _notificationHistory.map((e) => jsonEncode(e)).toList(),
+    );
+  }
+
+  Future<void> _playSound(String sound) async {
+    try {
+      print('Attempting to play sound: sounds/$sound');
+      _audioPlayer?.stop();
+      _audioPlayer = AudioPlayer();
+      setState(() => _playingSound = sound);
+      await _audioPlayer!.play(AssetSource('sounds/$sound'));
+      _audioPlayer!.onPlayerComplete.listen((event) {
+        setState(() => _playingSound = null);
+      });
+      print('Sound played successfully: $sound');
+    } catch (e) {
+      setState(() => _playingSound = null);
+      print('Error playing sound: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to play sound: $e')));
+      }
+    }
+  }
+
+  // Helper to check if selected sound is available in res/raw/ for Android notifications
+  bool _isSoundAvailableForNotification(String sound) {
+    // Only check for Android, as iOS uses bundled assets differently
+    // This is a static check; in real app, you may want to check at build time
+    const availableRawSounds = [
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_001_41155.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_002_41156.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_003_41157.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_004_41158.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_005_41159.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_006_41160.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_007_41161.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_008_41162.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_009_41163.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_010_41164.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_011_41165.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_012_41166.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_013_41167.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_014_41168.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_015_41169.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_016_41170.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_017_41171.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_018_41181.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_019_41182.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_020_41183.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_021_41184.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_022_41185.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_023_41186.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_024_41187.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_025_41188.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_026_41189.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_027_41190.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_028_41172.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_029_41173.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_030_41191.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_031_41192.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_032_41193.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_033_41194.mp3',
+      'zapsplat_multimedia_notification_bell_chime_ring_alert_034_41195.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_001_41174.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_002_41175.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_003_41196.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_004_41197.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_005_41198.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_006_41199.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_007_41200.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_008_41201.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_009_41202.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_010_41203.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_011_41204.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_012_41205.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_013_41206.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_014_41207.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_015_41208.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_016_41209.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_017_41210.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_018_41211.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_019_41212.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_020_41213.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_021_41214.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_022_41215.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_023_41216.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_024_41217.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_025_41218.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_026_41219.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_027_41220.mp3',
+      'zapsplat_multimedia_notification_bell_glassy_chime_028_41221.mp3',
+      'notification.mp3',
+    ];
+    return availableRawSounds.contains(sound);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: ShineText(
+          text: 'Settings',
+          textStyle: const TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            letterSpacing: 1.0,
+          ),
+        ),
+        centerTitle: true,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+            ),
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionHeader('User Profile'),
+            _buildUserProfileSection(),
+            const SizedBox(height: 20),
+
+            if (_isEditingProfile) ...[
+              _buildSectionHeader('Update Password'),
+              _buildPasswordUpdateSection(),
+              const SizedBox(height: 20),
+            ],
+
+            _buildSectionHeader('Appearance'),
+            _buildAppearanceSettings(),
+            const SizedBox(height: 20),
+
+            _buildSectionHeader('Features'),
+            _buildToggleSetting(
+              'Auto-update exchange rates',
+              _autoUpdateRates,
+              (value) {
+                setState(() => _autoUpdateRates = value);
+                _saveSetting('autoUpdateRates', value);
+                widget.onAutoUpdateChanged(value);
+                Provider.of<AppSettings>(
+                  context,
+                  listen: false,
+                ).setAutoUpdateRates(value);
+              },
+            ),
+            _buildToggleSetting('Show calculator button', _showCalculator, (
+              value,
+            ) {
+              setState(() => _showCalculator = value);
+              _saveSetting('showCalculator', value);
+              widget.onCalculatorChanged(value);
+              Provider.of<AppSettings>(
+                context,
+                listen: false,
+              ).setShowCalculator(value);
+            }),
+            _buildToggleSetting(
+              'Offline mode (use cached rates)',
+              _offlineMode,
+              (value) {
+                setState(() => _offlineMode = value);
+                _saveSetting('offlineMode', value);
+                Provider.of<AppSettings>(
+                  context,
+                  listen: false,
+                ).setOfflineMode(value);
+              },
+            ),
+            const SizedBox(height: 20),
+
+
+
+            // --- Notification Settings Section (moved up, always visible) ---
+            _buildSectionHeader('Notification Settings'),
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ListTile(
+                      leading: const Icon(Icons.music_note, color: Colors.blue),
+                      title: const Text(
+                        'Notification Sound',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle:
+                          _availableSounds.isEmpty
+                              ? const Center(child: CircularProgressIndicator())
+                              : DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value:
+                                      _availableSounds.contains(
+                                            _notificationSound,
+                                          )
+                                          ? _notificationSound
+                                          : _availableSounds.first,
+                                  isExpanded: true,
+                                  icon: const Icon(Icons.arrow_drop_down),
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.black,
+                                  ),
+                                  dropdownColor: Colors.white,
+                                  items:
+                                      _availableSounds.map((sound) {
+                                        return DropdownMenuItem<String>(
+                                          value: sound,
+                                          child: Row(
+                                            children: [
+                                              IconButton(
+                                                icon: Icon(
+                                                  _playingSound == sound
+                                                      ? Icons.stop_circle
+                                                      : Icons.play_circle_fill,
+                                                  color:
+                                                      _playingSound == sound
+                                                          ? Colors.red
+                                                          : Colors.blueGrey,
+                                                  size: 24,
+                                                ),
+                                                onPressed: () {
+                                                  if (_playingSound == sound) {
+                                                    _audioPlayer?.stop();
+                                                    setState(
+                                                      () =>
+                                                          _playingSound = null,
+                                                    );
+                                                  } else {
+                                                    _playSound(sound);
+                                                  }
+                                                },
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Flexible(
+                                                child: Text(
+                                                  sound.replaceAll('.mp3', ''),
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }).toList(),
+                                  onChanged: (value) {
+                                    if (value != null) {
+                                      _saveNotificationSound(value);
+                                    }
+                                  },
+                                ),
+                              ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Notification History',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        if (_notificationHistory.isEmpty) {
+                          return Column(
+                            children: [
+                              const Icon(
+                                Icons.notifications_off,
+                                size: 40,
+                                color: Colors.grey,
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'No notifications yet.',
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            ],
+                          );
+                        } else {
+                          return ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _notificationHistory.length,
+                            separatorBuilder:
+                                (context, idx) => const Divider(height: 1),
+                            itemBuilder: (context, idx) {
+                              final notif = _notificationHistory[idx];
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                  horizontal: 4,
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (notif['soundName'] != null)
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          right: 8.0,
+                                          top: 2,
+                                        ),
+                                        child: Icon(
+                                          Icons.music_note,
+                                          color: Colors.blueGrey,
+                                          size: 20,
+                                        ),
+                                      ),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            notif['title'] ?? '',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 15,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                            maxLines: 1,
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            notif['body'] ?? '',
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.black87,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                            maxLines:
+                                                constraints.maxWidth < 400
+                                                    ? 2
+                                                    : 1,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                      children: [
+                                        Text(
+                                          notif['timestamp'] != null
+                                              ? notif['timestamp']
+                                                  .toString()
+                                                  .substring(0, 16)
+                                                  .replaceAll('T', ' ')
+                                              : '',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.delete,
+                                            color: Colors.red,
+                                            size: 20,
+                                          ),
+                                          onPressed:
+                                              () =>
+                                                  _deleteNotificationFromHistory(
+                                                    idx,
+                                                  ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          );
+                        }
+                      },
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: _clearNotificationHistory,
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        label: const Text(
+                          'Clear History',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // --- Security Section (now after Notification Settings) ---
+            _buildSectionHeader('Security'),
+            _buildToggleSetting('Biometric authentication', _biometricAuth, (
+              value,
+            ) {
+              setState(() => _biometricAuth = value);
+              _saveSetting('biometricAuth', value);
+              widget.onBiometricChanged(value);
+              Provider.of<AppSettings>(
+                context,
+                listen: false,
+              ).setBiometricAuth(value);
+            }),
+            const SizedBox(height: 20),
+
+            _buildSectionHeader('About'),
+            _buildAboutSection(),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUserProfileSection() {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            _buildProfileImage(),
+            const SizedBox(height: 16),
+            Text(
+              _userName,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _userEmail,
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 16),
+            _isEditingProfile
+                ? Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      TextFormField(
+                        controller: _nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Full Name',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter your name';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          ElevatedButton(
+                            onPressed: () {
+                              setState(() {
+                                _isEditingProfile = false;
+                              });
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.grey,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                            ),
+                            child: const Text('Cancel'),
+                          ),
+                          ElevatedButton(
+                            onPressed: _updateProfile,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                            ),
+                            child: const Text('Save Profile'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                )
+                : Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          _isEditingProfile = true;
+                          _currentPasswordController.clear();
+                          _newPasswordController.clear();
+                          _confirmPasswordController.clear();
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                      child: const Text('Edit Profile'),
+                    ),
+                    ElevatedButton(
+                      onPressed: _deleteAccount,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                      child: const Text('Delete Account'),
+                    ),
+                  ],
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileImage() {
+    return GestureDetector(
+      onTap: _isEditingProfile ? _pickAndUploadImage : null,
+      child:
+          _isUploadingImage
+              ? const CircularProgressIndicator()
+              : FutureBuilder<LottieComposition>(
+                future: _animationComposition,
+                builder: (context, snapshot) {
+                  if (snapshot.hasData) {
+                    return Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            spreadRadius: 2,
+                            blurRadius: 10,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: Lottie(
+                        composition: snapshot.data!,
+                        fit: BoxFit.contain,
+                        repeat: true,
+                        animate: true,
+                      ),
+                    );
+                  } else if (snapshot.hasError) {
+                    return const Icon(
+                      Icons.person,
+                      size: 60,
+                      color: Colors.blue,
+                    );
+                  } else {
+                    return const CircularProgressIndicator();
+                  }
+                },
+              ),
+    );
+  }
+
+  Widget _buildPasswordUpdateSection() {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Form(
+          child: Column(
+            children: [
+              TextFormField(
+                controller: _currentPasswordController,
+                obscureText: _obscureCurrentPassword,
+                decoration: InputDecoration(
+                  labelText: 'Current Password',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscureCurrentPassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _obscureCurrentPassword = !_obscureCurrentPassword;
+                      });
+                    },
+                  ),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your current password';
+                  }
+                  if (value.length < 6) {
+                    return 'Password must be at least 6 characters';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _newPasswordController,
+                obscureText: _obscureNewPassword,
+                decoration: InputDecoration(
+                  labelText: 'New Password',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscureNewPassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _obscureNewPassword = !_obscureNewPassword;
+                      });
+                    },
+                  ),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter a new password';
+                  }
+                  if (value.length < 6) {
+                    return 'Password must be at least 6 characters';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _confirmPasswordController,
+                obscureText: _obscureConfirmPassword,
+                decoration: InputDecoration(
+                  labelText: 'Confirm New Password',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscureConfirmPassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _obscureConfirmPassword = !_obscureConfirmPassword;
+                      });
+                    },
+                  ),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please confirm your new password';
+                  }
+                  if (value != _newPasswordController.text) {
+                    return 'Passwords do not match';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isUpdatingPassword ? null : _updatePassword,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  child:
+                      _isUpdatingPassword
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text('Update Password'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          color: Colors.blue,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAppearanceSettings() {
+    return Column(
+      children: [
+        _buildToggleSetting('Dark mode', _darkMode, (value) {
+          setState(() => _darkMode = value);
+          _saveSetting('darkMode', value);
+          widget.onThemeChanged(value);
+          Provider.of<AppSettings>(context, listen: false).setDarkMode(value);
+        }),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Appearance mode'),
+            DropdownButton<String>(
+              value: _selectedAppearance,
+              items:
+                  _appearanceOptions.map((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(value),
+                    );
+                  }).toList(),
+              onChanged: (newValue) {
+                if (newValue != null) {
+                  setState(() => _selectedAppearance = newValue);
+                  _saveSetting('selectedAppearance', newValue);
+                  widget.onThemeChanged(newValue == 'Dark');
+                  Provider.of<AppSettings>(
+                    context,
+                    listen: false,
+                  ).setSelectedAppearance(newValue);
+                }
+              },
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDecimalPrecisionSetting() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Decimal places for conversion results'),
+        Slider(
+          value: _decimalPlaces.toDouble(),
+          min: 0,
+          max: 6,
+          divisions: 6,
+          label: _decimalPlaces.toString(),
+          onChanged: (value) {
+            setState(() => _decimalPlaces = value.toInt());
+            _saveSetting('decimalPlaces', value.toInt());
+            widget.onDecimalChanged(value.toInt());
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBaseCurrencySetting() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text('Default base currency'),
+        DropdownButton<String>(
+          value: _baseCurrency,
+          items:
+              _currencies.map((String value) {
+                return DropdownMenuItem<String>(
+                  value: value,
+                  child: Text(value),
+                );
+              }).toList(),
+          onChanged: (newValue) {
+            if (newValue != null) {
+              setState(() => _baseCurrency = newValue);
+              _saveSetting('baseCurrency', newValue);
+              widget.onBaseCurrencyChanged(newValue);
+            }
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLanguageSetting() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text('App language'),
+        DropdownButton<String>(
+          value: _selectedLanguage,
+          items:
+              _languages.map((String value) {
+                return DropdownMenuItem<String>(
+                  value: value,
+                  child: Text(value),
+                );
+              }).toList(),
+          onChanged: (newValue) {
+            if (newValue != null) {
+              setState(() => _selectedLanguage = newValue);
+              _saveSetting('selectedLanguage', newValue);
+              Provider.of<AppSettings>(
+                context,
+                listen: false,
+              ).setSelectedLanguage(newValue);
+            }
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildToggleSetting(
+    String title,
+    bool value,
+    Function(bool) onChanged,
+  ) {
+    // Special handling for biometric authentication
+    if (title == 'Biometric authentication') {
+      bool isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+      return SwitchListTile(
+        title: Text(title),
+        value: value,
+        onChanged:
+            isMobile
+                ? (enabled) async {
+                  if (enabled) {
+                    final localAuth = LocalAuthentication();
+                    bool canCheck = await localAuth.canCheckBiometrics;
+                    bool isDeviceSupported =
+                        await localAuth.isDeviceSupported();
+                    List<BiometricType> available =
+                        await localAuth.getAvailableBiometrics();
+                    if (!canCheck || !isDeviceSupported || available.isEmpty) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Biometric authentication is not available or not set up on this device.',
+                            ),
+                          ),
+                        );
+                      }
+                      setState(() => _biometricAuth = false);
+                      Provider.of<AppSettings>(
+                        context,
+                        listen: false,
+                      ).setBiometricAuth(false);
+                      return;
+                    }
+                    try {
+                      final didAuthenticate = await localAuth.authenticate(
+                        localizedReason:
+                            'Enable biometric lock for CurrenSee Pro',
+                        options: const AuthenticationOptions(
+                          biometricOnly: true,
+                          stickyAuth: false,
+                        ),
+                      );
+                      if (didAuthenticate) {
+                        setState(() => _biometricAuth = true);
+                        _saveSetting('biometricAuth', true);
+                        widget.onBiometricChanged(true);
+                        Provider.of<AppSettings>(
+                          context,
+                          listen: false,
+                        ).setBiometricAuth(true);
+                      } else {
+                        setState(() => _biometricAuth = false);
+                        _saveSetting('biometricAuth', false);
+                        widget.onBiometricChanged(false);
+                        Provider.of<AppSettings>(
+                          context,
+                          listen: false,
+                        ).setBiometricAuth(false);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Authentication failed or cancelled. Biometric lock not enabled.',
+                              ),
+                            ),
+                          );
+                        }
+                      }
+                    } catch (e) {
+                      setState(() => _biometricAuth = false);
+                      _saveSetting('biometricAuth', false);
+                      widget.onBiometricChanged(false);
+                      Provider.of<AppSettings>(
+                        context,
+                        listen: false,
+                      ).setBiometricAuth(false);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error: ${e.toString()}')),
+                        );
+                      }
+                    }
+                  } else {
+                    setState(() => _biometricAuth = false);
+                    _saveSetting('biometricAuth', false);
+                    widget.onBiometricChanged(false);
+                    Provider.of<AppSettings>(
+                      context,
+                      listen: false,
+                    ).setBiometricAuth(false);
+                  }
+                }
+                : null,
+        subtitle:
+            isMobile ? null : const Text('Only available on mobile devices'),
+        contentPadding: EdgeInsets.zero,
+      );
+    }
+    // Default toggle
+    return SwitchListTile(
+      title: Text(title),
+      value: value,
+      onChanged: onChanged,
+      contentPadding: EdgeInsets.zero,
+    );
+  }
+
+  Widget _buildAboutSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'CurrenSee Pro',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 4),
+        const Text('Version 2.3.1'),
+        const SizedBox(height: 12),
+        const Text(
+          'This app provides real-time currency conversion using the latest exchange rates.',
+        ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () {
+            _showRateAppDialog();
+          },
+          child: const Text(
+            'Rate this app',
+            style: TextStyle(color: Colors.blue),
+          ),
+        ),
+        const SizedBox(height: 4),
+        GestureDetector(
+          onTap: () {
+            _shareApp();
+          },
+          child: const Text(
+            'Share with friends',
+            style: TextStyle(color: Colors.blue),
+          ),
+        ),
+        const SizedBox(height: 4),
+        GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const SupportHelpScreen(),
+              ),
+            );
+          },
+          child: const Text(
+            'Send feedback',
+            style: TextStyle(color: Colors.blue),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showBackupDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Backup Settings'),
+          content: const Text(
+            'Would you like to backup your settings to the cloud?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Settings backed up successfully'),
+                  ),
+                );
+              },
+              child: const Text('Backup'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showRateAppDialog() {
+    int selectedRating = 0;
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Rate this app'),
+          content: StatefulBuilder(
+            builder: (context, setState) {
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (index) {
+                  return IconButton(
+                    icon: Icon(
+                      index < selectedRating ? Icons.star : Icons.star_border,
+                      color: Colors.amber,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        selectedRating = index + 1;
+                      });
+                    },
+                  );
+                }),
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final user = FirebaseAuth.instance.currentUser;
+                if (user != null && selectedRating > 0) {
+                  await FirebaseFirestore.instance
+                      .collection('rate_this_app')
+                      .add({
+                        'userId': user.uid,
+                        'rating': selectedRating,
+                        'timestamp': FieldValue.serverTimestamp(),
+                      });
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Thank you for rating!')),
+                  );
+                }
+              },
+              child: const Text('Submit'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _shareApp() async {
+    const appLink =
+        'https://play.google.com/store/apps/details?id=com.example.currensee';
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      // Use share_plus for mobile
+      try {
+        await Share.share(
+          'Check out this awesome currency converter app: $appLink',
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not share: $e')));
+      }
+    } else {
+      // Web: copy to clipboard
+      await Clipboard.setData(const ClipboardData(text: appLink));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('App link copied!')));
+    }
+  }
+}
