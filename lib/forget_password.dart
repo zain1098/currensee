@@ -65,7 +65,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           return;
         }
 
-        // Check if user exists in database
+        // Check if user exists in database and their status
         try {
           // First check in Firebase Auth
           final userQuery = await FirebaseAuth.instance
@@ -79,7 +79,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             return;
           }
 
-          // Additional check in Firestore for extra security
+          // Additional check in Firestore for extra security and status
           final userDoc =
               await FirebaseFirestore.instance
                   .collection('currentUser')
@@ -91,6 +91,21 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               _isLoading = false;
               _errorMessage =
                   'Account not found. Please sign up first or contact support.';
+            });
+            return;
+          }
+
+          // Check user status
+          final userData = userDoc.docs.first.data();
+          final status =
+              userData['status'] ??
+              'active'; // Default to active for existing users
+
+          if (status == 'blocked') {
+            setState(() {
+              _isLoading = false;
+              _errorMessage =
+                  'Your account has been temporarily blocked by the CurrenSee Team. Please contact support for assistance.';
             });
             return;
           }

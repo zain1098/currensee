@@ -19,7 +19,6 @@ import 'support_help_screen.dart';
 import 'dart:convert';
 import 'package:audioplayers/audioplayers.dart';
 
-
 // Add ShineText widget for animated gradient text
 class ShineText extends StatefulWidget {
   final String text;
@@ -175,6 +174,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _animationComposition = _loadAnimation();
     _loadNotificationHistory();
     _loadAvailableSounds();
+    _clearOldDefaultPairsOnLoad();
   }
 
   Future<LottieComposition> _loadAnimation() async {
@@ -300,6 +300,45 @@ class _SettingsPageState extends State<SettingsPage> {
       _selectedLanguage = appSettings.selectedLanguage;
       _selectedAppearance = appSettings.selectedAppearance;
     });
+  }
+
+  // Clear any old default pairs when settings page loads
+  Future<void> _clearOldDefaultPairsOnLoad() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Check for old default pairs
+      List<String> pairs = prefs.getStringList('watchlist_pairs') ?? [];
+      String? flutterPairsString = prefs.getString('flutter.watchlist_pairs');
+
+      final oldDefaults = ['USD/PKR', 'USD/INR', 'USD/AED'];
+      final hasOldDefaults = pairs.any((pair) => oldDefaults.contains(pair));
+
+      if (hasOldDefaults ||
+          (flutterPairsString != null &&
+              flutterPairsString.contains('USD/PKR'))) {
+        print('Found old default pairs in settings page load, clearing them');
+
+        // Clear all pairs
+        await prefs.remove('watchlist_pairs');
+        await prefs.remove('flutter.watchlist_pairs');
+
+        // Clear any cached rates for these pairs
+        for (String defaultPair in oldDefaults) {
+          await prefs.remove('${defaultPair}_previous');
+          await prefs.remove('${defaultPair}_current');
+          await prefs.remove('${defaultPair}_base');
+          await prefs.remove('${defaultPair}_change');
+        }
+
+        print('Cleared old default pairs during settings page load');
+
+        // Refresh the UI to show "No pairs configured"
+        setState(() {});
+      }
+    } catch (e) {
+      print('Error clearing old default pairs on settings load: $e');
+    }
   }
 
   Future<void> _saveSetting(String key, dynamic value) async {
@@ -839,8 +878,6 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(height: 20),
 
-
-
             // --- Notification Settings Section (moved up, always visible) ---
             _buildSectionHeader('Notification Settings'),
             Card(
@@ -1076,6 +1113,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 listen: false,
               ).setBiometricAuth(value);
             }),
+            const SizedBox(height: 20),
+
+            // Widget sections removed - simplified implementation
             const SizedBox(height: 20),
 
             _buildSectionHeader('About'),
@@ -1768,5 +1808,1343 @@ class _SettingsPageState extends State<SettingsPage> {
         context,
       ).showSnackBar(const SnackBar(content: Text('App link copied!')));
     }
+  }
+
+  // Watchlist Widget Management Section
+  Widget _buildWatchlistWidgetSection() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.widgets, color: Colors.blue),
+                const SizedBox(width: 8),
+                const Text(
+                  'Watchlist Widget Pairs',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildWatchlistPairsList(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWatchlistPairsList() {
+    return FutureBuilder<List<String>>(
+      future: _getWatchlistPairs(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final pairs = snapshot.data ?? [];
+
+        return Column(
+          children: [
+            // Current pairs display
+            if (pairs.isNotEmpty) ...[
+              ...pairs.asMap().entries.map((entry) {
+                final index = entry.key;
+                final pair = entry.value;
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.blue,
+                      child: Text(
+                        '${index + 1}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    title: Text(
+                      pair,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: const Text('Tap to edit'),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.edit, color: Colors.blue),
+                      onPressed: () => _showEditPairDialog(index, pair),
+                    ),
+                    onTap: () => _showEditPairDialog(index, pair),
+                  ),
+                );
+              }),
+              // Add new pair button
+              if (pairs.length < 3) ...[
+                Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.green,
+                      child: const Icon(
+                        Icons.add,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                    title: const Text(
+                      'Add New Pair',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                      ),
+                    ),
+                    subtitle: const Text('Tap to add another currency pair'),
+                    onTap: () => _showEditPairDialog(pairs.length, ''),
+                  ),
+                ),
+              ],
+            ] else ...[
+              // No pairs configured message with add button
+              Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.orange,
+                    child: const Icon(Icons.info, color: Colors.white),
+                  ),
+                  title: const Text(
+                    'No pairs configured',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text(
+                    'Tap the plus icon to add your first currency pair',
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(
+                      Icons.add_circle,
+                      color: Colors.green,
+                      size: 28,
+                    ),
+                    onPressed: () => _showEditPairDialog(0, ''),
+                  ),
+                  onTap: () => _showEditPairDialog(0, ''),
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  Future<List<String>> _getWatchlistPairs() async {
+    try {
+      // Simple fixed pairs - no database complexity
+      final pairs = ['USD/PKR', 'GBP/PKR', 'EUR/PKR'];
+
+      // Save to local preferences for widget
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('watchlist_pairs', pairs);
+      final jsonString = '["${pairs.join('","')}"]';
+      await prefs.setString('flutter.watchlist_pairs', jsonString);
+
+      print('Using fixed pairs: $pairs');
+      return pairs;
+    } catch (e) {
+      print('Error getting watchlist pairs: $e');
+      return ['USD/PKR', 'GBP/PKR', 'EUR/PKR']; // Fallback
+    }
+  }
+
+  Future<void> _saveWatchlistPairs(List<String> pairs) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // Save to both native and Flutter preferences
+    await prefs.setStringList('watchlist_pairs', pairs);
+
+    // Also save as JSON string for Flutter preferences (native widget reads this)
+    final jsonString = '["${pairs.join('","')}"]';
+    await prefs.setString('flutter.watchlist_pairs', jsonString);
+
+    // Mark that user has configured their own pairs
+    await prefs.setBool('has_user_set_pairs', true);
+
+    print('Saved pairs to both preferences: $pairs');
+
+    // Save to Firebase database
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance
+            .collection('user_widget_settings')
+            .doc(user.uid)
+            .set({
+              'watchlist_pairs': pairs,
+              'updated_at': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
+      }
+    } catch (e) {
+      print('Error saving to database: $e');
+    }
+
+    // Update widget
+    try {
+      // Clear previous rates for new pairs to ensure proper percentage calculation
+      for (String pair in pairs) {
+        await prefs.remove('${pair}_previous');
+      }
+
+      // Add a small delay to ensure preferences are saved
+      await Future.delayed(Duration(milliseconds: 500));
+
+      // Then trigger widget update
+      const platform = MethodChannel('currensee_widget_channel');
+      await platform.invokeMethod('updateWatchlistWidget');
+      print('Watchlist widget update triggered for pairs: $pairs');
+    } catch (e) {
+      print('Error updating watchlist widget: $e');
+    }
+  }
+
+  void _showEditPairDialog(int index, String currentPair) {
+    String? fromCurrency;
+    String? toCurrency;
+
+    // Parse current pair
+    final parts = currentPair.split('/');
+    if (parts.length == 2) {
+      fromCurrency = parts[0];
+      toCurrency = parts[1];
+    }
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Edit Currency Pair'),
+              content: SizedBox(
+                width: MediaQuery.of(context).size.width * 0.9,
+                height: MediaQuery.of(context).size.height * 0.7,
+                child: Column(
+                  children: [
+                    const Text(
+                      'Select currencies for your pair:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // From Currency Selection
+                    const Text(
+                      'From Currency:',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 120,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: FutureBuilder<List<Map<String, dynamic>>>(
+                        future: _getAvailableCurrencies(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          }
+
+                          final currencies = snapshot.data!;
+
+                          return ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: currencies.length,
+                            itemBuilder: (context, index) {
+                              final currency = currencies[index];
+                              final isActive = currency['status'] == 'active';
+                              final isSelected =
+                                  fromCurrency == currency['code'];
+
+                              return Container(
+                                width: 100,
+                                margin: const EdgeInsets.all(4),
+                                child: Card(
+                                  color:
+                                      isSelected
+                                          ? Colors.blue
+                                          : (isActive
+                                              ? Colors.blue.shade50
+                                              : Colors.grey.shade100),
+                                  child: InkWell(
+                                    onTap:
+                                        isActive
+                                            ? () {
+                                              setState(() {
+                                                fromCurrency = currency['code'];
+                                              });
+                                            }
+                                            : null,
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          currency['flag'] ?? '🏳️',
+                                          style: const TextStyle(fontSize: 24),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          currency['code'],
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color:
+                                                isSelected
+                                                    ? Colors.white
+                                                    : (isActive
+                                                        ? Colors.black
+                                                        : Colors.grey),
+                                          ),
+                                        ),
+                                        Text(
+                                          currency['name'],
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color:
+                                                isSelected
+                                                    ? Colors.white70
+                                                    : (isActive
+                                                        ? Colors.black54
+                                                        : Colors.grey),
+                                          ),
+                                          textAlign: TextAlign.center,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // To Currency Selection
+                    const Text(
+                      'To Currency:',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 120,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: FutureBuilder<List<Map<String, dynamic>>>(
+                        future: _getAvailableCurrencies(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          }
+
+                          final currencies = snapshot.data!;
+
+                          return ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: currencies.length,
+                            itemBuilder: (context, index) {
+                              final currency = currencies[index];
+                              final isActive = currency['status'] == 'active';
+                              final isSelected = toCurrency == currency['code'];
+
+                              return Container(
+                                width: 100,
+                                margin: const EdgeInsets.all(4),
+                                child: Card(
+                                  color:
+                                      isSelected
+                                          ? Colors.green
+                                          : (isActive
+                                              ? Colors.green.shade50
+                                              : Colors.grey.shade100),
+                                  child: InkWell(
+                                    onTap:
+                                        isActive
+                                            ? () {
+                                              setState(() {
+                                                toCurrency = currency['code'];
+                                              });
+                                            }
+                                            : null,
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          currency['flag'] ?? '🏳️',
+                                          style: const TextStyle(fontSize: 24),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          currency['code'],
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color:
+                                                isSelected
+                                                    ? Colors.white
+                                                    : (isActive
+                                                        ? Colors.black
+                                                        : Colors.grey),
+                                          ),
+                                        ),
+                                        Text(
+                                          currency['name'],
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color:
+                                                isSelected
+                                                    ? Colors.white70
+                                                    : (isActive
+                                                        ? Colors.black54
+                                                        : Colors.grey),
+                                          ),
+                                          textAlign: TextAlign.center,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Selected pair display
+                    if (fromCurrency != null && toCurrency != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue.shade200),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.check_circle, color: Colors.blue),
+                            const SizedBox(width: 8),
+                            Text(
+                              '$fromCurrency → $toCurrency',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed:
+                      (fromCurrency != null && toCurrency != null)
+                          ? () async {
+                            final newPair = '$fromCurrency/$toCurrency';
+                            final pairs = await _getWatchlistPairs();
+
+                            if (pairs.length < 3 || index < pairs.length) {
+                              if (index < pairs.length) {
+                                pairs[index] = newPair;
+                              } else {
+                                pairs.add(newPair);
+                              }
+
+                              await _saveWatchlistPairs(pairs);
+                              Navigator.pop(context);
+                              setState(() {}); // Refresh UI
+
+                              // Show success message
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Pair updated successfully! Widget will refresh shortly.',
+                                  ),
+                                  backgroundColor: Colors.green,
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          }
+                          : null,
+                  child: const Text('Done'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showAddPairDialog() {
+    _showPairDialog();
+  }
+
+  void _showPairDialog({int? editIndex, String? currentPair}) {
+    String? fromCurrency;
+    String? toCurrency;
+    String fromSearchQuery = '';
+    String toSearchQuery = '';
+
+    if (currentPair != null) {
+      final parts = currentPair.split('/');
+      if (parts.length == 2) {
+        fromCurrency = parts[0];
+        toCurrency = parts[1];
+      }
+    }
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text(
+                editIndex != null ? 'Edit Currency Pair' : 'Add Currency Pair',
+              ),
+              content: SizedBox(
+                width: MediaQuery.of(context).size.width * 0.8,
+                height: MediaQuery.of(context).size.height * 0.6,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Select currencies for your watchlist pair:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // From Currency Section
+                    const Text(
+                      'From Currency:',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      decoration: const InputDecoration(
+                        hintText: 'Search currency...',
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          fromSearchQuery = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 150,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: FutureBuilder<List<Map<String, dynamic>>>(
+                        future: _getAvailableCurrencies(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          }
+
+                          final currencies = snapshot.data!;
+                          final filteredCurrencies =
+                              currencies.where((currency) {
+                                final code =
+                                    currency['code'].toString().toLowerCase();
+                                final name =
+                                    currency['name'].toString().toLowerCase();
+                                final query = fromSearchQuery.toLowerCase();
+                                return code.contains(query) ||
+                                    name.contains(query);
+                              }).toList();
+
+                          return ListView.builder(
+                            itemCount: filteredCurrencies.length,
+                            itemBuilder: (context, index) {
+                              final currency = filteredCurrencies[index];
+                              final isActive = currency['status'] == 'active';
+                              final isSelected =
+                                  fromCurrency == currency['code'];
+
+                              return ListTile(
+                                leading: Text(
+                                  currency['flag'] ?? '🏳️',
+                                  style: const TextStyle(fontSize: 20),
+                                ),
+                                title: Text(
+                                  '${currency['code']} - ${currency['name']}',
+                                  style: TextStyle(
+                                    color:
+                                        isActive ? Colors.black : Colors.grey,
+                                    fontWeight:
+                                        isSelected
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                  ),
+                                ),
+                                trailing:
+                                    isSelected
+                                        ? const Icon(
+                                          Icons.check_circle,
+                                          color: Colors.green,
+                                        )
+                                        : !isActive
+                                        ? const Icon(
+                                          Icons.block,
+                                          color: Colors.red,
+                                          size: 16,
+                                        )
+                                        : null,
+                                onTap:
+                                    isActive
+                                        ? () {
+                                          setState(() {
+                                            fromCurrency = currency['code'];
+                                          });
+                                        }
+                                        : null,
+                                tileColor:
+                                    isSelected ? Colors.blue.shade50 : null,
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // To Currency Section
+                    const Text(
+                      'To Currency:',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      decoration: const InputDecoration(
+                        hintText: 'Search currency...',
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          toSearchQuery = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 150,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: FutureBuilder<List<Map<String, dynamic>>>(
+                        future: _getAvailableCurrencies(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          }
+
+                          final currencies = snapshot.data!;
+                          final filteredCurrencies =
+                              currencies.where((currency) {
+                                final code =
+                                    currency['code'].toString().toLowerCase();
+                                final name =
+                                    currency['name'].toString().toLowerCase();
+                                final query = toSearchQuery.toLowerCase();
+                                return code.contains(query) ||
+                                    name.contains(query);
+                              }).toList();
+
+                          return ListView.builder(
+                            itemCount: filteredCurrencies.length,
+                            itemBuilder: (context, index) {
+                              final currency = filteredCurrencies[index];
+                              final isActive = currency['status'] == 'active';
+                              final isSelected = toCurrency == currency['code'];
+
+                              return ListTile(
+                                leading: Text(
+                                  currency['flag'] ?? '🏳️',
+                                  style: const TextStyle(fontSize: 20),
+                                ),
+                                title: Text(
+                                  '${currency['code']} - ${currency['name']}',
+                                  style: TextStyle(
+                                    color:
+                                        isActive ? Colors.black : Colors.grey,
+                                    fontWeight:
+                                        isSelected
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                  ),
+                                ),
+                                trailing:
+                                    isSelected
+                                        ? const Icon(
+                                          Icons.check_circle,
+                                          color: Colors.green,
+                                        )
+                                        : !isActive
+                                        ? const Icon(
+                                          Icons.block,
+                                          color: Colors.red,
+                                          size: 16,
+                                        )
+                                        : null,
+                                onTap:
+                                    isActive
+                                        ? () {
+                                          setState(() {
+                                            toCurrency = currency['code'];
+                                          });
+                                        }
+                                        : null,
+                                tileColor:
+                                    isSelected ? Colors.blue.shade50 : null,
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+                    if (fromCurrency == toCurrency && fromCurrency != null)
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.warning, color: Colors.red, size: 16),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'From and To currencies cannot be the same!',
+                                style: TextStyle(
+                                  color: Colors.red,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed:
+                      (fromCurrency != null &&
+                              toCurrency != null &&
+                              fromCurrency != toCurrency)
+                          ? () async {
+                            final newPair = '$fromCurrency/$toCurrency';
+                            final currentPairs = await _getWatchlistPairs();
+
+                            if (editIndex != null) {
+                              // Edit existing pair
+                              if (currentPairs.length > editIndex) {
+                                currentPairs[editIndex] = newPair;
+                              }
+                            } else {
+                              // Add new pair
+                              if (currentPairs.length >= 3) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Maximum 3 pairs allowed. Please remove one first.',
+                                    ),
+                                    backgroundColor: Colors.orange,
+                                  ),
+                                );
+                                return;
+                              }
+                              currentPairs.add(newPair);
+                            }
+
+                            await _saveWatchlistPairs(currentPairs);
+                            Navigator.pop(context);
+
+                            // Refresh the UI
+                            setState(() {});
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  editIndex != null
+                                      ? 'Pair updated!'
+                                      : 'Pair added!',
+                                ),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          }
+                          : null,
+                  child: Text(editIndex != null ? 'Update' : 'Add'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> _getAvailableCurrencies() async {
+    try {
+      final snapshot =
+          await FirebaseFirestore.instance.collection('currencies').get();
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        return {
+          'code': doc.id,
+          'name': data['name'] ?? '',
+          'flag': data['flag'] ?? '🏳️',
+          'status': data['status'] ?? 'active',
+        };
+      }).toList();
+    } catch (e) {
+      print('Error fetching currencies: $e');
+      return [];
+    }
+  }
+
+  Future<void> _refreshWatchlistWidget() async {
+    try {
+      const platform = MethodChannel('currensee_widget_channel');
+      await platform.invokeMethod('updateWatchlistWidget');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Watchlist widget refreshed!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      print('Error refreshing watchlist widget: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error refreshing widget: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _refreshConverterWidget() async {
+    try {
+      const platform = MethodChannel('currensee_widget_channel');
+      await platform.invokeMethod('updateConverterWidget');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Converter widget refreshed!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      print('Error refreshing converter widget: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error refreshing widget: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _removePair(int index) async {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Remove Pair'),
+          content: const Text(
+            'Are you sure you want to remove this currency pair?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final currentPairs = await _getWatchlistPairs();
+                if (currentPairs.length > index) {
+                  currentPairs.removeAt(index);
+                  await _saveWatchlistPairs(currentPairs);
+
+                  // Refresh the UI
+                  setState(() {});
+
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Pair removed!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Remove'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Converter Widget Management Section
+  Widget _buildConverterWidgetSection() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.currency_exchange, color: Colors.blue),
+                const SizedBox(width: 8),
+                const Text(
+                  'Currency Converter Widget',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildConverterPairDisplay(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConverterPairDisplay() {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _getConverterPair(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final pair =
+            snapshot.data ?? {'fromCurrency': 'USD', 'toCurrency': 'PKR'};
+
+        return Column(
+          children: [
+            Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.green,
+                  child: const Icon(
+                    Icons.currency_exchange,
+                    color: Colors.white,
+                  ),
+                ),
+                title: Text(
+                  '${pair['fromCurrency']} → ${pair['toCurrency']}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: const Text('Current converter pair'),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Edit button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _showConverterPairDialog(),
+                icon: const Icon(Icons.edit),
+                label: const Text('Change Converter Pair'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> _getConverterPair() async {
+    final prefs = await SharedPreferences.getInstance();
+    return {
+      'fromCurrency': prefs.getString('converter_from_currency') ?? 'USD',
+      'toCurrency': prefs.getString('converter_to_currency') ?? 'PKR',
+    };
+  }
+
+  Future<void> _saveConverterPair(
+    String fromCurrency,
+    String toCurrency,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('converter_from_currency', fromCurrency);
+    await prefs.setString('converter_to_currency', toCurrency);
+
+    // Update widget
+    try {
+      const platform = MethodChannel('currensee_widget_channel');
+      await platform.invokeMethod('updateConverterWidget');
+    } catch (e) {
+      print('Error updating converter widget: $e');
+    }
+  }
+
+  void _showConverterPairDialog() {
+    String? fromCurrency;
+    String? toCurrency;
+    String fromSearchQuery = '';
+    String toSearchQuery = '';
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Configure Converter Widget'),
+              content: SizedBox(
+                width: MediaQuery.of(context).size.width * 0.8,
+                height: MediaQuery.of(context).size.height * 0.6,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Select currencies for your converter widget:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // From Currency Section
+                    const Text(
+                      'From Currency:',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      decoration: const InputDecoration(
+                        hintText: 'Search currency...',
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          fromSearchQuery = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 150,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: FutureBuilder<List<Map<String, dynamic>>>(
+                        future: _getAvailableCurrencies(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          }
+
+                          final currencies = snapshot.data!;
+                          final filteredCurrencies =
+                              currencies.where((currency) {
+                                final code =
+                                    currency['code'].toString().toLowerCase();
+                                final name =
+                                    currency['name'].toString().toLowerCase();
+                                final query = fromSearchQuery.toLowerCase();
+                                return code.contains(query) ||
+                                    name.contains(query);
+                              }).toList();
+
+                          return ListView.builder(
+                            itemCount: filteredCurrencies.length,
+                            itemBuilder: (context, index) {
+                              final currency = filteredCurrencies[index];
+                              final isActive = currency['status'] == 'active';
+                              final isSelected =
+                                  fromCurrency == currency['code'];
+
+                              return ListTile(
+                                leading: Text(
+                                  currency['flag'] ?? '🏳️',
+                                  style: const TextStyle(fontSize: 20),
+                                ),
+                                title: Text(
+                                  '${currency['code']} - ${currency['name']}',
+                                  style: TextStyle(
+                                    color:
+                                        isActive ? Colors.black : Colors.grey,
+                                    fontWeight:
+                                        isSelected
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                  ),
+                                ),
+                                trailing:
+                                    isSelected
+                                        ? const Icon(
+                                          Icons.check_circle,
+                                          color: Colors.green,
+                                        )
+                                        : !isActive
+                                        ? const Icon(
+                                          Icons.block,
+                                          color: Colors.red,
+                                          size: 16,
+                                        )
+                                        : null,
+                                onTap:
+                                    isActive
+                                        ? () {
+                                          setState(() {
+                                            fromCurrency = currency['code'];
+                                          });
+                                        }
+                                        : null,
+                                tileColor:
+                                    isSelected ? Colors.blue.shade50 : null,
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // To Currency Section
+                    const Text(
+                      'To Currency:',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      decoration: const InputDecoration(
+                        hintText: 'Search currency...',
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          toSearchQuery = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 150,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: FutureBuilder<List<Map<String, dynamic>>>(
+                        future: _getAvailableCurrencies(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          }
+
+                          final currencies = snapshot.data!;
+                          final filteredCurrencies =
+                              currencies.where((currency) {
+                                final code =
+                                    currency['code'].toString().toLowerCase();
+                                final name =
+                                    currency['name'].toString().toLowerCase();
+                                final query = toSearchQuery.toLowerCase();
+                                return code.contains(query) ||
+                                    name.contains(query);
+                              }).toList();
+
+                          return ListView.builder(
+                            itemCount: filteredCurrencies.length,
+                            itemBuilder: (context, index) {
+                              final currency = filteredCurrencies[index];
+                              final isActive = currency['status'] == 'active';
+                              final isSelected = toCurrency == currency['code'];
+
+                              return ListTile(
+                                leading: Text(
+                                  currency['flag'] ?? '🏳️',
+                                  style: const TextStyle(fontSize: 20),
+                                ),
+                                title: Text(
+                                  '${currency['code']} - ${currency['name']}',
+                                  style: TextStyle(
+                                    color:
+                                        isActive ? Colors.black : Colors.grey,
+                                    fontWeight:
+                                        isSelected
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                  ),
+                                ),
+                                trailing:
+                                    isSelected
+                                        ? const Icon(
+                                          Icons.check_circle,
+                                          color: Colors.green,
+                                        )
+                                        : !isActive
+                                        ? const Icon(
+                                          Icons.block,
+                                          color: Colors.red,
+                                          size: 16,
+                                        )
+                                        : null,
+                                onTap:
+                                    isActive
+                                        ? () {
+                                          setState(() {
+                                            toCurrency = currency['code'];
+                                          });
+                                        }
+                                        : null,
+                                tileColor:
+                                    isSelected ? Colors.blue.shade50 : null,
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+                    if (fromCurrency == toCurrency && fromCurrency != null)
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.warning, color: Colors.red, size: 16),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'From and To currencies cannot be the same!',
+                                style: TextStyle(
+                                  color: Colors.red,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed:
+                      (fromCurrency != null &&
+                              toCurrency != null &&
+                              fromCurrency != toCurrency)
+                          ? () async {
+                            await _saveConverterPair(
+                              fromCurrency!,
+                              toCurrency!,
+                            );
+                            Navigator.pop(context);
+
+                            // Refresh the UI
+                            setState(() {});
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Converter widget updated!'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          }
+                          : null,
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 }

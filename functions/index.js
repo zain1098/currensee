@@ -36,24 +36,24 @@ functions.setGlobalOptions({maxInstances: 10});
 
 // Background function to check currency alerts every 5 minutes
 exports.checkCurrencyAlerts = functions.pubsub
-    .schedule('every 5 minutes')
+    .schedule("every 5 minutes")
     .onRun(async (context) => {
       try {
-        console.log('Starting currency alert check...');
-        
+        console.log("Starting currency alert check...");
+
         // Get all active alerts
         const alertsSnapshot = await admin.firestore()
-            .collection('alerts')
+            .collection("alerts")
             .get();
-        
+
         if (alertsSnapshot.empty) {
-          console.log('No active alerts found');
+          console.log("No active alerts found");
           return null;
         }
-        
+
         // Group alerts by base currency to minimize API calls
         const alertsByBaseCurrency = {};
-        alertsSnapshot.forEach(doc => {
+        alertsSnapshot.forEach((doc) => {
           const alert = doc.data();
           const baseCurrency = alert.baseCurrency;
           if (!alertsByBaseCurrency[baseCurrency]) {
@@ -61,68 +61,68 @@ exports.checkCurrencyAlerts = functions.pubsub
           }
           alertsByBaseCurrency[baseCurrency].push({
             id: doc.id,
-            ...alert
+            ...alert,
           });
         });
-        
+
         // Check alerts for each base currency
         for (const [baseCurrency, alerts] of Object.entries(alertsByBaseCurrency)) {
           try {
             // Fetch current rates for this base currency
             const response = await axios.get(
-              `https://open.er-api.com/v6/latest/${baseCurrency}`
+                `https://open.er-api.com/v6/latest/${baseCurrency}`,
             );
-            
-            if (response.data.result === 'success') {
+
+            if (response.data.result === "success") {
               const rates = response.data.rates;
-              
+
               // Check each alert
               for (const alert of alerts) {
                 const currentRate = rates[alert.targetCurrency];
                 if (currentRate === undefined) continue;
-                
-                const shouldTrigger = alert.isAbove
-                  ? currentRate >= alert.targetRate
-                  : currentRate <= alert.targetRate;
-                
-                        if (shouldTrigger) {
-          console.log(`Alert triggered: ${alert.id}`);
-          
-          // Send push notification to user
-          await sendPushNotification(alert, currentRate);
-          
-          // Send email notification
-          await sendAlertNotification(alert, currentRate);
-          
-          // Save to alert history
-          await admin.firestore().collection('alert_history').add({
-            userId: alert.userId,
-            alertId: alert.id,
-            baseCurrency: alert.baseCurrency,
-            targetCurrency: alert.targetCurrency,
-            targetRate: alert.targetRate,
-            isAbove: alert.isAbove,
-            triggeredAt: admin.firestore.FieldValue.serverTimestamp(),
-            currentRate: currentRate,
-            notificationTitle: 'Currency Rate Alert!',
-            notificationBody: `1 ${alert.baseCurrency} = ${currentRate.toFixed(4)} ${alert.targetCurrency} (${alert.isAbove ? 'above' : 'below'} ${alert.targetRate})`,
-            sound: 'notification.mp3',
-          });
-          
-          // Remove the alert
-          await admin.firestore().collection('alerts').doc(alert.id).delete();
-        }
+
+                const shouldTrigger = alert.isAbove ?
+                  currentRate >= alert.targetRate :
+                  currentRate <= alert.targetRate;
+
+                if (shouldTrigger) {
+                  console.log(`Alert triggered: ${alert.id}`);
+
+                  // Send push notification to user
+                  await sendPushNotification(alert, currentRate);
+
+                  // Send email notification
+                  await sendAlertNotification(alert, currentRate);
+
+                  // Save to alert history
+                  await admin.firestore().collection("alert_history").add({
+                    userId: alert.userId,
+                    alertId: alert.id,
+                    baseCurrency: alert.baseCurrency,
+                    targetCurrency: alert.targetCurrency,
+                    targetRate: alert.targetRate,
+                    isAbove: alert.isAbove,
+                    triggeredAt: admin.firestore.FieldValue.serverTimestamp(),
+                    currentRate: currentRate,
+                    notificationTitle: "Currency Rate Alert!",
+                    notificationBody: `1 ${alert.baseCurrency} = ${currentRate.toFixed(4)} ${alert.targetCurrency} (${alert.isAbove ? "above" : "below"} ${alert.targetRate})`,
+                    sound: "notification.mp3",
+                  });
+
+                  // Remove the alert
+                  await admin.firestore().collection("alerts").doc(alert.id).delete();
+                }
               }
             }
           } catch (error) {
             console.error(`Error checking alerts for ${baseCurrency}:`, error);
           }
         }
-        
-        console.log('Currency alert check completed');
+
+        console.log("Currency alert check completed");
         return null;
       } catch (error) {
-        console.error('Error in checkCurrencyAlerts:', error);
+        console.error("Error in checkCurrencyAlerts:", error);
         return null;
       }
     });
@@ -132,29 +132,29 @@ async function sendPushNotification(alert, currentRate) {
   try {
     // Get user's FCM token
     const userDoc = await admin.firestore()
-        .collection('currentUser')
+        .collection("currentUser")
         .doc(alert.userId)
         .get();
-    
+
     if (!userDoc.exists) {
       console.log(`User ${alert.userId} not found`);
       return;
     }
-    
+
     const userData = userDoc.data();
     const fcmToken = userData.fcmToken;
-    
+
     if (!fcmToken) {
       console.log(`No FCM token found for user ${alert.userId}`);
       return;
     }
-    
+
     // Send push notification
     const message = {
       token: fcmToken,
       notification: {
-        title: 'Currency Rate Alert!',
-        body: `1 ${alert.baseCurrency} = ${currentRate.toFixed(4)} ${alert.targetCurrency} (${alert.isAbove ? 'above' : 'below'} ${alert.targetRate})`
+        title: "Currency Rate Alert!",
+        body: `1 ${alert.baseCurrency} = ${currentRate.toFixed(4)} ${alert.targetCurrency} (${alert.isAbove ? "above" : "below"} ${alert.targetRate})`,
       },
       data: {
         alertId: alert.id,
@@ -163,30 +163,29 @@ async function sendPushNotification(alert, currentRate) {
         targetRate: alert.targetRate.toString(),
         currentRate: currentRate.toString(),
         isAbove: alert.isAbove.toString(),
-        type: 'currency_alert'
+        type: "currency_alert",
       },
       android: {
         notification: {
-          sound: 'default',
-          channelId: 'currency_alerts',
-          priority: 'high'
-        }
+          sound: "default",
+          channelId: "currency_alerts",
+          priority: "high",
+        },
       },
       apns: {
         payload: {
           aps: {
-            sound: 'default',
-            badge: 1
-          }
-        }
-      }
+            sound: "default",
+            badge: 1,
+          },
+        },
+      },
     };
-    
+
     const response = await admin.messaging().send(message);
     console.log(`Push notification sent successfully: ${response}`);
-    
   } catch (error) {
-    console.error('Error sending push notification:', error);
+    console.error("Error sending push notification:", error);
   }
 }
 
@@ -195,32 +194,32 @@ async function sendAlertNotification(alert, currentRate) {
   try {
     // Get user's notification preferences
     const userDoc = await admin.firestore()
-        .collection('currentUser')
+        .collection("currentUser")
         .doc(alert.userId)
         .get();
-    
+
     if (!userDoc.exists) {
       console.log(`User ${alert.userId} not found`);
       return;
     }
-    
+
     const userData = userDoc.data();
     const userEmail = userData.email || alert.userEmail;
     const fcmToken = userData.fcmToken; // Get FCM token for push notifications
-    
+
     if (!userEmail) {
       console.log(`No email found for user ${alert.userId}`);
       return;
     }
-    
+
     // Send push notification if FCM token is available
     if (fcmToken) {
       try {
         const message = {
           token: fcmToken,
           notification: {
-            title: 'Currency Rate Alert!',
-            body: `1 ${alert.baseCurrency} = ${currentRate.toFixed(4)} ${alert.targetCurrency} (${alert.isAbove ? 'above' : 'below'} ${alert.targetRate})`
+            title: "Currency Rate Alert!",
+            body: `1 ${alert.baseCurrency} = ${currentRate.toFixed(4)} ${alert.targetCurrency} (${alert.isAbove ? "above" : "below"} ${alert.targetRate})`,
           },
           data: {
             alertId: alert.id,
@@ -229,32 +228,32 @@ async function sendAlertNotification(alert, currentRate) {
             targetRate: alert.targetRate.toString(),
             currentRate: currentRate.toString(),
             isAbove: alert.isAbove.toString(),
-            type: 'currency_alert'
+            type: "currency_alert",
           },
           android: {
             notification: {
-              sound: 'default',
-              channelId: 'currency_alerts',
-              priority: 'high'
-            }
+              sound: "default",
+              channelId: "currency_alerts",
+              priority: "high",
+            },
           },
           apns: {
             payload: {
               aps: {
-                sound: 'default',
-                badge: 1
-              }
-            }
-          }
+                sound: "default",
+                badge: 1,
+              },
+            },
+          },
         };
-        
+
         const response = await admin.messaging().send(message);
         console.log(`Push notification sent successfully: ${response}`);
       } catch (pushError) {
-        console.error('Error sending push notification:', pushError);
+        console.error("Error sending push notification:", pushError);
       }
     }
-    
+
     // Send email notification
     const mailOptions = {
       from: "\"CurrenSee Pro\" <" + functions.config().gmail.email + ">",
@@ -271,7 +270,7 @@ async function sendAlertNotification(alert, currentRate) {
             <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #1E3A8A;">
               <p><strong>Base Currency:</strong> ${alert.baseCurrency}</p>
               <p><strong>Target Currency:</strong> ${alert.targetCurrency}</p>
-              <p><strong>Condition:</strong> Rate is ${alert.isAbove ? 'above' : 'below'} ${alert.targetRate}</p>
+              <p><strong>Condition:</strong> Rate is ${alert.isAbove ? "above" : "below"} ${alert.targetRate}</p>
               <p><strong>Current Rate:</strong> ${currentRate.toFixed(4)}</p>
               <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
             </div>
@@ -283,12 +282,11 @@ async function sendAlertNotification(alert, currentRate) {
         </div>
       `,
     };
-    
+
     await transporter.sendMail(mailOptions);
     console.log(`Alert notification sent to ${userEmail}`);
-    
   } catch (error) {
-    console.error('Error sending alert notification:', error);
+    console.error("Error sending alert notification:", error);
   }
 }
 
@@ -373,3 +371,445 @@ exports.sendWelcomeEmail = functions.firestore
         );
       }
     });
+
+// Cloud Function to add status field to existing users
+exports.addStatusToExistingUsers = functions.https.onRequest(async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const usersRef = db.collection("currentUser");
+
+    // Get all users
+    const snapshot = await usersRef.get();
+
+    let updatedCount = 0;
+    const batch = db.batch();
+
+    snapshot.docs.forEach((doc) => {
+      const userData = doc.data();
+
+      // Only add status if it doesn't exist
+      if (!Object.prototype.hasOwnProperty.call(userData, "status")) {
+        batch.update(doc.ref, {
+          status: "active", // Default to active for existing users
+          statusUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        updatedCount++;
+      }
+    });
+
+    // Commit the batch
+    if (updatedCount > 0) {
+      await batch.commit();
+      console.log(`Updated ${updatedCount} users with status field`);
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully updated ${updatedCount} users with status field`,
+      updatedCount: updatedCount,
+    });
+  } catch (error) {
+    console.error("Error updating users:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Cloud Function to block a user
+exports.blockUser = functions.https.onRequest(async (req, res) => {
+  try {
+    const {uid, reason} = req.body;
+
+    if (!uid) {
+      return res.status(400).json({
+        success: false,
+        error: "User ID is required",
+      });
+    }
+
+    const db = admin.firestore();
+    const userRef = db.collection("currentUser").doc(uid);
+
+    await userRef.update({
+      status: "blocked",
+      blockedAt: admin.firestore.FieldValue.serverTimestamp(),
+      blockedReason: reason || "No reason provided",
+      blockedBy: "admin", // You can modify this to track who blocked the user
+    });
+
+    res.json({
+      success: true,
+      message: `User ${uid} has been blocked successfully`,
+    });
+  } catch (error) {
+    console.error("Error blocking user:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Cloud Function to unblock a user
+exports.unblockUser = functions.https.onRequest(async (req, res) => {
+  try {
+    const {uid} = req.body;
+
+    if (!uid) {
+      return res.status(400).json({
+        success: false,
+        error: "User ID is required",
+      });
+    }
+
+    const db = admin.firestore();
+    const userRef = db.collection("currentUser").doc(uid);
+
+    await userRef.update({
+      status: "active",
+      unblockedAt: admin.firestore.FieldValue.serverTimestamp(),
+      unblockedBy: "admin", // You can modify this to track who unblocked the user
+    });
+
+    res.json({
+      success: true,
+      message: `User ${uid} has been unblocked successfully`,
+    });
+  } catch (error) {
+    console.error("Error unblocking user:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Initialize default news categories
+exports.initializeNewsCategories = functions.https.onCall(async (data, context) => {
+  // Check if user is admin
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
+  }
+
+  const adminUid = context.auth.uid;
+  const adminDoc = await admin.firestore().collection("currentUser").doc(adminUid).get();
+  
+  if (!adminDoc.exists || adminDoc.data().role !== "admin") {
+    throw new functions.https.HttpsError("permission-denied", "Only admins can initialize news categories");
+  }
+
+  try {
+    const defaultCategories = [
+      {
+        id: "business",
+        name: "Business",
+        apiCategory: "business",
+        status: "active",
+        maxArticles: 20,
+        description: "Latest business news and updates",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "economy",
+        name: "Economy",
+        apiCategory: "economy",
+        status: "active",
+        maxArticles: 20,
+        description: "Economic news and financial updates",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "finance",
+        name: "Finance",
+        apiCategory: "finance",
+        status: "active",
+        maxArticles: 20,
+        description: "Financial markets and investment news",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "technology",
+        name: "Technology",
+        apiCategory: "technology",
+        status: "active",
+        maxArticles: 20,
+        description: "Technology and innovation news",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "world",
+        name: "World",
+        apiCategory: "world",
+        status: "active",
+        maxArticles: 20,
+        description: "International news and global updates",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "cryptocurrency",
+        name: "Cryptocurrency",
+        apiCategory: "cryptocurrency",
+        status: "active",
+        maxArticles: 20,
+        description: "Cryptocurrency and blockchain news",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "stock-market",
+        name: "Stock Market",
+        apiCategory: "stock market",
+        status: "active",
+        maxArticles: 20,
+        description: "Stock market and trading news",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+    ];
+
+    const batch = admin.firestore().batch();
+    
+    defaultCategories.forEach((category) => {
+      const docRef = admin.firestore().collection("news_categories").doc(category.id);
+      batch.set(docRef, category);
+    });
+
+    await batch.commit();
+
+    return { success: true, message: "News categories initialized successfully" };
+  } catch (error) {
+    console.error("Error initializing news categories:", error);
+    throw new functions.https.HttpsError("internal", "Failed to initialize news categories");
+  }
+});
+
+// Initialize news configuration
+exports.initializeNewsConfig = functions.https.onCall(async (data, context) => {
+  // Check if user is admin
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
+  }
+
+  const adminUid = context.auth.uid;
+  const adminDoc = await admin.firestore().collection("currentUser").doc(adminUid).get();
+  
+  if (!adminDoc.exists || adminDoc.data().role !== "admin") {
+    throw new functions.https.HttpsError("permission-denied", "Only admins can initialize news configuration");
+  }
+
+  try {
+    const defaultConfig = {
+      apiKey: "b2254f48318f9db55c21821b24d057bd",
+      baseUrl: "https://gnews.io/api/v4/top-headlines",
+      defaultLanguage: "en",
+      defaultCountry: "us",
+      maxArticlesPerCategory: 20,
+      refreshInterval: 300, // 5 minutes
+      enableCaching: true,
+      cacheDuration: 600, // 10 minutes
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    await admin.firestore()
+      .collection("app_config")
+      .doc("news_settings")
+      .set(defaultConfig);
+
+    return { success: true, message: "News configuration initialized successfully" };
+  } catch (error) {
+    console.error("Error initializing news configuration:", error);
+    throw new functions.https.HttpsError("internal", "Failed to initialize news configuration");
+  }
+});
+
+// Initialize ALL news categories (comprehensive list)
+exports.initializeAllNewsCategories = functions.https.onCall(async (data, context) => {
+  // Check if user is admin
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
+  }
+
+  const adminUid = context.auth.uid;
+  const adminDoc = await admin.firestore().collection("currentUser").doc(adminUid).get();
+  
+  if (!adminDoc.exists || adminDoc.data().role !== "admin") {
+    throw new functions.https.HttpsError("permission-denied", "Only admins can initialize news categories");
+  }
+
+  try {
+    const allCategories = [
+      {
+        id: "business",
+        name: "Business",
+        apiCategory: "business",
+        status: "active",
+        maxArticles: 20,
+        description: "Latest business news and updates",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "economy",
+        name: "Economy",
+        apiCategory: "economy",
+        status: "active",
+        maxArticles: 20,
+        description: "Economic news and financial updates",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "finance",
+        name: "Finance",
+        apiCategory: "finance",
+        status: "active",
+        maxArticles: 20,
+        description: "Financial markets and investment news",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "technology",
+        name: "Technology",
+        apiCategory: "technology",
+        status: "active",
+        maxArticles: 20,
+        description: "Technology and innovation news",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "world",
+        name: "World",
+        apiCategory: "world",
+        status: "active",
+        maxArticles: 20,
+        description: "International news and global updates",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "cryptocurrency",
+        name: "Cryptocurrency",
+        apiCategory: "cryptocurrency",
+        status: "active",
+        maxArticles: 20,
+        description: "Cryptocurrency and blockchain technology news",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "stock-market",
+        name: "Stock Market",
+        apiCategory: "stock market",
+        status: "active",
+        maxArticles: 20,
+        description: "Stock market updates and trading news",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "real-estate",
+        name: "Real Estate",
+        apiCategory: "real estate",
+        status: "active",
+        maxArticles: 15,
+        description: "Real estate market and property news",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "healthcare",
+        name: "Healthcare",
+        apiCategory: "health",
+        status: "active",
+        maxArticles: 15,
+        description: "Healthcare and pharmaceutical industry news",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "energy",
+        name: "Energy",
+        apiCategory: "energy",
+        status: "active",
+        maxArticles: 15,
+        description: "Energy sector and oil market updates",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "automotive",
+        name: "Automotive",
+        apiCategory: "automotive",
+        status: "active",
+        maxArticles: 15,
+        description: "Automotive industry and car market news",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "entertainment",
+        name: "Entertainment",
+        apiCategory: "entertainment",
+        status: "active",
+        maxArticles: 15,
+        description: "Entertainment and media industry updates",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "sports-business",
+        name: "Sports Business",
+        apiCategory: "sports",
+        status: "active",
+        maxArticles: 15,
+        description: "Sports business and industry news",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "politics",
+        name: "Politics",
+        apiCategory: "politics",
+        status: "active",
+        maxArticles: 15,
+        description: "Political news affecting business and economy",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "science",
+        name: "Science",
+        apiCategory: "science",
+        status: "active",
+        maxArticles: 15,
+        description: "Scientific research and innovation news",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "education",
+        name: "Education",
+        apiCategory: "education",
+        status: "active",
+        maxArticles: 15,
+        description: "Education sector and EdTech industry news",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {
+        id: "travel",
+        name: "Travel",
+        apiCategory: "travel",
+        status: "active",
+        maxArticles: 15,
+        description: "Travel industry and tourism business news",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+    ];
+
+    const batch = admin.firestore().batch();
+    
+    allCategories.forEach((category) => {
+      const docRef = admin.firestore().collection("news_categories").doc(category.id);
+      batch.set(docRef, category);
+    });
+
+    await batch.commit();
+
+    console.log(`✅ All ${allCategories.length} news categories initialized successfully!`);
+    return { 
+      success: true, 
+      message: `All ${allCategories.length} news categories initialized successfully!`,
+      count: allCategories.length
+    };
+  } catch (error) {
+    console.error("Error initializing all news categories:", error);
+    throw new functions.https.HttpsError("internal", "Failed to initialize all news categories");
+  }
+});

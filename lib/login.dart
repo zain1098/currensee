@@ -10,6 +10,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:emailjs/emailjs.dart';
 import 'package:http/http.dart' as http;
 import 'email_verification_service.dart';
+import 'contact_form_screen.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -512,6 +513,10 @@ class _SignInScreenState extends State<SignInScreen> {
     final userDoc = FirebaseFirestore.instance
         .collection('currentUser')
         .doc(user.uid);
+
+    // Check if user already exists to determine if we should set status
+    final existingDoc = await userDoc.get();
+
     final userData = {
       'uid': user.uid,
       'email': user.email,
@@ -519,8 +524,140 @@ class _SignInScreenState extends State<SignInScreen> {
       'photoURL': user.photoURL ?? '',
       'isEmailVerified': user.emailVerified,
       'createdAt': FieldValue.serverTimestamp(),
+      // Only add status if user doesn't exist (new user)
+      if (!existingDoc.exists) 'status': 'active',
     };
     await userDoc.set(userData, SetOptions(merge: true));
+  }
+
+  // Check user status and handle blocking
+  Future<bool> checkUserStatus(String uid) async {
+    try {
+      final userDoc =
+          await FirebaseFirestore.instance
+              .collection('currentUser')
+              .doc(uid)
+              .get();
+
+      if (userDoc.exists) {
+        final userData = userDoc.data();
+        final status =
+            userData?['status'] ??
+            'active'; // Default to active for existing users
+
+        // If user is blocked, sign them out and show message
+        if (status == 'blocked') {
+          await FirebaseAuth.instance.signOut();
+          if (mounted) {
+            _showBlockedUserDialog();
+          }
+          return false;
+        }
+      }
+      return true;
+    } catch (e) {
+      print('Error checking user status: $e');
+      return true; // Allow login if status check fails
+    }
+  }
+
+  // Show blocked user dialog
+  void _showBlockedUserDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF1E3A8A), Color(0xFFD4AF37)],
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(50),
+                  ),
+                  child: const Icon(Icons.block, size: 50, color: Colors.white),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Account Temporarily Blocked',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'The CurrenSee Team has temporarily blocked your account for security reasons.',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.white,
+                    height: 1.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'If you believe this is an error, please contact our support team.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white70,
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 30),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ContactFormScreen(),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF1E3A8A),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'Contact Support',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _signIn() async {
@@ -564,6 +701,13 @@ class _SignInScreenState extends State<SignInScreen> {
         final isNewUser = userCredential.additionalUserInfo?.isNewUser ?? false;
 
         await addUserToFirestore(userCredential.user!);
+
+        // Check user status after successful authentication
+        final isUserActive = await checkUserStatus(userCredential.user!.uid);
+        if (!isUserActive) {
+          setState(() => _isLoading = false);
+          return; // User is blocked, dialog already shown
+        }
 
         // Send welcome email for new users
         if (isNewUser) {
@@ -655,6 +799,14 @@ class _SignInScreenState extends State<SignInScreen> {
       }
 
       await addUserToFirestore(userCredential.user!);
+
+      // Check user status after successful authentication
+      final isUserActive = await checkUserStatus(userCredential.user!.uid);
+      if (!isUserActive) {
+        setState(() => _isLoading = false);
+        return; // User is blocked, dialog already shown
+      }
+
       if (!mounted) {
         print('Widget not mounted, cannot navigate');
         return;

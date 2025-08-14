@@ -14,6 +14,8 @@ import 'multi_currency_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:lottie/lottie.dart';
 import 'support_help_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'services/flag_service.dart';
 
 class WorldClockPage extends StatefulWidget {
   const WorldClockPage({super.key});
@@ -25,44 +27,8 @@ class WorldClockPage extends StatefulWidget {
 class _WorldClockPageState extends State<WorldClockPage>
     with TickerProviderStateMixin, WidgetsBindingObserver {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  final List<ClockLocation> allLocations = [
-    ClockLocation(
-      timezone: 'America/New_York',
-      city: 'New York',
-      utcOffset: '-5',
-    ),
-    ClockLocation(timezone: 'Europe/London', city: 'London', utcOffset: '+0'),
-    ClockLocation(timezone: 'Europe/Paris', city: 'Paris', utcOffset: '+1'),
-    ClockLocation(
-      timezone: 'America/Los_Angeles',
-      city: 'Los Angeles',
-      utcOffset: '-8',
-    ),
-    ClockLocation(timezone: 'Asia/Tokyo', city: 'Tokyo', utcOffset: '+9'),
-    ClockLocation(timezone: 'Asia/Dubai', city: 'Dubai', utcOffset: '+4'),
-    ClockLocation(
-      timezone: 'Australia/Sydney',
-      city: 'Sydney',
-      utcOffset: '+10',
-    ),
-    ClockLocation(timezone: 'Asia/Shanghai', city: 'Shanghai', utcOffset: '+8'),
-    ClockLocation(timezone: 'Europe/Moscow', city: 'Moscow', utcOffset: '+3'),
-    ClockLocation(
-      timezone: 'America/Sao_Paulo',
-      city: 'Sao Paulo',
-      utcOffset: '-3',
-    ),
-    ClockLocation(timezone: 'Africa/Cairo', city: 'Cairo', utcOffset: '+2'),
-    ClockLocation(
-      timezone: 'Asia/Kolkata',
-      city: 'New Delhi',
-      utcOffset: '+5.5',
-    ),
-    ClockLocation(timezone: 'Asia/Karachi', city: 'Karachi', utcOffset: '+5'),
-    ClockLocation(timezone: 'Asia/Karachi', city: 'Islamabad', utcOffset: '+5'),
-    ClockLocation(timezone: 'Asia/Karachi', city: 'Lahore', utcOffset: '+5'),
-    // ... (add more as needed)
-  ];
+  // Firebase data will be loaded here
+  List<ClockLocation> allLocations = [];
 
   List<ClockLocation> locations = [];
   bool is24HourFormat = false;
@@ -115,6 +81,125 @@ class _WorldClockPageState extends State<WorldClockPage>
     _updateAllTimes();
     _startTimer();
     _listController.forward();
+    _loadLocationsFromFirebase(); // Load Firebase data
+  }
+
+  // Load locations from Firebase
+  Future<void> _loadLocationsFromFirebase() async {
+    try {
+      print('🔄 Loading locations from Firebase...');
+
+      // Load all locations (both active and inactive) for status display
+      final allSnapshot =
+          await FirebaseFirestore.instance
+              .collection('world_clock_cities')
+              .orderBy('display_order')
+              .get();
+
+      if (allSnapshot.docs.isNotEmpty) {
+        setState(() {
+          allLocations =
+              allSnapshot.docs.map((doc) {
+                final data = doc.data();
+                final location = ClockLocation(
+                  timezone: data['timezone'] ?? '',
+                  city: data['city'] ?? '',
+                  utcOffset: data['gmt_offset']?.toString() ?? '+0',
+                  flagUrl: data['flag_url'] ?? '',
+                  country: data['country'] ?? '',
+                  status: data['status'] ?? 'active', // Add status field
+                );
+                print(
+                  '📍 Loaded location: ${location.city} (${location.status}) with flag URL: ${location.flagUrl}',
+                );
+                print('🏳️ Country code extracted: ${location.countryCode}');
+                return location;
+              }).toList();
+
+          // Update locations list if empty (only active locations)
+          if (locations.isEmpty) {
+            final activeLocations =
+                allLocations.where((loc) => loc.status == 'active').toList();
+            if (activeLocations.isNotEmpty) {
+              locations = [activeLocations[0]];
+              _selectedTimezone = activeLocations[0].timezone;
+            }
+          }
+
+          print(
+            '✅ Loaded ${allLocations.length} locations from Firebase (${allLocations.where((loc) => loc.status == 'active').length} active)',
+          );
+        });
+      } else {
+        print('⚠️ No locations found in Firebase, using fallback data');
+        _loadFallbackLocations();
+      }
+    } catch (e) {
+      print('❌ Error loading from Firebase: $e');
+      print('🔄 Using fallback data...');
+      _loadFallbackLocations();
+    }
+  }
+
+  // Fallback to hardcoded data if Firebase fails
+  void _loadFallbackLocations() {
+    setState(() {
+      allLocations = [
+        ClockLocation(
+          timezone: 'America/New_York',
+          city: 'New York',
+          utcOffset: '-5',
+          flagUrl: 'https://flagcdn.com/w40/us.png',
+          country: 'United States',
+          status: 'active',
+        ),
+        ClockLocation(
+          timezone: 'Europe/London',
+          city: 'London',
+          utcOffset: '+0',
+          flagUrl: 'https://flagcdn.com/w40/gb.png',
+          country: 'United Kingdom',
+          status: 'active',
+        ),
+        ClockLocation(
+          timezone: 'Asia/Tokyo',
+          city: 'Tokyo',
+          utcOffset: '+9',
+          flagUrl: 'https://flagcdn.com/w40/jp.png',
+          country: 'Japan',
+          status: 'active',
+        ),
+        ClockLocation(
+          timezone: 'Asia/Dubai',
+          city: 'Dubai',
+          utcOffset: '+4',
+          flagUrl: 'https://flagcdn.com/w40/ae.png',
+          country: 'UAE',
+          status: 'active',
+        ),
+        ClockLocation(
+          timezone: 'Asia/Karachi',
+          city: 'Karachi',
+          utcOffset: '+5',
+          flagUrl: 'https://flagcdn.com/w40/pk.png',
+          country: 'Pakistan',
+          status: 'active',
+        ),
+      ];
+
+      // Debug fallback locations
+      for (final location in allLocations) {
+        print(
+          '📍 Fallback location: ${location.city} with flag URL: ${location.flagUrl}',
+        );
+        print('🏳️ Country code extracted: ${location.countryCode}');
+      }
+
+      if (locations.isEmpty) {
+        locations = [allLocations[0]];
+        _selectedTimezone = allLocations[0].timezone;
+      }
+    });
   }
 
   @override
@@ -212,6 +297,7 @@ class _WorldClockPageState extends State<WorldClockPage>
       if (query.isEmpty) {
         _searchResults.clear();
       } else {
+        // Show all matching locations (both active and inactive)
         _searchResults =
             allLocations
                 .where(
@@ -234,6 +320,18 @@ class _WorldClockPageState extends State<WorldClockPage>
   }
 
   void _addLocation(ClockLocation location) {
+    // Check if location is active
+    if (location.status != 'active') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${location.city} is temporarily unavailable'),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     if (!locations.any((loc) => loc.timezone == location.timezone)) {
       setState(() {
         locations.add(location);
@@ -559,7 +657,10 @@ class _WorldClockPageState extends State<WorldClockPage>
                 Expanded(
                   child: SingleChildScrollView(
                     padding: EdgeInsets.only(
-                      bottom: isKeyboardVisible ? 0 : 180, // Increased padding to prevent overflow
+                      bottom:
+                          isKeyboardVisible
+                              ? 0
+                              : 200, // Increased padding to prevent flag overflow
                     ),
                     child: Center(
                       child: ScaleTransition(
@@ -589,7 +690,7 @@ class _WorldClockPageState extends State<WorldClockPage>
                 left: 0,
                 right: 0,
                 child: Container(
-                  height: 180, // Increased height to prevent overflow
+                  height: 200, // Increased height to prevent flag overflow
                   padding: const EdgeInsets.only(
                     top: 12,
                     bottom: 20,
@@ -665,7 +766,8 @@ class _WorldClockPageState extends State<WorldClockPage>
                       ),
                       const SizedBox(height: 12),
                       SizedBox(
-                        height: 100, // Increased height for better spacing
+                        height:
+                            120, // Increased height to prevent flag overflow
                         child: ListView.separated(
                           controller: _scrollController,
                           scrollDirection: Axis.horizontal,
@@ -745,30 +847,70 @@ class _WorldClockPageState extends State<WorldClockPage>
                                         mainAxisAlignment:
                                             MainAxisAlignment.center,
                                         children: [
-                                          Text(
-                                            location.flag,
-                                            style: TextStyle(
-                                              fontSize:
-                                                  isSelected
-                                                      ? 32
-                                                      : 28, // Reduced font sizes
-                                              shadows:
-                                                  isSelected
-                                                      ? [
-                                                        Shadow(
-                                                          color: Colors.black
-                                                              .withOpacity(0.2),
-                                                          blurRadius: 2,
-                                                          offset: const Offset(
-                                                            0,
-                                                            1,
-                                                          ),
+                                          // Use FlagService for flags with error handling
+                                          if (location.countryCode != null)
+                                            Container(
+                                              width: 26,
+                                              height: 16,
+                                              constraints: const BoxConstraints(
+                                                maxWidth: 26,
+                                                maxHeight: 16,
+                                              ),
+                                              margin: const EdgeInsets.only(
+                                                bottom: 2,
+                                              ),
+                                              child: ClipRect(
+                                                child: Builder(
+                                                  builder: (context) {
+                                                    try {
+                                                      return FlagService.getFlagWidget(
+                                                        location.countryCode!,
+                                                        size: FlagSize.small,
+                                                      );
+                                                    } catch (e) {
+                                                      // Fallback to emoji flag if FlagService fails
+                                                      return Text(
+                                                        location.flag,
+                                                        style: TextStyle(
+                                                          fontSize:
+                                                              isSelected
+                                                                  ? 24
+                                                                  : 20,
                                                         ),
-                                                      ]
-                                                      : null,
+                                                      );
+                                                    }
+                                                  },
+                                                ),
+                                              ),
+                                            )
+                                          else
+                                            Text(
+                                              location.flag,
+                                              style: TextStyle(
+                                                fontSize:
+                                                    isSelected
+                                                        ? 26
+                                                        : 22, // Reduced font sizes
+                                                shadows:
+                                                    isSelected
+                                                        ? [
+                                                          Shadow(
+                                                            color: Colors.black
+                                                                .withOpacity(
+                                                                  0.2,
+                                                                ),
+                                                            blurRadius: 2,
+                                                            offset:
+                                                                const Offset(
+                                                                  0,
+                                                                  1,
+                                                                ),
+                                                          ),
+                                                        ]
+                                                        : null,
+                                              ),
                                             ),
-                                          ),
-                                          const SizedBox(height: 4),
+                                          const SizedBox(height: 6),
                                           Text(
                                             location.city,
                                             style: TextStyle(
@@ -974,8 +1116,27 @@ class _WorldClockPageState extends State<WorldClockPage>
                                                   location,
                                                 ),
                                                 onTap:
-                                                    () =>
-                                                        _addLocation(location),
+                                                    location.status == 'active'
+                                                        ? () => _addLocation(
+                                                          location,
+                                                        )
+                                                        : () {
+                                                          ScaffoldMessenger.of(
+                                                            context,
+                                                          ).showSnackBar(
+                                                            SnackBar(
+                                                              content: Text(
+                                                                '${location.city} is temporarily unavailable',
+                                                              ),
+                                                              backgroundColor:
+                                                                  Colors.orange,
+                                                              duration:
+                                                                  const Duration(
+                                                                    seconds: 3,
+                                                                  ),
+                                                            ),
+                                                          );
+                                                        },
                                               );
                                             },
                                           ),
@@ -1098,15 +1259,61 @@ class ClockLocation {
   final String timezone;
   final String city;
   final String utcOffset;
+  final String? flagUrl; // Firebase flag URL
+  final String? country; // Country name
+  final String status; // Status: 'active' or 'inactive'
   String? time;
   String? date;
   DateTime? localTime;
-  String get flag => _getFlagForTimezone(timezone);
+
+  // Use FlagService for flags, fallback to emoji
+  String get flag {
+    if (flagUrl != null && flagUrl!.isNotEmpty) {
+      return '🏳️'; // Placeholder - will be replaced with FlagService widget
+    }
+    return _getFlagForTimezone(timezone);
+  }
+
+  // Extract country code from flag URL
+  String? get countryCode {
+    if (flagUrl != null && flagUrl!.isNotEmpty) {
+      try {
+        // Extract country code from URL like "https://flagcdn.com/w40/us.png"
+        final uri = Uri.parse(flagUrl!);
+        final pathSegments = uri.pathSegments;
+        if (pathSegments.isNotEmpty) {
+          final filename = pathSegments.last;
+          final dotIndex = filename.lastIndexOf('.');
+          if (dotIndex > 0) {
+            final countryCode = filename.substring(0, dotIndex);
+            // Validate that it's a 2-letter country code
+            if (countryCode.length == 2 &&
+                countryCode.contains(RegExp(r'^[a-z]{2}$'))) {
+              print(
+                '✅ Extracted country code: $countryCode from URL: $flagUrl',
+              );
+              return countryCode;
+            } else {
+              print(
+                '⚠️ Invalid country code format: $countryCode from URL: $flagUrl',
+              );
+            }
+          }
+        }
+      } catch (e) {
+        print('❌ Error extracting country code from flag URL: $e');
+      }
+    }
+    return null;
+  }
 
   ClockLocation({
     required this.timezone,
     required this.city,
     required this.utcOffset,
+    this.flagUrl,
+    this.country,
+    this.status = 'active', // Default to active
     this.time,
     this.date,
     this.localTime,
@@ -1250,10 +1457,43 @@ class _ClockCard extends StatelessWidget {
                 ),
                 Row(
                   children: [
-                    Text(
-                      location.flag,
-                      style: TextStyle(fontSize: isMainClock ? 32 : 28),
-                    ),
+                    if (location.countryCode != null)
+                      Container(
+                        width: isMainClock ? 40 : 32,
+                        height: isMainClock ? 30 : 24,
+                        constraints: BoxConstraints(
+                          maxWidth: isMainClock ? 40 : 32,
+                          maxHeight: isMainClock ? 30 : 24,
+                        ),
+                        child: ClipRect(
+                          child: Builder(
+                            builder: (context) {
+                              try {
+                                return FlagService.getFlagWidget(
+                                  location.countryCode!,
+                                  size:
+                                      isMainClock
+                                          ? FlagSize.medium
+                                          : FlagSize.small,
+                                );
+                              } catch (e) {
+                                // Fallback to emoji flag if FlagService fails
+                                return Text(
+                                  location.flag,
+                                  style: TextStyle(
+                                    fontSize: isMainClock ? 32 : 28,
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                        ),
+                      )
+                    else
+                      Text(
+                        location.flag,
+                        style: TextStyle(fontSize: isMainClock ? 32 : 28),
+                      ),
                     if (isMainClock)
                       IconButton(
                         icon: Icon(Icons.settings, size: 20, color: textColor),
@@ -1485,17 +1725,79 @@ class _SearchResultItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isInactive = location.status != 'active';
+
     return ListTile(
-      leading: Text(location.flag, style: const TextStyle(fontSize: 24)),
-      title: Text(location.city),
-      subtitle: Text('UTC${location.utcOffset}'),
+      leading:
+          location.countryCode != null
+              ? Container(
+                width: 24,
+                height: 18,
+                constraints: const BoxConstraints(maxWidth: 24, maxHeight: 18),
+                child: ClipRect(
+                  child: Builder(
+                    builder: (context) {
+                      try {
+                        return FlagService.getFlagWidget(
+                          location.countryCode!,
+                          size: FlagSize.small,
+                        );
+                      } catch (e) {
+                        // Fallback to emoji flag if FlagService fails
+                        return Text(
+                          location.flag,
+                          style: const TextStyle(fontSize: 18),
+                        );
+                      }
+                    },
+                  ),
+                ),
+              )
+              : Text(location.flag, style: const TextStyle(fontSize: 20)),
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(
+              location.city,
+              style: TextStyle(
+                color: isInactive ? Colors.grey : null,
+                decoration: isInactive ? TextDecoration.lineThrough : null,
+              ),
+            ),
+          ),
+          if (isInactive)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: Colors.orange.withOpacity(0.5)),
+              ),
+              child: Text(
+                'BLOCKED',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.orange[700],
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+        ],
+      ),
+      subtitle: Text(
+        'UTC${location.utcOffset}',
+        style: TextStyle(color: isInactive ? Colors.grey : null),
+      ),
       trailing:
-          isAdded
+          isInactive
+              ? const Icon(Icons.block, color: Colors.orange)
+              : isAdded
               ? const Icon(Icons.check, color: Colors.green)
               : const Icon(Icons.add),
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      tileColor: isInactive ? Colors.grey.withOpacity(0.1) : null,
     );
   }
 }

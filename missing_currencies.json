@@ -1,0 +1,224 @@
+[
+  {
+    "code": "RUB",
+    "name": "Russian Ruble",
+    "symbol": "₽",
+    "flag": "🇷🇺"
+  },
+  {
+    "code": "CRC",
+    "name": "Costa Rican Colón",
+    "symbol": "₡",
+    "flag": "🇨🇷"
+  },
+  {
+    "code": "PYG",
+    "name": "Paraguayan Guarani",
+    "symbol": "₲",
+    "flag": "🇵🇾"
+  },
+  {
+    "code": "GTQ",
+    "name": "Guatemalan Quetzal",
+    "symbol": "Q",
+    "flag": "🇬🇹"
+  },
+  {
+    "code": "DOP",
+    "name": "Dominican Peso",
+    "symbol": "RD$",
+    "flag": "🇩🇴"
+  },
+  {
+    "code": "HNL",
+    "name": "Honduran Lempira",
+    "symbol": "L",
+    "flag": "🇭🇳"
+  },
+  {
+    "code": "NIO",
+    "name": "Nicaraguan Córdoba",
+    "symbol": "C$",
+    "flag": "🇳🇮"
+  },
+  {
+    "code": "MZN",
+    "name": "Mozambican Metical",
+    "symbol": "MT",
+    "flag": "🇲🇿"
+  },
+  {
+    "code": "MWK",
+    "name": "Malawian Kwacha",
+    "symbol": "MK",
+    "flag": "🇲🇼"
+  },
+  {
+    "code": "ANG",
+    "name": "Netherlands Antillean Guilder",
+    "symbol": "ƒ",
+    "flag": "🇨🇼"
+  },
+  {
+    "code": "TTD",
+    "name": "Trinidad & Tobago Dollar",
+    "symbol": "TT$",
+    "flag": "🇹🇹"
+  },
+  {
+    "code": "BBD",
+    "name": "Barbadian Dollar",
+    "symbol": "Bds$",
+    "flag": "🇧🇧"
+  },
+  {
+    "code": "JMD",
+    "name": "Jamaican Dollar",
+    "symbol": "J$",
+    "flag": "🇯🇲"
+  },
+  {
+    "code": "BND",
+    "name": "Brunei Dollar",
+    "symbol": "B$",
+    "flag": "🇧🇳"
+  },
+  {
+    "code": "PGK",
+    "name": "Papua New Guinean Kina",
+    "symbol": "K",
+    "flag": "🇵🇬"
+  },
+  {
+    "code": "SBD",
+    "name": "Solomon Islands Dollar",
+    "symbol": "SI$",
+    "flag": "🇸🇧"
+  },
+  {
+    "code": "VUV",
+    "name": "Vanuatu Vatu",
+    "symbol": "VT",
+    "flag": "🇻🇺"
+  },
+  {
+    "code": "WST",
+    "name": "Samoan Tala",
+    "symbol": "WS$",
+    "flag": "🇼🇸"
+  },
+  {
+    "code": "TOP",
+    "name": "Tongan Paʻanga",
+    "symbol": "T$",
+    "flag": "🇹🇴"
+  },
+  {
+    "code": "KHR",
+    "name": "Cambodian Riel",
+    "symbol": "៛",
+    "flag": "🇰🇭"
+  },
+  {
+    "code": "MMK",
+    "name": "Myanmar Kyat",
+    "symbol": "K",
+    "flag": "🇲🇲"
+  },
+  {
+    "code": "LAK",
+    "name": "Laotian Kip",
+    "symbol": "₭",
+    "flag": "🇱🇦"
+  },
+  {
+    "code": "MVR",
+    "name": "Maldivian Rufiyaa",
+    "symbol": "Rf",
+    "flag": "🇲🇻"
+  },
+  {
+    "code": "NPR",
+    "name": "Nepalese Rupee",
+    "symbol": "₨",
+    "flag": "🇳🇵"
+  },
+  {
+    "code": "BTN",
+    "name": "Bhutanese Ngultrum",
+    "symbol": "Nu.",
+    "flag": "🇧🇹"
+  },
+  {
+    "code": "MNT",
+    "name": "Mongolian Tögrög",
+    "symbol": "₮",
+    "flag": "🇲🇳"
+  },
+  {
+    "code": "AFN",
+    "name": "Afghan Afghani",
+    "symbol": "؋",
+    "flag": "🇦🇫"
+  },
+  {
+    "code": "ALL",
+    "name": "Albanian Lek",
+    "symbol": "L",
+    "flag": "🇦🇱"
+  },
+  {
+    "code": "AMD",
+    "name": "Armenian Dram",
+    "symbol": "֏",
+    "flag": "🇦🇲"
+  },
+  {
+    "code": "AZN",
+    "name": "Azerbaijani Manat",
+    "symbol": "₼",
+    "flag": "🇦🇿"
+  },
+  {
+    "code": "BAM",
+    "name": "Bosnia-Herzegovina Convertible Mark",
+    "symbol": "KM",
+    "flag": "🇧🇦"
+  },
+  {
+    "code": "GEL",
+    "name": "Georgian Lari",
+    "symbol": "₾",
+    "flag": "🇬🇪"
+  },
+  {
+    "code": "MDL",
+    "name": "Moldovan Leu",
+    "symbol": "L",
+    "flag": "🇲🇩"
+  },
+  {
+    "code": "MKD",
+    "name": "Macedonian Denar",
+    "symbol": "ден",
+    "flag": "🇲🇰"
+  },
+  {
+    "code": "TJS",
+    "name": "Tajikistani Somoni",
+    "symbol": "ЅМ",
+    "flag": "🇹🇯"
+  },
+  {
+    "code": "TMT",
+    "name": "Turkmenistani Manat",
+    "symbol": "m",
+    "flag": "🇹🇲"
+  },
+  {
+    "code": "UZS",
+    "name": "Uzbekistani Som",
+    "symbol": "so'm",
+    "flag": "🇺🇿"
+  }
+]

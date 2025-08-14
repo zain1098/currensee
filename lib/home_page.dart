@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'main.dart';
 import 'currency_widget.dart';
+import 'services/currency_service.dart';
 
 class CurrencyConverterScreen extends StatefulWidget {
   final bool showSuccess;
@@ -82,10 +83,41 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
       _lastAutoUpdateSetting = appSettings.autoUpdateRates;
       _setupAutoUpdate();
     }
+
+    // Check offline mode
+    if (appSettings.offlineMode) {
+      _handleOfflineMode();
+    }
+
     if (widget.showSuccess) {
       // Check if user is new (first time) and show tutorial
       _checkAndShowTutorial();
     }
+  }
+
+  // Handle offline mode
+  void _handleOfflineMode() {
+    setState(() {
+      isLoading = false;
+      // Use cached rates or default rates for offline mode
+      if (rates.isEmpty) {
+        // Set some default rates for offline mode
+        rates = {
+          'USD': 1.0,
+          'EUR': 0.85,
+          'GBP': 0.73,
+          'JPY': 110.0,
+          'INR': 75.0,
+          'PKR': 160.0,
+          'CAD': 1.25,
+          'AUD': 1.35,
+          'CHF': 0.92,
+          'CNY': 6.45,
+        };
+      }
+      lastUpdated = 'Offline Mode - Last cached rates';
+    });
+    convertCurrency();
   }
 
   Future<void> _checkAndShowTutorial() async {
@@ -170,83 +202,76 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
     });
   }
 
-  void initializeCurrencies() {
-    currencies = [
-      Currency(code: 'USD', name: 'US Dollar', symbol: '\$', flag: '🇺🇸'),
-      Currency(code: 'EUR', name: 'Euro', symbol: '€', flag: '🇪🇺'),
-      Currency(code: 'GBP', name: 'British Pound', symbol: '£', flag: '🇬🇧'),
-      Currency(code: 'JPY', name: 'Japanese Yen', symbol: '¥', flag: '🇯🇵'),
-      Currency(code: 'INR', name: 'Indian Rupee', symbol: '₹', flag: '🇮🇳'),
-      Currency(
-        code: 'PKR',
-        name: 'Pakistani Rupee',
-        symbol: 'Rs',
-        flag: '🇵🇰',
-      ),
-      Currency(code: 'CNY', name: 'Chinese Yuan', symbol: '¥', flag: '🇨🇳'),
-      Currency(
-        code: 'AUD',
-        name: 'Australian Dollar',
-        symbol: 'A',
-        flag: '🇦🇺',
-      ),
-      Currency(code: 'CAD', name: 'Canadian Dollar', symbol: 'C', flag: '🇨🇦'),
-      Currency(code: 'CHF', name: 'Swiss Franc', symbol: 'Fr', flag: '🇨🇭'),
-      Currency(
-        code: 'SGD',
-        name: 'Singapore Dollar',
-        symbol: 'S',
-        flag: '🇸🇬',
-      ),
-      Currency(
-        code: 'NZD',
-        name: 'New Zealand Dollar',
-        symbol: 'NZ',
-        flag: '🇳🇿',
-      ),
-      Currency(code: 'MXN', name: 'Mexican Peso', symbol: '\$', flag: '🇲🇽'),
-      Currency(code: 'BRL', name: 'Brazilian Real', symbol: 'R', flag: '🇧🇷'),
-      Currency(code: 'RUB', name: 'Russian Ruble', symbol: '₽', flag: '🇷🇺'),
-      Currency(
-        code: 'KRW',
-        name: 'South Korean Won',
-        symbol: '₩',
-        flag: '🇰🇷',
-      ),
-      Currency(code: 'TRY', name: 'Turkish Lira', symbol: '₺', flag: '🇹🇷'),
-      Currency(
-        code: 'ZAR',
-        name: 'South African Rand',
-        symbol: 'R',
-        flag: '🇿🇦',
-      ),
-      Currency(code: 'SEK', name: 'Swedish Krona', symbol: 'kr', flag: '🇸🇪'),
-      Currency(
-        code: 'NOK',
-        name: 'Norwegian Krone',
-        symbol: 'kr',
-        flag: '🇳🇴',
-      ),
-    ];
+  Future<void> initializeCurrencies() async {
+    try {
+      // Load currencies from Firebase
+      final loadedCurrencies = await CurrencyService.loadActiveCurrencies();
+      print('Loaded ${loadedCurrencies.length} currencies from Firebase');
 
-    setState(() {
-      fromCurrency = currencies.firstWhere((c) => c.code == 'USD');
-      toCurrency = currencies.firstWhere((c) => c.code == 'PKR');
-    });
+      setState(() {
+        currencies = loadedCurrencies;
+      });
 
-    fetchExchangeRates();
+      // Set default currencies with robust fallback logic
+      if (currencies.isNotEmpty) {
+        // Get preferred from currency (USD) with fallback
+        Currency? preferredFrom = currencies.firstWhere(
+          (c) => c.code == 'USD',
+          orElse: () => currencies.first,
+        );
+
+        // Get preferred to currency (PKR) with fallback
+        Currency? preferredTo = currencies.firstWhere(
+          (c) => c.code == 'PKR',
+          orElse:
+              () => currencies.length > 1 ? currencies[1] : currencies.first,
+        );
+
+        // Ensure from and to currencies are different
+        if (preferredFrom.code == preferredTo.code && currencies.length > 1) {
+          final currentIndex = currencies.indexWhere(
+            (c) => c.code == preferredFrom.code,
+          );
+          final nextIndex = (currentIndex + 1) % currencies.length;
+          preferredTo = currencies[nextIndex];
+        }
+
+        setState(() {
+          fromCurrency = preferredFrom;
+          toCurrency = preferredTo;
+        });
+
+        print(
+          'Selected currencies: ${fromCurrency?.code} -> ${toCurrency?.code}',
+        );
+      }
+
+      // Fetch exchange rates after loading currencies
+      fetchExchangeRates();
+    } catch (e) {
+      print('Error loading currencies: $e');
+      // Fallback to default behavior
+      fetchExchangeRates();
+    }
   }
 
   Future<void> fetchExchangeRates() async {
+    // Check if we're in offline mode
+    final appSettings = Provider.of<AppSettings>(context, listen: false);
+    if (appSettings.offlineMode) {
+      _handleOfflineMode();
+      return;
+    }
+
     setState(() {
       isLoading = true;
       errorMessage = null;
     });
 
     try {
-      final response = await http.get(
-        Uri.parse('https://open.er-api.com/v6/latest/USD'),
-      );
+      final response = await http
+          .get(Uri.parse('https://open.er-api.com/v6/latest/USD'))
+          .timeout(const Duration(seconds: 10)); // Add timeout
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -273,11 +298,58 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
         });
       }
     } catch (e) {
+      print('Network error in fetchExchangeRates: $e');
       setState(() {
         errorMessage = 'Network error: $e';
         isLoading = false;
       });
+
+      // If network fails, show option to go offline
+      _showOfflineOption();
     }
+  }
+
+  // Show offline option when network fails
+  void _showOfflineOption() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Network Error'),
+          content: const Text(
+            'Unable to fetch latest rates. Would you like to continue in offline mode with cached rates?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _retryConnection();
+              },
+              child: const Text('Retry'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _continueOffline();
+              },
+              child: const Text('Continue Offline'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Retry connection
+  void _retryConnection() {
+    fetchExchangeRates();
+  }
+
+  // Continue in offline mode
+  void _continueOffline() {
+    final appSettings = Provider.of<AppSettings>(context, listen: false);
+    appSettings.setOfflineMode(true);
+    _handleOfflineMode();
   }
 
   void convertCurrency() {
@@ -818,7 +890,7 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
           ),
         ),
         SizedBox(
-          height: 120, // Reduced height
+          height: 140, // Increased height to accommodate content
           child: NotificationListener<UserScrollNotification>(
             onNotification: (notification) {
               if (notification.direction.name != 'idle') {
@@ -842,8 +914,10 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                 return GestureDetector(
                   onTap: () => onCurrencySelected(curr),
                   child: Container(
-                    width: 90, // Reduced width
-                    margin: const EdgeInsets.only(right: 10), // Reduced margin
+                    width: 100, // Increased width
+                    margin: const EdgeInsets.only(
+                      right: 12,
+                    ), // Increased margin
                     decoration: BoxDecoration(
                       gradient:
                           isSelected
@@ -864,36 +938,44 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                         ),
                       ],
                     ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          curr.flag,
-                          style: const TextStyle(fontSize: 28),
-                        ), // Reduced size
-                        const SizedBox(height: 6), // Reduced spacing
-                        Text(
-                          curr.code,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: isSelected ? Colors.white : Colors.black,
+                    child: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Display flag emoji
+                          Text(curr.flag, style: const TextStyle(fontSize: 24)),
+                          const SizedBox(height: 8),
+                          Text(
+                            curr.code,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: isSelected ? Colors.white : Colors.black,
+                            ),
+                            textAlign: TextAlign.center,
                           ),
-                        ),
-                        Text(
-                          '1 ${fromCurrency?.code} = ${rate.toStringAsFixed(4)}',
-                          style: TextStyle(
-                            fontSize: 9, // Reduced font size
-                            color:
-                                isSelected
-                                    ? Colors.white70
-                                    : (Theme.of(context).brightness ==
-                                            Brightness.dark
-                                        ? Colors.grey[300]
-                                        : Colors.grey[700]),
+                          const SizedBox(height: 4),
+                          Flexible(
+                            child: Text(
+                              '1 ${fromCurrency?.code} = ${rate.toStringAsFixed(4)}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color:
+                                    isSelected
+                                        ? Colors.white70
+                                        : (Theme.of(context).brightness ==
+                                                Brightness.dark
+                                            ? Colors.grey[300]
+                                            : Colors.grey[700]),
+                              ),
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 2,
+                            ),
                           ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 );
@@ -1126,20 +1208,6 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
     _autoUpdateTimer?.cancel();
     super.dispose();
   }
-}
-
-class Currency {
-  final String code;
-  final String name;
-  final String symbol;
-  final String flag;
-
-  const Currency({
-    required this.code,
-    required this.name,
-    required this.symbol,
-    required this.flag,
-  });
 }
 
 class CalculatorDialog extends StatefulWidget {

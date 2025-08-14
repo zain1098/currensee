@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="@drawable/watchlist_widget_background"
+    android:minHeight="200dp">
+
+    <!-- Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="12dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="My Watchlist"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF" />
+
+        <TextView
+            android:id="@+id/watchlist_refresh_btn"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:text="🔄"
+            android:textSize="16sp"
+            android:gravity="center"
+            android:background="@drawable/watchlist_refresh_button_background"
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="Refresh rates" />
+
+    </LinearLayout>
+
+    <!-- Currency Pair 1 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="8dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/currency_pair_1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="USD/PKR"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF" />
+
+            <TextView
+                android:id="@+id/base_rate_1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="280.50"
+                android:textSize="14sp"
+                android:textColor="#CCCCCC"
+                android:layout_marginTop="2dp" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="end">
+
+            <TextView
+                android:id="@+id/current_rate_1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="280.50"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF" />
+
+            <TextView
+                android:id="@+id/percentage_change_1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="+0.15%"
+                android:textSize="14sp"
+                android:textColor="#4CAF50"
+                android:layout_marginTop="2dp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Currency Pair 2 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="8dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/currency_pair_2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="GBP/PKR"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF" />
+
+            <TextView
+                android:id="@+id/base_rate_2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="355.20"
+                android:textSize="14sp"
+                android:textColor="#CCCCCC"
+                android:layout_marginTop="2dp" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="end">
+
+            <TextView
+                android:id="@+id/current_rate_2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="355.20"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF" />
+
+            <TextView
+                android:id="@+id/percentage_change_2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="-0.10%"
+                android:textSize="14sp"
+                android:textColor="#F44336"
+                android:layout_marginTop="2dp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Currency Pair 3 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="8dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/currency_pair_3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="EUR/PKR"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF" />
+
+            <TextView
+                android:id="@+id/base_rate_3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="305.80"
+                android:textSize="14sp"
+                android:textColor="#CCCCCC"
+                android:layout_marginTop="2dp" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="end">
+
+            <TextView
+                android:id="@+id/current_rate_3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="305.80"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF" />
+
+            <TextView
+                android:id="@+id/percentage_change_3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="+0.32%"
+                android:textSize="14sp"
+                android:textColor="#4CAF50"
+                android:layout_marginTop="2dp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Last Updated Info -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="8dp">
+
+        <TextView
+            android:id="@+id/last_updated"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Updated: Just now"
+            android:textSize="12sp"
+            android:textColor="#AAAAAA" />
+
+        <TextView
+            android:id="@+id/internet_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="12sp"
+            android:textColor="#F44336"
+            android:visibility="gone" />
+
+    </LinearLayout>
+
+</LinearLayout>

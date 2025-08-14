@@ -612,7 +612,7 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
             email: _emailController.text,
             message: _messageController.text,
           );
-          print('Contact email sent successfully');
+          print('Contact email sent successfully to festoeventure@gmail.com');
           emailSent = true;
         } catch (e) {
           print('Failed to send contact email: $e');

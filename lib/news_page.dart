@@ -14,7 +14,8 @@ import 'world_clock.dart';
 import 'multi_currency_page.dart';
 import 'package:lottie/lottie.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'support_help_screen.dart';
+import 'contact_form_screen.dart';
+import 'services/news_service.dart';
 
 // ... (Keep the existing MyApp, MainNavigationScreen and CurrencyConverterScreen code)
 
@@ -33,20 +34,36 @@ class _NewsScreenState extends State<NewsScreen> {
   String? errorMessage;
   final TextEditingController _searchController = TextEditingController();
   String selectedCategory = 'business';
-  final List<String> categories = [
-    'business',
-    'economy',
-    'finance',
-    'stock market',
-    'cryptocurrency',
-    'technology',
-    'world',
-  ];
+  List<NewsCategory> categories = [];
+  Map<String, dynamic> newsConfig = {};
 
   @override
   void initState() {
     super.initState();
-    fetchNews();
+    _loadNewsData();
+  }
+
+  Future<void> _loadNewsData() async {
+    try {
+      // Load categories and configuration
+      final loadedCategories = await NewsService.loadNewsCategories();
+      final config = await NewsService.getNewsConfiguration();
+
+      setState(() {
+        categories = loadedCategories;
+        newsConfig = config;
+        if (categories.isNotEmpty) {
+          selectedCategory = categories.first.id;
+        }
+      });
+
+      // Fetch news after loading categories
+      fetchNews();
+    } catch (e) {
+      print('Error loading news data: $e');
+      // Fallback to default behavior
+      fetchNews();
+    }
   }
 
   void _navigateAndClose(BuildContext context, Widget page) {
@@ -60,18 +77,42 @@ class _NewsScreenState extends State<NewsScreen> {
   }
 
   Future<void> fetchNews() async {
+    if (categories.isEmpty) return;
+
     setState(() {
       isLoading = true;
       errorMessage = null;
     });
 
     try {
-      // Using GNews API which has better financial coverage
-      final response = await http.get(
-        Uri.parse(
-          'https://gnews.io/api/v4/top-headlines?category=$selectedCategory&lang=en&country=us&max=20&apikey=b2254f48318f9db55c21821b24d057bd',
-        ),
+      // Find the selected category
+      final selectedCat = categories.firstWhere(
+        (cat) => cat.id == selectedCategory,
+        orElse: () => categories.first,
       );
+
+      // Check if category is inactive
+      if (selectedCat.status == 'inactive') {
+        setState(() {
+          errorMessage =
+              '${selectedCat.name} category is temporarily blocked by admin';
+          isLoading = false;
+        });
+        return;
+      }
+
+      // Build API URL with configuration
+      final apiKey = newsConfig['apiKey'] ?? 'b2254f48318f9db55c21821b24d057bd';
+      final baseUrl =
+          newsConfig['baseUrl'] ?? 'https://gnews.io/api/v4/top-headlines';
+      final language = newsConfig['defaultLanguage'] ?? 'en';
+      final country = newsConfig['defaultCountry'] ?? 'us';
+      final maxArticles = selectedCat.maxArticles;
+
+      final url =
+          '$baseUrl?category=${selectedCat.apiCategory}&lang=$language&country=$country&max=$maxArticles&apikey=$apiKey';
+
+      final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -128,9 +169,29 @@ class _NewsScreenState extends State<NewsScreen> {
     });
   }
 
-  void changeCategory(String category) {
+  void changeCategory(String categoryId) {
+    // Check if the category is inactive
+    final category = categories.firstWhere(
+      (cat) => cat.id == categoryId,
+      orElse: () => categories.first,
+    );
+
+    if (category.status == 'inactive') {
+      // Show a message that category is blocked
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${category.name} category is temporarily blocked by admin',
+          ),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     setState(() {
-      selectedCategory = category;
+      selectedCategory = categoryId;
       isLoading = true;
       _searchController.clear();
     });
@@ -338,7 +399,7 @@ class _NewsScreenState extends State<NewsScreen> {
                 icon: Icons.help_center,
                 title: 'Help & Support',
                 onTap:
-                    () => _navigateAndClose(context, const SupportHelpScreen()),
+                    () => _navigateAndClose(context, const ContactFormScreen()),
               ),
               const SizedBox(height: 16),
               const Divider(color: Colors.white24, height: 1),
@@ -399,21 +460,70 @@ class _NewsScreenState extends State<NewsScreen> {
                     itemCount: categories.length,
                     itemBuilder: (context, index) {
                       final category = categories[index];
-                      final isSelected = category == selectedCategory;
+                      final isSelected = category.id == selectedCategory;
+                      final isInactive = category.status == 'inactive';
+
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: ChoiceChip(
-                          label: Text(category.toUpperCase()),
-                          selected: isSelected,
-                          selectedColor: const Color(0xFF4A6CD1),
-                          backgroundColor: Theme.of(context).brightness == Brightness.dark
-                              ? Colors.grey[700]
-                              : Colors.grey[200],
-                          onSelected: (selected) => changeCategory(category),
-                          labelStyle: TextStyle(
-                            color: isSelected ? Colors.white : Colors.black,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        child: Stack(
+                          children: [
+                            ChoiceChip(
+                              label: Text(
+                                category.name.toUpperCase(),
+                                style: TextStyle(
+                                  color:
+                                      isSelected
+                                          ? Colors.white
+                                          : isInactive
+                                          ? Colors.grey[500]
+                                          : Colors.black,
+                                  fontWeight: FontWeight.bold,
+                                  decoration:
+                                      isInactive
+                                          ? TextDecoration.lineThrough
+                                          : null,
+                                ),
+                              ),
+                              selected: isSelected && !isInactive,
+                              selectedColor: const Color(0xFF4A6CD1),
+                              backgroundColor:
+                                  isInactive
+                                      ? Colors.grey[300]
+                                      : Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? Colors.grey[700]
+                                      : Colors.grey[200],
+                              onSelected:
+                                  isInactive
+                                      ? null
+                                      : (selected) =>
+                                          changeCategory(category.id),
+                              disabledColor: Colors.grey[300],
+                            ),
+                            if (isInactive)
+                              Positioned(
+                                top: 2,
+                                right: 2,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 1,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Text(
+                                    'BLOCKED',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       );
                     },
@@ -487,38 +597,42 @@ class _NewsScreenState extends State<NewsScreen> {
                     height: 180,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                                            placeholder:
-                            (context, url) => Container(
-                              height: 180,
-                              color: Theme.of(context).brightness == Brightness.dark
+                    placeholder:
+                        (context, url) => Container(
+                          height: 180,
+                          color:
+                              Theme.of(context).brightness == Brightness.dark
                                   ? Colors.grey[700]
                                   : Colors.grey[200],
-                              child: const Center(
-                                child: CircularProgressIndicator(),
-                              ),
-                            ),
+                          child: const Center(
+                            child: CircularProgressIndicator(),
+                          ),
+                        ),
                     errorWidget:
                         (context, url, error) => Container(
                           height: 180,
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? Colors.grey[700]
-                              : Colors.grey[200],
+                          color:
+                              Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.grey[700]
+                                  : Colors.grey[200],
                           child: const Icon(Icons.broken_image),
                         ),
                   ),
                 )
                 : Container(
                   height: 180,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.grey[700]
-                      : Colors.grey[200],
+                  color:
+                      Theme.of(context).brightness == Brightness.dark
+                          ? Colors.grey[700]
+                          : Colors.grey[200],
                   alignment: Alignment.center,
                   child: Icon(
                     Icons.article,
                     size: 60,
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? Colors.grey[400]
-                        : Colors.grey,
+                    color:
+                        Theme.of(context).brightness == Brightness.dark
+                            ? Colors.grey[400]
+                            : Colors.grey,
                   ),
                 ),
 
@@ -541,9 +655,10 @@ class _NewsScreenState extends State<NewsScreen> {
                       Text(
                         DateFormat('MMM dd, yyyy').format(article.publishedAt),
                         style: TextStyle(
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? Colors.grey[400]
-                              : Colors.grey,
+                          color:
+                              Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.grey[400]
+                                  : Colors.grey,
                         ),
                       ),
                     ],
@@ -557,9 +672,10 @@ class _NewsScreenState extends State<NewsScreen> {
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? Colors.white
-                          : Colors.black87,
+                      color:
+                          Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white
+                              : Colors.black87,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -572,9 +688,10 @@ class _NewsScreenState extends State<NewsScreen> {
                     article.description,
                     style: TextStyle(
                       fontSize: 14,
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? Colors.white70
-                          : Colors.black87,
+                      color:
+                          Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white70
+                              : Colors.black87,
                     ),
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,

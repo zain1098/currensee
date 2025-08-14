@@ -14,6 +14,7 @@ import 'world_clock.dart';
 import 'package:lottie/lottie.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'support_help_screen.dart';
+import 'services/currency_service.dart';
 
 class MultiCurrencyConverter extends StatefulWidget {
   const MultiCurrencyConverter({super.key});
@@ -34,13 +35,282 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
   List<String> selectedCurrencies = [];
   Map<String, double> conversionResults = {};
   final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _baseCurrencySearchController =
+      TextEditingController();
   String searchQuery = '';
+  String baseCurrencySearchQuery = '';
+
+  // Database-driven currency data
+  List<dynamic> _databaseCurrencies = [];
+
+  // Fallback currency data (used if database fails)
+  final Map<String, String> currencyFlags = {
+    'USD': '🇺🇸',
+    'EUR': '🇪🇺',
+    'GBP': '🇬🇧',
+    'JPY': '🇯🇵',
+    'INR': '🇮🇳',
+    'AUD': '🇦🇺',
+    'CAD': '🇨🇦',
+    'CHF': '🇨🇭',
+    'CNY': '🇨🇳',
+    'NZD': '🇳🇿',
+    'SEK': '🇸🇪',
+    'SGD': '🇸🇬',
+    'NOK': '🇳🇴',
+    'KRW': '🇰🇷',
+    'TRY': '🇹🇷',
+    'BRL': '🇧🇷',
+    'RUB': '🇷🇺',
+    'ZAR': '🇿🇦',
+    'MXN': '🇲🇽',
+    'IDR': '🇮🇩',
+    'THB': '🇹🇭',
+    'HKD': '🇭🇰',
+    'SAR': '🇸🇦',
+    'AED': '🇦🇪',
+    'PLN': '🇵🇱',
+    'HUF': '🇭🇺',
+    'CZK': '🇨🇿',
+    'ILS': '🇮🇱',
+    'CLP': '🇨🇱',
+    'PHP': '🇵🇭',
+    'MYR': '🇲🇾',
+    'RON': '🇷🇴',
+    'COP': '🇨🇴',
+    'VND': '🇻🇳',
+    'EGP': '🇪🇬',
+    'PKR': '🇵🇰',
+    'BDT': '🇧🇩',
+    'DKK': '🇩🇰',
+    'ARS': '🇦🇷',
+    'NGN': '🇳🇬',
+    'UAH': '🇺🇦',
+    'KZT': '🇰🇿',
+    'QAR': '🇶🇦',
+    'PEN': '🇵🇪',
+    'KWD': '🇰🇼',
+    'OMR': '🇴🇲',
+    'BHD': '🇧🇭',
+    'LKR': '🇱🇰',
+    'DZD': '🇩🇿',
+    'MAD': '🇲🇦',
+    'TWD': '🇹🇼',
+    'JOD': '🇯🇴',
+    'HNL': '🇭🇳',
+    'GTQ': '🇬🇹',
+    'CRC': '🇨🇷',
+    'UYU': '🇺🇾',
+    'BOB': '🇧🇴',
+    'PYG': '🇵🇾',
+    'DOP': '🇩🇴',
+    'JMD': '🇯🇲',
+    'BGN': '🇧🇬',
+    'HRK': '🇭🇷',
+    'RSD': '🇷🇸',
+    'ISK': '🇮🇸',
+    'FJD': '🇫🇯',
+    'BWP': '🇧🇼',
+    'NAD': '🇳🇦',
+    'ZMW': '🇿🇲',
+    'ETB': '🇪🇹',
+    'KES': '🇰🇪',
+    'TZS': '🇹🇿',
+    'UGX': '🇺🇬',
+    'GHS': '🇬🇭',
+    'XOF': '🇧🇯',
+    'XAF': '🇨🇲',
+  };
+
+  final Map<String, String> currencyNames = {
+    'USD': 'US Dollar',
+    'EUR': 'Euro',
+    'GBP': 'British Pound',
+    'JPY': 'Japanese Yen',
+    'INR': 'Indian Rupee',
+    'AUD': 'Australian Dollar',
+    'CAD': 'Canadian Dollar',
+    'CHF': 'Swiss Franc',
+    'CNY': 'Chinese Yuan',
+    'NZD': 'New Zealand Dollar',
+    'SEK': 'Swedish Krona',
+    'SGD': 'Singapore Dollar',
+    'NOK': 'Norwegian Krone',
+    'KRW': 'South Korean Won',
+    'TRY': 'Turkish Lira',
+    'BRL': 'Brazilian Real',
+    'RUB': 'Russian Ruble',
+    'ZAR': 'South African Rand',
+    'MXN': 'Mexican Peso',
+    'IDR': 'Indonesian Rupiah',
+    'THB': 'Thai Baht',
+    'HKD': 'Hong Kong Dollar',
+    'SAR': 'Saudi Riyal',
+    'AED': 'UAE Dirham',
+    'PLN': 'Polish Złoty',
+    'HUF': 'Hungarian Forint',
+    'CZK': 'Czech Koruna',
+    'ILS': 'Israeli Shekel',
+    'CLP': 'Chilean Peso',
+    'PHP': 'Philippine Peso',
+    'MYR': 'Malaysian Ringgit',
+    'RON': 'Romanian Leu',
+    'COP': 'Colombian Peso',
+    'VND': 'Vietnamese Dong',
+    'EGP': 'Egyptian Pound',
+    'PKR': 'Pakistani Rupee',
+    'BDT': 'Bangladeshi Taka',
+    'DKK': 'Danish Krone',
+    'ARS': 'Argentine Peso',
+    'NGN': 'Nigerian Naira',
+    'UAH': 'Ukrainian Hryvnia',
+    'KZT': 'Kazakhstani Tenge',
+    'QAR': 'Qatari Riyal',
+    'PEN': 'Peruvian Sol',
+    'KWD': 'Kuwaiti Dinar',
+    'OMR': 'Omani Rial',
+    'BHD': 'Bahraini Dinar',
+    'LKR': 'Sri Lankan Rupee',
+    'DZD': 'Algerian Dinar',
+    'MAD': 'Moroccan Dirham',
+    'TWD': 'New Taiwan Dollar',
+    'JOD': 'Jordanian Dinar',
+    'HNL': 'Honduran Lempira',
+    'GTQ': 'Guatemalan Quetzal',
+    'CRC': 'Costa Rican Colón',
+    'UYU': 'Uruguayan Peso',
+    'BOB': 'Bolivian Boliviano',
+    'PYG': 'Paraguayan Guarani',
+    'DOP': 'Dominican Peso',
+    'JMD': 'Jamaican Dollar',
+    'BGN': 'Bulgarian Lev',
+    'HRK': 'Croatian Kuna',
+    'RSD': 'Serbian Dinar',
+    'ISK': 'Icelandic Króna',
+    'FJD': 'Fijian Dollar',
+    'BWP': 'Botswana Pula',
+    'NAD': 'Namibian Dollar',
+    'ZMW': 'Zambian Kwacha',
+    'ETB': 'Ethiopian Birr',
+    'KES': 'Kenyan Shilling',
+    'TZS': 'Tanzanian Shilling',
+    'UGX': 'Ugandan Shilling',
+    'GHS': 'Ghanaian Cedi',
+    'XOF': 'West African CFA Franc',
+    'XAF': 'Central African CFA Franc',
+  };
 
   @override
   void initState() {
     super.initState();
-    initializeCurrencies();
+    _loadCurrenciesFromDatabase();
     amountController.text = amount.toStringAsFixed(2);
+  }
+
+  Future<void> _loadCurrenciesFromDatabase() async {
+    try {
+      final loadedCurrencies = await CurrencyService.loadCurrencies();
+      setState(() {
+        _databaseCurrencies = loadedCurrencies;
+      });
+
+      // Set default currencies with fallback logic
+      if (_databaseCurrencies.isNotEmpty) {
+        // Get preferred base currency (USD) with fallback
+        final preferredBase = _databaseCurrencies.firstWhere(
+          (c) => c.code == 'USD',
+          orElse: () => _databaseCurrencies.first,
+        );
+
+        // Convert service Currency to local Currency
+        final localCurrency = Currency(
+          code: preferredBase.code,
+          name: preferredBase.name,
+          symbol: preferredBase.symbol,
+          flag: preferredBase.flag,
+          status: preferredBase.status,
+        );
+
+        setState(() {
+          baseCurrency = localCurrency;
+          selectedCurrencies = ['EUR', 'GBP', 'JPY', 'INR', 'CAD', 'AUD'];
+        });
+      }
+
+      fetchExchangeRates();
+    } catch (e) {
+      print('Error loading currencies from database: $e');
+      // Fallback to hardcoded currencies
+      initializeCurrencies();
+    }
+  }
+
+  // Get currency information from database or fallback
+  Map<String, dynamic> _getCurrencyInfo(String code) {
+    try {
+      final currency = _databaseCurrencies.firstWhere((c) => c.code == code);
+      return {
+        'code': currency.code,
+        'name': currency.name,
+        'flag': currency.flag,
+        'symbol': currency.symbol,
+        'status': currency.status,
+      };
+    } catch (e) {
+      // Fallback to hardcoded data
+      return {
+        'code': code,
+        'name': currencyNames[code] ?? code,
+        'flag': currencyFlags[code] ?? '💱',
+        'symbol': _getCurrencySymbol(code),
+        'status': 'active', // Assume active for fallback
+      };
+    }
+  }
+
+  // Get available currencies for display (all currencies from database)
+  List<Currency> get availableCurrencies {
+    if (_databaseCurrencies.isNotEmpty) {
+      // Convert service Currency objects to local Currency objects
+      return _databaseCurrencies
+          .map(
+            (serviceCurrency) => Currency(
+              code: serviceCurrency.code,
+              name: serviceCurrency.name,
+              symbol: serviceCurrency.symbol,
+              flag: serviceCurrency.flag,
+              status: serviceCurrency.status,
+            ),
+          )
+          .toList();
+    }
+    return currencies;
+  }
+
+  String _getCurrencySymbol(String code) {
+    const symbols = {
+      'USD': '\$',
+      'EUR': '€',
+      'GBP': '£',
+      'JPY': '¥',
+      'AUD': 'A\$',
+      'CAD': 'C\$',
+      'CHF': 'Fr',
+      'CNY': '¥',
+      'INR': '₹',
+      'SGD': 'S\$',
+      'KRW': '₩',
+      'RUB': '₽',
+      'TRY': '₺',
+      'THB': '฿',
+      'PLN': 'zł',
+      'HUF': 'Ft',
+      'CZK': 'Kč',
+      'DKK': 'kr',
+      'SEK': 'kr',
+      'NOK': 'kr',
+    };
+    return symbols[code] ?? code;
   }
 
   void initializeCurrencies() {
@@ -345,9 +615,9 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
         final data = json.decode(response.body);
         if (data['result'] == 'success') {
           setState(() {
-rates = (data['rates'] as Map<String, dynamic>).map(
-  (key, value) => MapEntry(key, (value as num).toDouble()),
-);
+            rates = (data['rates'] as Map<String, dynamic>).map(
+              (key, value) => MapEntry(key, (value as num).toDouble()),
+            );
             isLoading = false;
           });
           calculateConversions();
@@ -385,6 +655,21 @@ rates = (data['rates'] as Map<String, dynamic>).map(
   }
 
   void toggleCurrency(String currencyCode) {
+    // Check if currency is inactive
+    final currencyInfo = _getCurrencyInfo(currencyCode);
+    if (currencyInfo['status'] == 'inactive') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${currencyInfo['name']} is temporarily blocked by the team',
+          ),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       if (selectedCurrencies.contains(currencyCode)) {
         selectedCurrencies.remove(currencyCode);
@@ -419,11 +704,30 @@ rates = (data['rates'] as Map<String, dynamic>).map(
   }
 
   List<Currency> getFilteredCurrencies() {
-    if (searchQuery.isEmpty) return currencies;
+    if (searchQuery.isEmpty) return availableCurrencies;
 
-    return currencies.where((currency) {
-      return currency.code.toLowerCase().contains(searchQuery.toLowerCase()) ||
-          currency.name.toLowerCase().contains(searchQuery.toLowerCase());
+    return availableCurrencies.where((currency) {
+      final codeMatch = currency.code.toLowerCase().contains(
+        searchQuery.toLowerCase(),
+      );
+      final nameMatch = currency.name.toLowerCase().contains(
+        searchQuery.toLowerCase(),
+      );
+      return codeMatch || nameMatch;
+    }).toList();
+  }
+
+  List<Currency> getFilteredBaseCurrencies() {
+    if (baseCurrencySearchQuery.isEmpty) return availableCurrencies;
+
+    return availableCurrencies.where((currency) {
+      final codeMatch = currency.code.toLowerCase().contains(
+        baseCurrencySearchQuery.toLowerCase(),
+      );
+      final nameMatch = currency.name.toLowerCase().contains(
+        baseCurrencySearchQuery.toLowerCase(),
+      );
+      return codeMatch || nameMatch;
     }).toList();
   }
 
@@ -813,30 +1117,28 @@ rates = (data['rates'] as Map<String, dynamic>).map(
                                 itemCount: selectedCurrencies.length,
                                 itemBuilder: (context, index) {
                                   final code = selectedCurrencies[index];
-                                  final currency = currencies.firstWhere(
-                                    (c) => c.code == code,
-                                    orElse:
-                                        () => Currency(
-                                          code: code,
-                                          name: code,
-                                          symbol: '',
-                                          flag: '',
-                                        ),
-                                  );
+                                  final currencyInfo = _getCurrencyInfo(code);
+                                  final isInactive =
+                                      currencyInfo['status'] == 'inactive';
                                   final value = conversionResults[code] ?? 0.0;
                                   final formatter = NumberFormat.currency(
-                                    symbol: currency.symbol,
+                                    symbol:
+                                        currencyInfo['symbol'] ??
+                                        _getCurrencySymbol(code),
                                     decimalDigits: 2,
                                   );
 
                                   return Padding(
                                     padding: const EdgeInsets.only(right: 8),
                                     child: Chip(
-                                      backgroundColor: const Color(
-                                        0xFF4A6CD1,
-                                      ).withOpacity(0.1),
+                                      backgroundColor:
+                                          isInactive
+                                              ? Colors.grey.withOpacity(0.2)
+                                              : const Color(
+                                                0xFF4A6CD1,
+                                              ).withOpacity(0.1),
                                       label: Text(
-                                        '${currency.flag} ${formatter.format(value)}',
+                                        '${currencyInfo['flag']} ${formatter.format(value)}',
                                       ),
                                       onDeleted: () => toggleCurrency(code),
                                       deleteIcon: const Icon(
@@ -854,9 +1156,11 @@ rates = (data['rates'] as Map<String, dynamic>).map(
                       padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
                       child: Row(
                         children: [
-                          const Text(
-                            'All Currencies',
-                            style: TextStyle(
+                          Text(
+                            searchQuery.isEmpty
+                                ? 'All Currencies (${availableCurrencies.length})'
+                                : 'Search Results (${filteredCurrencies.length})',
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
@@ -866,12 +1170,26 @@ rates = (data['rates'] as Map<String, dynamic>).map(
                             width: MediaQuery.of(context).size.width * 0.6,
                             child: TextField(
                               controller: _searchController,
-                              onChanged:
-                                  (value) =>
-                                      setState(() => searchQuery = value),
+                              onChanged: (value) {
+                                setState(() {
+                                  searchQuery = value;
+                                });
+                              },
                               decoration: InputDecoration(
                                 hintText: 'Search currencies...',
                                 prefixIcon: const Icon(Icons.search),
+                                suffixIcon:
+                                    searchQuery.isNotEmpty
+                                        ? IconButton(
+                                          icon: const Icon(Icons.clear),
+                                          onPressed: () {
+                                            _searchController.clear();
+                                            setState(() {
+                                              searchQuery = '';
+                                            });
+                                          },
+                                        )
+                                        : null,
                                 isDense: true,
                                 contentPadding: const EdgeInsets.symmetric(
                                   vertical: 8,
@@ -892,17 +1210,58 @@ rates = (data['rates'] as Map<String, dynamic>).map(
                     // Currency List
                     SizedBox(
                       height: MediaQuery.of(context).size.height * 0.35,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: filteredCurrencies.length,
-                        itemBuilder: (context, index) {
-                          final currency = filteredCurrencies[index];
-                          final isSelected = selectedCurrencies.contains(
-                            currency.code,
-                          );
-                          return _buildCurrencyListItem(currency, isSelected);
-                        },
-                      ),
+                      child:
+                          filteredCurrencies.isEmpty && searchQuery.isNotEmpty
+                              ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.search_off,
+                                      size: 64,
+                                      color: Colors.grey[400],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      'No currencies found',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Try searching with different keywords',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.grey[500],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                              : ListView.builder(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                itemCount: filteredCurrencies.length,
+                                itemBuilder: (context, index) {
+                                  final currency = filteredCurrencies[index];
+                                  final isSelected = selectedCurrencies
+                                      .contains(currency.code);
+                                  final currencyInfo = _getCurrencyInfo(
+                                    currency.code,
+                                  );
+                                  final isInactive =
+                                      currencyInfo['status'] == 'inactive';
+                                  return _buildCurrencyListItem(
+                                    currency,
+                                    isSelected,
+                                    isInactive,
+                                  );
+                                },
+                              ),
                     ),
 
                     // Conversion Results
@@ -966,40 +1325,119 @@ rates = (data['rates'] as Map<String, dynamic>).map(
     );
   }
 
-  Widget _buildCurrencyListItem(Currency currency, bool isSelected) {
-    return Card(
-      elevation: 1,
-      margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        leading: Text(currency.flag, style: const TextStyle(fontSize: 28)),
-        title: Text(
-          currency.code,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Text(currency.name, style: const TextStyle(fontSize: 12)),
-        trailing: Switch(
-          value: isSelected,
-          onChanged: (_) => toggleCurrency(currency.code),
-          activeColor: const Color(0xFF4A6CD1),
-        ),
-        onTap: () => toggleCurrency(currency.code),
-        tileColor: isSelected ? const Color(0xFF4A6CD1).withOpacity(0.1) : null,
+  Widget _buildCurrencyListItem(
+    Currency currency,
+    bool isSelected,
+    bool isInactive,
+  ) {
+    return Opacity(
+      opacity: isInactive ? 0.6 : 1.0,
+      child: Card(
+        elevation: 1,
+        margin: const EdgeInsets.only(bottom: 8),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: ListTile(
+          leading: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color:
+                  isInactive
+                      ? Theme.of(context).colorScheme.error.withOpacity(0.1)
+                      : const Color(0xFF4A6CD1).withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(currency.flag, style: const TextStyle(fontSize: 24)),
+            ),
+          ),
+          title: Row(
+            children: [
+              Text(
+                currency.code,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color:
+                      isInactive ? Theme.of(context).colorScheme.error : null,
+                ),
+              ),
+              if (isInactive) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.error,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'BLOCKED',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(currency.name, style: const TextStyle(fontSize: 12)),
+              if (isInactive)
+                Text(
+                  'Temporarily blocked by team',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+            ],
+          ),
+          trailing:
+              isInactive
+                  ? null
+                  : Switch(
+                    value: isSelected,
+                    onChanged: (_) => toggleCurrency(currency.code),
+                    activeColor: const Color(0xFF4A6CD1),
+                  ),
+          onTap:
+              isInactive
+                  ? () {
+                    // Show message when user taps on inactive currency
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          '${currency.name} is temporarily blocked by the team',
+                        ),
+                        backgroundColor: Colors.orange,
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                  : () => toggleCurrency(currency.code),
+          tileColor:
+              isSelected ? const Color(0xFF4A6CD1).withOpacity(0.1) : null,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildConversionRow(String currencyCode, double amount) {
-    final currency = currencies.firstWhere(
-      (c) => c.code == currencyCode,
-      orElse:
-          () => Currency(
-            code: currencyCode,
-            name: currencyCode,
-            symbol: '',
-            flag: '',
-          ),
+    final currencyInfo = _getCurrencyInfo(currencyCode);
+    final currency = Currency(
+      code: currencyCode,
+      name: currencyInfo['name'] ?? currencyCode,
+      symbol: currencyInfo['symbol'] ?? _getCurrencySymbol(currencyCode),
+      flag: currencyInfo['flag'] ?? '💱',
     );
     final formatter = NumberFormat.currency(
       symbol: currency.symbol,
@@ -1028,9 +1466,12 @@ rates = (data['rates'] as Map<String, dynamic>).map(
     final buffer = StringBuffer();
     buffer.writeln('${baseCurrency?.name} ($amount):');
     conversionResults.forEach((code, value) {
-      final currency = currencies.firstWhere(
-        (c) => c.code == code,
-        orElse: () => Currency(code: code, name: code, symbol: '', flag: ''),
+      final currencyInfo = _getCurrencyInfo(code);
+      final currency = Currency(
+        code: code,
+        name: currencyInfo['name'] ?? code,
+        symbol: currencyInfo['symbol'] ?? _getCurrencySymbol(code),
+        flag: currencyInfo['flag'] ?? '💱',
       );
       final formatter = NumberFormat.currency(
         symbol: currency.symbol,
@@ -1069,17 +1510,37 @@ rates = (data['rates'] as Map<String, dynamic>).map(
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  const Text(
-                    'Select Base Currency',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  Text(
+                    baseCurrencySearchQuery.isEmpty
+                        ? 'Select Base Currency (${availableCurrencies.length})'
+                        : 'Search Results (${getFilteredBaseCurrencies().length})',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   TextField(
+                    controller: _baseCurrencySearchController,
                     autofocus: true,
-                    onChanged: (value) => setState(() => searchQuery = value),
+                    onChanged:
+                        (value) =>
+                            setState(() => baseCurrencySearchQuery = value),
                     decoration: InputDecoration(
                       hintText: 'Search currencies...',
                       prefixIcon: const Icon(Icons.search),
+                      suffixIcon:
+                          baseCurrencySearchQuery.isNotEmpty
+                              ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () {
+                                  _baseCurrencySearchController.clear();
+                                  setState(() {
+                                    baseCurrencySearchQuery = '';
+                                  });
+                                },
+                              )
+                              : null,
                       filled: true,
                       fillColor: Colors.grey.shade100,
                       border: OutlineInputBorder(
@@ -1090,29 +1551,171 @@ rates = (data['rates'] as Map<String, dynamic>).map(
                   ),
                   const SizedBox(height: 16),
                   Expanded(
-                    child: ListView.builder(
-                      itemCount: getFilteredCurrencies().length,
-                      itemBuilder: (context, index) {
-                        final currency = getFilteredCurrencies()[index];
-                        final isSelected = currency.code == baseCurrency?.code;
-                        return ListTile(
-                          leading: Text(
-                            currency.flag,
-                            style: const TextStyle(fontSize: 28),
-                          ),
-                          title: Text(currency.code),
-                          subtitle: Text(currency.name),
-                          trailing:
-                              isSelected
-                                  ? const Icon(Icons.check, color: Colors.green)
-                                  : null,
-                          onTap: () {
-                            changeBaseCurrency(currency);
-                            Navigator.pop(context);
-                          },
-                        );
-                      },
-                    ),
+                    child:
+                        getFilteredBaseCurrencies().isEmpty &&
+                                baseCurrencySearchQuery.isNotEmpty
+                            ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.search_off,
+                                    size: 64,
+                                    color: Colors.grey[400],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'No currencies found',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Try searching with different keywords',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[500],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                            : ListView.builder(
+                              itemCount: getFilteredBaseCurrencies().length,
+                              itemBuilder: (context, index) {
+                                final currency =
+                                    getFilteredBaseCurrencies()[index];
+                                final isSelected =
+                                    currency.code == baseCurrency?.code;
+                                final currencyInfo = _getCurrencyInfo(
+                                  currency.code,
+                                );
+                                final isInactive =
+                                    currencyInfo['status'] == 'inactive';
+                                return Opacity(
+                                  opacity: isInactive ? 0.6 : 1.0,
+                                  child: ListTile(
+                                    leading: Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color:
+                                            isInactive
+                                                ? Theme.of(context)
+                                                    .colorScheme
+                                                    .error
+                                                    .withOpacity(0.1)
+                                                : const Color(
+                                                  0xFF4A6CD1,
+                                                ).withOpacity(0.1),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          currency.flag,
+                                          style: const TextStyle(fontSize: 24),
+                                        ),
+                                      ),
+                                    ),
+                                    title: Row(
+                                      children: [
+                                        Text(
+                                          currency.code,
+                                          style: TextStyle(
+                                            color:
+                                                isInactive
+                                                    ? Theme.of(
+                                                      context,
+                                                    ).colorScheme.error
+                                                    : null,
+                                          ),
+                                        ),
+                                        if (isInactive) ...[
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 4,
+                                              vertical: 1,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color:
+                                                  Theme.of(
+                                                    context,
+                                                  ).colorScheme.error,
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              'BLOCKED',
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.bodySmall?.copyWith(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 8,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    subtitle: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(currency.name),
+                                        if (isInactive)
+                                          Text(
+                                            'Temporarily blocked by team',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall?.copyWith(
+                                              color:
+                                                  Theme.of(
+                                                    context,
+                                                  ).colorScheme.error,
+                                              fontStyle: FontStyle.italic,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                    trailing:
+                                        isSelected
+                                            ? const Icon(
+                                              Icons.check,
+                                              color: Colors.green,
+                                            )
+                                            : null,
+                                    onTap:
+                                        isInactive
+                                            ? () {
+                                              // Show message when user taps on inactive currency
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    '${currency.name} is temporarily blocked by the team',
+                                                  ),
+                                                  backgroundColor:
+                                                      Colors.orange,
+                                                  duration: const Duration(
+                                                    seconds: 2,
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                            : () {
+                                              changeBaseCurrency(currency);
+                                              Navigator.pop(context);
+                                            },
+                                  ),
+                                );
+                              },
+                            ),
                   ),
                 ],
               ),
@@ -1129,12 +1732,14 @@ class Currency {
   final String name;
   final String symbol;
   final String flag;
+  final String status; // 'active' or 'inactive'
 
   const Currency({
     required this.code,
     required this.name,
     required this.symbol,
     required this.flag,
+    this.status = 'active', // Default to active
   });
 }
 

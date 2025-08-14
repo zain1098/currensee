@@ -319,20 +319,3 @@ Future<void> updateWidgetCurrencies(String fromCode, String toCode) async {
     print('Error updating widget currencies: $e');
   }
 }
-
-/// Test widget functionality
-Future<void> testWidget() async {
-  try {
-    print('Testing widget functionality...');
-
-    // Set test data
-    await updateCurrencyWidget(amount: 100.0, fromCode: 'USD', toCode: 'PKR');
-
-    // Force update
-    await forceUpdateWidget();
-
-    print('Widget test completed successfully');
-  } catch (e) {
-    print('Widget test failed: $e');
-  }
-}

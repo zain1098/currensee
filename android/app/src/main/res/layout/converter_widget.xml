@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="@drawable/converter_widget_background"
+    android:minHeight="120dp">
+
+    <!-- Title with Currency Change Buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="12dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Currency Converter"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:gravity="center" />
+
+        <TextView
+            android:id="@+id/change_currencies_btn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🔄"
+            android:textSize="16sp"
+            android:gravity="center"
+            android:background="@drawable/currency_change_button_background"
+            android:padding="8dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="Change currencies" />
+
+    </LinearLayout>
+
+    <!-- Currency Conversion Display -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="12dp">
+
+        <!-- Left Side - Source Currency -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <TextView
+                android:id="@+id/source_amount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="$1"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF" />
+
+            <TextView
+                android:id="@+id/source_currency"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="USD"
+                android:textSize="16sp"
+                android:textColor="#FFFFFF"
+                android:layout_marginTop="4dp" />
+
+        </LinearLayout>
+
+        <!-- Middle - Currency Exchange Icon -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:layout_marginHorizontal="12dp">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_currency_exchange"
+                android:background="@drawable/currency_icon_background"
+                android:padding="3dp"
+                android:scaleType="centerInside" />
+
+        </LinearLayout>
+
+        <!-- Right Side - Target Currency -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <TextView
+                android:id="@+id/target_amount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="276.50"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF" />
+
+            <TextView
+                android:id="@+id/target_currency"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="PKR"
+                android:textSize="16sp"
+                android:textColor="#FFFFFF"
+                android:layout_marginTop="4dp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Exchange Rate -->
+    <TextView
+        android:id="@+id/exchange_rate"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="1 USD = 276.50 PKR"
+        android:textSize="14sp"
+        android:textColor="#E0E0E0"
+        android:gravity="center"
+        android:layout_marginBottom="6dp" />
+
+    <!-- Update Status -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/last_updated"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Updated: 2m ago"
+            android:textSize="12sp"
+            android:textColor="#BDBDBD" />
+
+        <TextView
+            android:id="@+id/internet_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="12sp"
+            android:textColor="#F44336"
+            android:visibility="gone" />
+
+    </LinearLayout>
+
+</LinearLayout>

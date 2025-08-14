@@ -13,7 +13,8 @@
     <application
         android:label="CurrenSee Pro"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:networkSecurityConfig="@xml/network_security_config">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -60,6 +61,70 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/home_widget_info" />
         </receiver>
+
+                            <!-- Watchlist Widget receiver -->
+                    <receiver
+                        android:name="Curren.See.WatchlistWidgetProvider"
+                        android:exported="true">
+                        <intent-filter>
+                            <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                            <action android:name="android.appwidget.action.APPWIDGET_ENABLED" />
+                            <action android:name="android.appwidget.action.APPWIDGET_DISABLED" />
+                            <action android:name="REFRESH_WATCHLIST" />
+                            <action android:name="UPDATE_WATCHLIST" />
+                        </intent-filter>
+                        <meta-data
+                            android:name="android.appwidget.provider"
+                            android:resource="@xml/watchlist_widget_info" />
+                    </receiver>
+
+                    <!-- Converter Widget receiver -->
+                    <receiver
+                        android:name="Curren.See.ConverterWidgetProvider"
+                        android:exported="true">
+                        <intent-filter>
+                            <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                            <action android:name="android.appwidget.action.APPWIDGET_ENABLED" />
+                            <action android:name="android.appwidget.action.APPWIDGET_DISABLED" />
+                            <action android:name="REFRESH_CONVERTER" />
+                            <action android:name="UPDATE_CONVERTER" />
+                        </intent-filter>
+                        <meta-data
+                            android:name="android.appwidget.provider"
+                            android:resource="@xml/converter_widget_info" />
+                    </receiver>
+
+                    <!-- Red List Widget receiver -->
+                    <receiver
+                        android:name="Curren.See.RedListWidgetProvider"
+                        android:exported="true">
+                        <intent-filter>
+                            <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                            <action android:name="android.appwidget.action.APPWIDGET_ENABLED" />
+                            <action android:name="android.appwidget.action.APPWIDGET_DISABLED" />
+                            <action android:name="REFRESH_REDLIST" />
+                            <action android:name="UPDATE_REDLIST" />
+                        </intent-filter>
+                        <meta-data
+                            android:name="android.appwidget.provider"
+                            android:resource="@xml/redlist_widget_info" />
+                    </receiver>
+
+                    <!-- Mini Chart Widget receiver -->
+                    <receiver
+                        android:name="Curren.See.MiniChartWidgetProvider"
+                        android:exported="true">
+                        <intent-filter>
+                            <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                            <action android:name="android.appwidget.action.APPWIDGET_ENABLED" />
+                            <action android:name="android.appwidget.action.APPWIDGET_DISABLED" />
+                            <action android:name="REFRESH_MINICHART" />
+                            <action android:name="UPDATE_MINICHART" />
+                        </intent-filter>
+                        <meta-data
+                            android:name="android.appwidget.provider"
+                            android:resource="@xml/mini_chart_widget_info" />
+                    </receiver>
 
 
     </application>

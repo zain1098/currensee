@@ -13,10 +13,11 @@ import 'rate_list_page.dart';
 import 'package:provider/provider.dart';
 import 'calculator_page.dart';
 import 'setting_page.dart';
-import 'multi_currency_page.dart';
+import 'multi_currency_page.dart' as multi_currency;
 import 'package:lottie/lottie.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'support_help_screen.dart';
+import 'services/currency_service.dart';
 
 class CurrencyChartPage extends StatefulWidget {
   const CurrencyChartPage({super.key});
@@ -46,6 +47,10 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
   Color bullColor = const Color(0xFF00C853);
   Color bearColor = const Color(0xFFD50000);
 
+  // Database-driven currency data
+  List<Currency> _currencies = [];
+
+  // Fallback currency data (used if database fails)
   final Map<String, String> currencyFlags = {
     'USD': '🇺🇸',
     'EUR': '🇪🇺',
@@ -131,7 +136,7 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadPreferences();
-    _fetchExchangeRates();
+    _loadCurrenciesFromDatabase();
   }
 
   @override
@@ -162,6 +167,81 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('bullColor', bullColor.value);
     await prefs.setInt('bearColor', bearColor.value);
+  }
+
+  Future<void> _loadCurrenciesFromDatabase() async {
+    try {
+      final loadedCurrencies = await CurrencyService.loadCurrencies();
+      setState(() {
+        _currencies = loadedCurrencies;
+      });
+      
+      // Set default currencies with fallback logic
+      if (_currencies.isNotEmpty) {
+        // Get preferred from currency (USD) with fallback
+        Currency preferredFrom = _currencies.firstWhere(
+          (c) => c.code == 'USD',
+          orElse: () => _currencies.first,
+        );
+        
+        // Get preferred to currency (EUR) with fallback
+        Currency preferredTo = _currencies.firstWhere(
+          (c) => c.code == 'EUR',
+          orElse: () => _currencies.length > 1 ? _currencies[1] : _currencies.first,
+        );
+
+        // Ensure from and to currencies are different
+        if (preferredFrom.code == preferredTo.code && _currencies.length > 1) {
+          final currentIndex = _currencies.indexWhere(
+            (c) => c.code == preferredFrom.code,
+          );
+          final nextIndex = (currentIndex + 1) % _currencies.length;
+          preferredTo = _currencies[nextIndex];
+        }
+
+        setState(() {
+          fromCurrency = preferredFrom.code;
+          toCurrency = preferredTo.code;
+        });
+      }
+      
+      _fetchExchangeRates();
+    } catch (e) {
+      print('Error loading currencies from database: $e');
+      // Fallback to default behavior
+      _fetchExchangeRates();
+    }
+  }
+
+  // Get currency information from database or fallback
+  Map<String, dynamic> _getCurrencyInfo(String code) {
+    try {
+      final currency = _currencies.firstWhere((c) => c.code == code);
+      return {
+        'code': currency.code,
+        'name': currency.name,
+        'flag': currency.flag,
+        'symbol': currency.symbol,
+        'status': currency.status,
+      };
+    } catch (e) {
+      // Fallback to hardcoded data
+      return {
+        'code': code,
+        'name': currencyNames[code] ?? code,
+        'flag': currencyFlags[code] ?? '💱',
+        'symbol': _getCurrencySymbol(code),
+        'status': 'active', // Assume active for fallback
+      };
+    }
+  }
+
+  // Get available currencies for dropdowns (all currencies from database)
+  List<String> get availableCurrencies {
+    if (_currencies.isNotEmpty) {
+      return _currencies.map((c) => c.code).toList();
+    }
+    return currencyFlags.keys.toList();
   }
 
   Future<void> _fetchExchangeRates() async {
@@ -493,7 +573,7 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
                 onTap:
                     () => _navigateAndClose(
                       context,
-                      const MultiCurrencyConverter(),
+                      const multi_currency.MultiCurrencyConverter(),
                     ),
               ),
               _buildDrawerItem(
@@ -663,6 +743,11 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
   }
 
   Widget _buildCurrencyHeader(Color chartColor) {
+    final fromCurrencyInfo = _getCurrencyInfo(fromCurrency);
+    final toCurrencyInfo = _getCurrencyInfo(toCurrency);
+    final fromIsInactive = fromCurrencyInfo['status'] == 'inactive';
+    final toIsInactive = toCurrencyInfo['status'] == 'inactive';
+    
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -682,17 +767,38 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
             children: [
               Row(
                 children: [
-                  Text(currencyFlags[fromCurrency] ?? ''),
+                  Text(fromCurrencyInfo['flag']),
                   const SizedBox(width: 8),
                   Text(
                     '$fromCurrency/$toCurrency',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
+                      color: (fromIsInactive || toIsInactive) 
+                          ? Theme.of(context).colorScheme.error
+                          : null,
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(currencyFlags[toCurrency] ?? ''),
+                  Text(toCurrencyInfo['flag']),
+                  if (fromIsInactive || toIsInactive) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.error,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'BLOCKED',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
               Container(
@@ -732,21 +838,45 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
             children: [
               Text(
                 '1 $fromCurrency = ',
-                style: const TextStyle(fontSize: 16, color: Colors.grey),
+                style: TextStyle(
+                  fontSize: 16, 
+                  color: fromIsInactive 
+                      ? Theme.of(context).colorScheme.error
+                      : Colors.grey,
+                ),
               ),
               Text(
                 _currentRate.toStringAsFixed(4),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
+                  color: (fromIsInactive || toIsInactive) 
+                      ? Theme.of(context).colorScheme.error
+                      : null,
                 ),
               ),
               Text(
                 ' $toCurrency',
-                style: const TextStyle(fontSize: 16, color: Colors.grey),
+                style: TextStyle(
+                  fontSize: 16, 
+                  color: toIsInactive 
+                      ? Theme.of(context).colorScheme.error
+                      : Colors.grey,
+                ),
               ),
             ],
           ),
+          if (fromIsInactive || toIsInactive) ...[
+            const SizedBox(height: 8),
+            Text(
+              'One or more currencies are temporarily blocked by the team',
+              style: TextStyle(
+                fontSize: 12, 
+                color: Theme.of(context).colorScheme.error,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           Text(
             'Last updated: ${DateFormat.yMMMd().add_jm().format(DateTime.now())}',
@@ -1231,9 +1361,26 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
               IconButton(
                 icon: Icon(
                   Icons.swap_horiz,
-                  color: Theme.of(context).primaryColor,
+                  color: (_getCurrencyInfo(fromCurrency)['status'] == 'inactive' || 
+                          _getCurrencyInfo(toCurrency)['status'] == 'inactive')
+                      ? Theme.of(context).colorScheme.error
+                      : Theme.of(context).primaryColor,
                 ),
                 onPressed: () {
+                  final fromIsInactive = _getCurrencyInfo(fromCurrency)['status'] == 'inactive';
+                  final toIsInactive = _getCurrencyInfo(toCurrency)['status'] == 'inactive';
+                  
+                  if (fromIsInactive || toIsInactive) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Cannot swap currencies when one or more are blocked'),
+                        backgroundColor: Colors.orange,
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                    return;
+                  }
+                  
                   setState(() {
                     final temp = fromCurrency;
                     fromCurrency = toCurrency;
@@ -1258,11 +1405,16 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    prefixText: '${_getCurrencySymbol(fromCurrency)} ',
+                    prefixText: '${_getCurrencyInfo(fromCurrency)['symbol']} ',
                     prefixStyle: const TextStyle(fontSize: 18),
                   ),
                   keyboardType: TextInputType.number,
-                  style: const TextStyle(fontSize: 18),
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: _getCurrencyInfo(fromCurrency)['status'] == 'inactive'
+                        ? Theme.of(context).colorScheme.error
+                        : null,
+                  ),
                   controller: TextEditingController(
                     text: _conversionAmount.toStringAsFixed(2),
                   ),
@@ -1290,34 +1442,58 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    prefixText: '${_getCurrencySymbol(toCurrency)} ',
+                    prefixText: '${_getCurrencyInfo(toCurrency)['symbol']} ',
                     prefixStyle: const TextStyle(fontSize: 18),
                   ),
                   readOnly: true,
                   controller: TextEditingController(
                     text: _convertedAmount.toStringAsFixed(4),
                   ),
-                  style: const TextStyle(fontSize: 18),
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: _getCurrencyInfo(toCurrency)['status'] == 'inactive'
+                        ? Theme.of(context).colorScheme.error
+                        : null,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
           ElevatedButton(
-            onPressed: () => _fetchExchangeRates(),
+            onPressed: () {
+              final fromIsInactive = _getCurrencyInfo(fromCurrency)['status'] == 'inactive';
+              final toIsInactive = _getCurrencyInfo(toCurrency)['status'] == 'inactive';
+              
+              if (fromIsInactive || toIsInactive) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Cannot refresh rates when currencies are blocked'),
+                    backgroundColor: Colors.orange,
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+                return;
+              }
+              
+              _fetchExchangeRates();
+            },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).primaryColor,
+              backgroundColor: (_getCurrencyInfo(fromCurrency)['status'] == 'inactive' || 
+                               _getCurrencyInfo(toCurrency)['status'] == 'inactive')
+                  ? Theme.of(context).colorScheme.error
+                  : Theme.of(context).primaryColor,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            child: const Row(
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(Icons.refresh, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Refresh Rates', style: TextStyle(color: Colors.white)),
+                const SizedBox(width: 8),
+                Text('Refresh Rates', style: const TextStyle(color: Colors.white)),
               ],
             ),
           ),
@@ -1369,21 +1545,68 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
       ),
-      items:
-          currencyFlags.keys.map((currency) {
-            return DropdownMenuItem<String>(
-              value: currency,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(currencyFlags[currency]!),
+      items: availableCurrencies.map((currency) {
+        final currencyInfo = _getCurrencyInfo(currency);
+        final isInactive = currencyInfo['status'] == 'inactive';
+        
+        return DropdownMenuItem<String>(
+          value: currency,
+          enabled: !isInactive, // Disable inactive currencies
+          child: Opacity(
+            opacity: isInactive ? 0.6 : 1.0,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(currencyInfo['flag']),
+                const SizedBox(width: 8),
+                Text(
+                  currency,
+                  style: TextStyle(
+                    color: isInactive 
+                        ? Theme.of(context).colorScheme.error
+                        : null,
+                  ),
+                ),
+                if (isInactive) ...[
                   const SizedBox(width: 8),
-                  Text(currency),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.error,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'BLOCKED',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 8,
+                      ),
+                    ),
+                  ),
                 ],
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+      onChanged: (newValue) {
+        if (newValue != null) {
+          final currencyInfo = _getCurrencyInfo(newValue);
+          if (currencyInfo['status'] == 'inactive') {
+            // Show message when user tries to select inactive currency
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('${currencyInfo['name']} is temporarily blocked by the team'),
+                backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 2),
               ),
             );
-          }).toList(),
-      onChanged: onChanged,
+            return; // Don't change the selection
+          }
+        }
+        onChanged(newValue);
+      },
       icon: const Icon(Icons.arrow_drop_down),
       isExpanded: true,
     );

@@ -1,0 +1,301 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="@drawable/redlist_widget_background"
+    android:minHeight="180dp">
+
+    <!-- Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="12dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Red List"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="#000000" />
+
+        <TextView
+            android:id="@+id/redlist_refresh_btn"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:text="🔄"
+            android:textSize="16sp"
+            android:gravity="center"
+            android:background="@drawable/redlist_refresh_button_background"
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="Refresh rates" />
+
+    </LinearLayout>
+
+    <!-- Currency List Container -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxHeight="120dp">
+
+        <LinearLayout
+            android:id="@+id/currency_list_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Currency Item 1 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
+
+                <ImageView
+                    android:id="@+id/flag_1"
+                    android:layout_width="24dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/flag_us"
+                    android:scaleType="centerCrop"
+                    android:layout_marginEnd="8dp" />
+
+                <TextView
+                    android:id="@+id/country_1"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="United States"
+                    android:textSize="14sp"
+                    android:textColor="#000000" />
+
+                <TextView
+                    android:id="@+id/rate_1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="1.0000"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="#000000" />
+
+            </LinearLayout>
+
+            <!-- Currency Item 2 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
+
+                <ImageView
+                    android:id="@+id/flag_2"
+                    android:layout_width="24dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/flag_eu"
+                    android:scaleType="centerCrop"
+                    android:layout_marginEnd="8dp" />
+
+                <TextView
+                    android:id="@+id/country_2"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Eurozone"
+                    android:textSize="14sp"
+                    android:textColor="#000000" />
+
+                <TextView
+                    android:id="@+id/rate_2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0.8500"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="#000000" />
+
+            </LinearLayout>
+
+            <!-- Currency Item 3 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
+
+                <ImageView
+                    android:id="@+id/flag_3"
+                    android:layout_width="24dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/flag_jp"
+                    android:scaleType="centerCrop"
+                    android:layout_marginEnd="8dp" />
+
+                <TextView
+                    android:id="@+id/country_3"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Japan"
+                    android:textSize="14sp"
+                    android:textColor="#000000" />
+
+                <TextView
+                    android:id="@+id/rate_3"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="150.25"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="#000000" />
+
+            </LinearLayout>
+
+            <!-- Currency Item 4 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
+
+                <ImageView
+                    android:id="@+id/flag_4"
+                    android:layout_width="24dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/flag_gb"
+                    android:scaleType="centerCrop"
+                    android:layout_marginEnd="8dp" />
+
+                <TextView
+                    android:id="@+id/country_4"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="United Kingdom"
+                    android:textSize="14sp"
+                    android:textColor="#000000" />
+
+                <TextView
+                    android:id="@+id/rate_4"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0.7500"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="#000000" />
+
+            </LinearLayout>
+
+            <!-- Currency Item 5 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
+
+                <ImageView
+                    android:id="@+id/flag_5"
+                    android:layout_width="24dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/flag_pk"
+                    android:scaleType="centerCrop"
+                    android:layout_marginEnd="8dp" />
+
+                <TextView
+                    android:id="@+id/country_5"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Pakistan"
+                    android:textSize="14sp"
+                    android:textColor="#000000" />
+
+                <TextView
+                    android:id="@+id/rate_5"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="280.50"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="#000000" />
+
+            </LinearLayout>
+
+            <!-- Currency Item 6 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
+
+                <ImageView
+                    android:id="@+id/flag_6"
+                    android:layout_width="24dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/flag_in"
+                    android:scaleType="centerCrop"
+                    android:layout_marginEnd="8dp" />
+
+                <TextView
+                    android:id="@+id/country_6"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="India"
+                    android:textSize="14sp"
+                    android:textColor="#000000" />
+
+                <TextView
+                    android:id="@+id/rate_6"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="83.25"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="#000000" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </ScrollView>
+
+    <!-- Last Updated Info -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="8dp">
+
+        <TextView
+            android:id="@+id/last_updated"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Updated: Just now"
+            android:textSize="10sp"
+            android:textColor="#666666" />
+
+        <TextView
+            android:id="@+id/internet_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="10sp"
+            android:textColor="#F44336"
+            android:visibility="gone" />
+
+    </LinearLayout>
+
+</LinearLayout>

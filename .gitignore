@@ -40,3 +40,4 @@ windows/flutter/generated_*.cc
 windows/runner/Debug/
 windows/runner/Release/
 windows/runner/Profile/
+node_modules

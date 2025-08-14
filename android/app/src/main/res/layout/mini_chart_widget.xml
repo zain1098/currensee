@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="@drawable/mini_chart_widget_background"
+    android:minHeight="140dp">
+
+    <!-- Title -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="MINI CHART"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF"
+        android:gravity="center"
+        android:layout_marginBottom="8dp" />
+
+    <!-- Currency Pair and Current Rate (Top) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:id="@+id/currency_pair"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="USD → PKR"
+            android:textSize="14sp"
+            android:textColor="#FFFFFF" />
+
+        <TextView
+            android:id="@+id/current_rate_top"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="276.50"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF" />
+
+    </LinearLayout>
+
+    <!-- Mini Chart Container -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/chart_background">
+
+        <!-- Chart Line -->
+        <View
+            android:id="@+id/chart_line"
+            android:layout_width="match_parent"
+            android:layout_height="2dp"
+            android:layout_gravity="center"
+            android:background="@drawable/chart_line_gradient" />
+
+        <!-- Chart Points -->
+        <View
+            android:id="@+id/chart_point_1"
+            android:layout_width="4dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/chart_point" />
+
+        <View
+            android:id="@+id/chart_point_2"
+            android:layout_width="4dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="40dp"
+            android:background="@drawable/chart_point" />
+
+        <View
+            android:id="@+id/chart_point_3"
+            android:layout_width="4dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="80dp"
+            android:background="@drawable/chart_point_red" />
+
+        <View
+            android:id="@+id/chart_point_4"
+            android:layout_width="4dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="120dp"
+            android:background="@drawable/chart_point" />
+
+        <View
+            android:id="@+id/chart_point_5"
+            android:layout_width="4dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/chart_point" />
+
+    </FrameLayout>
+
+    <!-- Current Rate and Percentage Change (Bottom) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/current_rate_bottom"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="276.50"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF" />
+
+        <TextView
+            android:id="@+id/percentage_change"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="+0.42%"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#4CAF50" />
+
+    </LinearLayout>
+
+    <!-- Last Updated Info -->
+    <TextView
+        android:id="@+id/last_updated"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Updated: Just now"
+        android:textSize="10sp"
+        android:textColor="#CCCCCC"
+        android:gravity="center"
+        android:layout_marginTop="4dp" />
+
+</LinearLayout>

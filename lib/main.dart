@@ -11,7 +11,7 @@ import 'package:provider/provider.dart';
 import 'calculator_page.dart';
 import 'package:lottie/lottie.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'support_help_screen.dart';
+import 'contact_form_screen.dart';
 import 'welcome_page.dart';
 import 'login.dart';
 import 'signup.dart';
@@ -31,8 +31,13 @@ import 'package:feature_discovery/feature_discovery.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'currency_widget.dart';
+import 'watchlist_widget.dart';
+import 'converter_widget.dart';
+import 'mini_chart_widget.dart';
+import 'redlist_widget.dart';
 import 'alert_service.dart';
 import 'messaging_service.dart';
+import 'services/user_status_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -86,6 +91,42 @@ void main() async {
   } catch (e) {
     print('Error initializing MessagingService: $e');
   }
+
+  // Initialize widgets with default pairs
+  try {
+    await initializeWatchlistWidget();
+    print('Watchlist widget initialized successfully');
+  } catch (e) {
+    print('Error initializing watchlist widget: $e');
+  }
+
+  // Initialize RedList widget
+  try {
+    await initializeRedListWidget();
+    print('RedList widget initialized successfully');
+  } catch (e) {
+    print('Error initializing RedList widget: $e');
+  }
+
+  // Initialize Mini Chart widget
+  try {
+    await initializeMiniChartWidget();
+    print('Mini Chart widget initialized successfully');
+  } catch (e) {
+    print('Error initializing mini chart widget: $e');
+  }
+
+  // Setup platform channel for widget communication
+  const platform = MethodChannel('currensee_widget_channel');
+  platform.setMethodCallHandler((call) async {
+    switch (call.method) {
+      case 'openConverterSettings':
+        // This will be handled by the widget click
+        return 'success';
+      default:
+        return 'unknown_method';
+    }
+  });
 
   runApp(
     FeatureDiscovery(
@@ -292,10 +333,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       false; // Track if user has authenticated in current session
   bool _appInitialized = false; // Track if app has been properly initialized
 
+  // Network connectivity state
+  bool _isConnected = true;
+  bool _isCheckingConnection = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
     // Load settings when app starts
     Provider.of<AppSettings>(context, listen: false).loadSettings();
 
@@ -303,14 +349,17 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _hasAuthenticatedInSession = false;
     _appInitialized = false;
 
-    // Initialize widget with default values
-    Future.delayed(const Duration(milliseconds: 1000), () {
-      initializeWidget();
+    // Initialize network connectivity monitoring
+    _initializeNetworkMonitoring();
 
-      // Test widget after initialization
-      Future.delayed(const Duration(milliseconds: 2000), () {
-        testWidget();
-      });
+    // Initialize widgets with default values
+    Future.delayed(const Duration(milliseconds: 1000), () async {
+      // Clear any old default pairs that might be cached
+      await _clearOldDefaultPairs();
+
+      initializeWidget();
+      initializeWatchlistWidget();
+      initializeConverterWidget();
     });
 
     // Initialize app and check biometric authentication after a delay
@@ -323,6 +372,108 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         _checkBiometricLock();
       }
     });
+  }
+
+  // Initialize network connectivity monitoring
+  void _initializeNetworkMonitoring() {
+    // Check initial connectivity
+    _checkConnectivity();
+
+    // Listen to connectivity changes
+    Connectivity().onConnectivityChanged.listen((
+      List<ConnectivityResult> results,
+    ) {
+      if (results.isNotEmpty) {
+        _handleConnectivityChange(results.first);
+      }
+    });
+  }
+
+  // Check current connectivity status
+  Future<void> _checkConnectivity() async {
+    try {
+      final connectivityResult = await Connectivity().checkConnectivity();
+      if (connectivityResult.isNotEmpty) {
+        _handleConnectivityChange(connectivityResult.first);
+      } else {
+        setState(() {
+          _isConnected = false;
+        });
+      }
+    } catch (e) {
+      print('Error checking connectivity: $e');
+      setState(() {
+        _isConnected = false;
+      });
+    }
+  }
+
+  // Handle connectivity changes
+  void _handleConnectivityChange(ConnectivityResult result) {
+    setState(() {
+      _isConnected = result != ConnectivityResult.none;
+    });
+    print('Connectivity changed: $result, isConnected: $_isConnected');
+  }
+
+  // Retry connection
+  Future<void> _retryConnection() async {
+    setState(() {
+      _isCheckingConnection = true;
+    });
+
+    try {
+      await _checkConnectivity();
+    } finally {
+      setState(() {
+        _isCheckingConnection = false;
+      });
+    }
+  }
+
+  // Continue in offline mode
+  void _continueOffline() {
+    final appSettings = Provider.of<AppSettings>(context, listen: false);
+    appSettings.setOfflineMode(true);
+    setState(() {
+      // Force rebuild to show offline mode
+    });
+  }
+
+  // Clear any old default pairs that might be cached
+  Future<void> _clearOldDefaultPairs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Check for old default pairs in both preference keys
+      List<String> pairs = prefs.getStringList('watchlist_pairs') ?? [];
+      String? flutterPairsString = prefs.getString('flutter.watchlist_pairs');
+
+      final oldDefaults = ['USD/PKR', 'USD/INR', 'USD/AED'];
+      final hasOldDefaults = pairs.any((pair) => oldDefaults.contains(pair));
+
+      if (hasOldDefaults ||
+          (flutterPairsString != null &&
+              flutterPairsString.contains('USD/PKR'))) {
+        print('Found old default pairs during app startup, clearing them');
+
+        // Clear all pairs
+        await prefs.remove('watchlist_pairs');
+        await prefs.remove('flutter.watchlist_pairs');
+
+        // Clear any cached rates for these pairs
+        for (String defaultPair in oldDefaults) {
+          await prefs.remove('${defaultPair}_previous');
+          await prefs.remove('${defaultPair}_current');
+          await prefs.remove('${defaultPair}_base');
+          await prefs.remove('${defaultPair}_change');
+        }
+
+        print('Cleared old default pairs during app startup');
+      }
+    } catch (e) {
+      print('Error clearing old default pairs: $e');
+    }
   }
 
   @override
@@ -539,7 +690,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       key: _appKey, // Use the restart key here
       // In main.dart, modify the MaterialApp routes:
       home:
-          _showLockScreen
+          !_isConnected && !settings.offlineMode
+              ? NetworkErrorScreen(
+                onRetry: _retryConnection,
+                onContinueOffline: _continueOffline,
+                isChecking: _isCheckingConnection,
+              )
+              : _showLockScreen
               ? BiometricLockScreen(
                 onUnlock: _authenticate,
                 error: _lockError,
@@ -890,6 +1047,15 @@ class _MainScreenState extends State<MainScreen> {
         }
       });
     }
+
+    // Initialize user status monitoring
+    UserStatusService.initializeStatusMonitoring(context);
+  }
+
+  @override
+  void dispose() {
+    UserStatusService.dispose();
+    super.dispose();
   }
 
   void _navigateAndClose(BuildContext context, Widget page) {
@@ -1098,8 +1264,9 @@ class _MainScreenState extends State<MainScreen> {
                 icon: Icons.help_center,
                 title: 'Help & Support',
                 onTap:
-                    () => _navigateAndClose(context, const SupportHelpScreen()),
+                    () => _navigateAndClose(context, const ContactFormScreen()),
               ),
+
               const SizedBox(height: 16),
               const Divider(color: Colors.white24, height: 1),
               const SizedBox(height: 16),

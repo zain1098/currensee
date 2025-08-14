@@ -13,11 +13,12 @@ import 'world_clock.dart';
 import 'package:provider/provider.dart';
 import 'calculator_page.dart';
 import 'setting_page.dart';
-import 'multi_currency_page.dart';
+import 'multi_currency_page.dart' as multi_currency; // Add prefix
 import 'package:lottie/lottie.dart';
 import 'support_help_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'alert_service.dart';
+import 'services/currency_service.dart'; // Add this import
 
 // EmailJS Configuration (keeping user's existing service ID)
 // const String _serviceId = 'service_ih5ns2r';
@@ -152,6 +153,7 @@ class _RateListPageState extends State<RateListPage> {
   String _searchQuery = '';
   String _lastUpdated = '';
   List<String> _allCurrencies = [];
+  List<Currency> _currencies = []; // Add this for database currencies
   final List<String> _popularCurrencies = [
     'USD',
     'EUR',
@@ -311,11 +313,36 @@ class _RateListPageState extends State<RateListPage> {
     // _initEmailJS();
     _getCurrentUser();
     _loadAlerts();
+    _loadCurrenciesFromDatabase(); // Add this line
     _fetchExchangeRates();
     _loadNotificationHistory();
 
     // Initialize AlertService if not already initialized
     _alertService.initialize();
+  }
+
+  // Add method to load currencies from database
+  Future<void> _loadCurrenciesFromDatabase() async {
+    try {
+      print('DEBUG: Starting to load currencies from database...');
+      final currencies = await CurrencyService.loadCurrencies();
+      print('DEBUG: CurrencyService returned ${currencies.length} currencies');
+
+      setState(() {
+        _currencies = currencies;
+        // Update all currencies list with database currencies
+        _allCurrencies = currencies.map((c) => c.code).toList();
+      });
+      print('DEBUG: Loaded ${currencies.length} currencies from database');
+      print('DEBUG: Currency codes: ${_allCurrencies.take(5).toList()}...');
+    } catch (e) {
+      print('DEBUG: Error loading currencies from database: $e');
+      // Fallback to hardcoded currencies if database fails
+      setState(() {
+        _allCurrencies = _currencyData.keys.toList();
+      });
+      print('DEBUG: Fallback to ${_allCurrencies.length} hardcoded currencies');
+    }
   }
 
   Future<void> _loadNotificationHistory() async {
@@ -475,6 +502,23 @@ class _RateListPageState extends State<RateListPage> {
   }
 
   void _showSetAlertDialog(String targetCurrency) {
+    // Check if currency is active
+    final currency =
+        _getCurrencyFromDatabase(targetCurrency) ??
+        _getCurrencyFromHardcoded(targetCurrency);
+    if (currency != null && currency['status'] == 'inactive') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Cannot set alerts for ${currency['name']} - Currency is temporarily blocked by team',
+          ),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     final currentRate = _exchangeRates[targetCurrency] ?? 0.0;
     TextEditingController rateController = TextEditingController();
     String triggerType = 'above';
@@ -645,9 +689,11 @@ class _RateListPageState extends State<RateListPage> {
             _lastUpdated = _formatDate(data['time_last_update_utc']);
             _isLoading = false;
 
-            // Initialize all currencies list
-            _allCurrencies = _exchangeRates.keys.toList();
-            _allCurrencies.sort();
+            // Only initialize all currencies list if we don't have database currencies
+            if (_currencies.isEmpty) {
+              _allCurrencies = _exchangeRates.keys.toList();
+              _allCurrencies.sort();
+            }
           });
         } else {
           throw Exception(data['error'] ?? 'API returned error');
@@ -753,19 +799,23 @@ class _RateListPageState extends State<RateListPage> {
   }
 
   List<Map<String, dynamic>> _getFilteredRates() {
-    if (_exchangeRates.isEmpty) return [];
-
     List<Map<String, dynamic>> rates = [];
+
+    // Use database currencies as the primary source, fallback to API currencies
+    final availableCurrencies =
+        _currencies.isNotEmpty
+            ? _currencies.map((c) => c.code).toList()
+            : _allCurrencies;
 
     // Create a list of currencies to display
     final displayCurrencies =
         _searchQuery.isEmpty
-            ? _allCurrencies
-            : _allCurrencies
+            ? availableCurrencies
+            : availableCurrencies
                 .where(
                   (code) =>
                       code.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-                      (_currencyData[code]?['name']?.toLowerCase().contains(
+                      (_getCurrencyName(code)?.toLowerCase().contains(
                             _searchQuery.toLowerCase(),
                           ) ??
                           false),
@@ -773,15 +823,19 @@ class _RateListPageState extends State<RateListPage> {
                 .toList();
 
     for (final code in displayCurrencies) {
-      final rate = _exchangeRates[code];
-      if (rate != null && _currencyData.containsKey(code)) {
-        final currency = _currencyData[code]!;
+      final rate = _exchangeRates[code] ?? 0.0; // Use 0.0 if no rate available
+
+      // Get currency info from database or fallback to hardcoded data
+      final currency =
+          _getCurrencyFromDatabase(code) ?? _getCurrencyFromHardcoded(code);
+      if (currency != null) {
         rates.add({
           'code': code,
           'rate': rate,
           'name': currency['name']!,
           'symbol': currency['symbol']!,
           'flag': currency['flag']!,
+          'status': currency['status'] ?? 'active', // Add status
         });
       }
     }
@@ -806,6 +860,43 @@ class _RateListPageState extends State<RateListPage> {
     return rates;
   }
 
+  // Helper method to get currency from database
+  Map<String, String>? _getCurrencyFromDatabase(String code) {
+    try {
+      final currency = _currencies.firstWhere((c) => c.code == code);
+
+      return {
+        'name': currency.name,
+        'symbol': currency.symbol,
+        'flag': currency.flag,
+        'status': currency.status,
+      };
+    } catch (e) {
+      // Currency not found in database
+      return null;
+    }
+  }
+
+  // Helper method to get currency from hardcoded data
+  Map<String, String>? _getCurrencyFromHardcoded(String code) {
+    final data = _currencyData[code];
+    if (data != null) {
+      return {
+        'name': data['name']!,
+        'symbol': data['symbol']!,
+        'flag': data['flag']!,
+        'status': 'active', // Default to active for hardcoded data
+      };
+    }
+    return null;
+  }
+
+  // Helper method to get currency name
+  String? _getCurrencyName(String code) {
+    return _getCurrencyFromDatabase(code)?['name'] ??
+        _getCurrencyFromHardcoded(code)?['name'];
+  }
+
   void _scrollToTop() {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
@@ -821,16 +912,23 @@ class _RateListPageState extends State<RateListPage> {
     final items = <DropdownMenuItem<String>>[];
     final addedCurrencies = <String>{};
 
+    // Use database currencies if available, otherwise fallback to API currencies
+    final availableCurrencies =
+        _currencies.isNotEmpty
+            ? _currencies.map((c) => c.code).toList()
+            : _allCurrencies;
+
     // Add popular currencies
     for (final currency in _popularCurrencies) {
-      if (_allCurrencies.contains(currency)) {
+      if (availableCurrencies.contains(currency)) {
         items.add(_buildDropdownItem(currency));
         addedCurrencies.add(currency);
       }
     }
 
     // Add divider only if we have both popular and other currencies
-    if (items.isNotEmpty && _allCurrencies.length > _popularCurrencies.length) {
+    if (items.isNotEmpty &&
+        availableCurrencies.length > _popularCurrencies.length) {
       items.add(
         const DropdownMenuItem<String>(
           value: 'divider',
@@ -841,7 +939,7 @@ class _RateListPageState extends State<RateListPage> {
     }
 
     // Add remaining currencies
-    for (final currency in _allCurrencies) {
+    for (final currency in availableCurrencies) {
       if (!addedCurrencies.contains(currency)) {
         items.add(_buildDropdownItem(currency));
       }
@@ -963,7 +1061,7 @@ class _RateListPageState extends State<RateListPage> {
                 onTap:
                     () => _navigateAndClose(
                       context,
-                      const MultiCurrencyConverter(),
+                      const multi_currency.MultiCurrencyConverter(),
                     ),
               ),
               _buildDrawerItem(
@@ -1124,7 +1222,8 @@ class _RateListPageState extends State<RateListPage> {
               children: [
                 TextField(
                   decoration: InputDecoration(
-                    hintText: 'Search ${_allCurrencies.length} currencies...',
+                    hintText:
+                        'Search ${_currencies.isNotEmpty ? _currencies.length : _allCurrencies.length} currencies...',
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon:
                         _searchQuery.isNotEmpty
@@ -1263,27 +1362,58 @@ class _RateListPageState extends State<RateListPage> {
                   ..._alerts.asMap().entries.map((entry) {
                     final index = entry.key;
                     final alert = entry.value;
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        leading: Text(
-                          _currencyData[alert.targetCurrency]?['flag'] ?? '🏳',
-                          style: const TextStyle(fontSize: 24),
-                        ),
-                        title: Text(
-                          '1 ${alert.baseCurrency} ${alert.triggerType == 'above'
-                              ? '≥'
-                              : alert.triggerType == 'below'
-                              ? '≤'
-                              : '='} ${alert.targetRate.toStringAsFixed(4)} ${alert.targetCurrency}',
-                        ),
-                        subtitle: Text(
-                          'Created: ${DateFormat('MMM dd, HH:mm').format(alert.createdAt)}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => _removeAlert(alert.id!),
+                    final currencyInfo =
+                        _getCurrencyFromDatabase(alert.targetCurrency) ??
+                        _getCurrencyFromHardcoded(alert.targetCurrency);
+                    final isInactive = currencyInfo?['status'] == 'inactive';
+
+                    return Opacity(
+                      opacity: isInactive ? 0.6 : 1.0,
+                      child: Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        color:
+                            isInactive
+                                ? theme.colorScheme.error.withOpacity(0.1)
+                                : null,
+                        child: ListTile(
+                          leading: Text(
+                            currencyInfo?['flag'] ?? '🏳',
+                            style: const TextStyle(fontSize: 24),
+                          ),
+                          title: Text(
+                            '1 ${alert.baseCurrency} ${alert.triggerType == 'above'
+                                ? '≥'
+                                : alert.triggerType == 'below'
+                                ? '≤'
+                                : '='} ${alert.targetRate.toStringAsFixed(4)} ${alert.targetCurrency}',
+                            style: TextStyle(
+                              color:
+                                  isInactive ? theme.colorScheme.error : null,
+                            ),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Created: ${DateFormat('MMM dd, HH:mm').format(alert.createdAt)}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              if (isInactive)
+                                Text(
+                                  'Currency is currently blocked',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.error,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () => _removeAlert(alert.id!),
+                          ),
                         ),
                       ),
                     );
@@ -1341,66 +1471,145 @@ class _RateListPageState extends State<RateListPage> {
                       ),
                   itemBuilder: (context, index) {
                     final currency = filteredRates[index];
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      leading: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withOpacity(0.1),
-                          shape: BoxShape.circle,
+                    final isInactive = currency['status'] == 'inactive';
+
+                    return Opacity(
+                      opacity: isInactive ? 0.6 : 1.0,
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
                         ),
-                        child: Center(
-                          child: Text(
-                            currency['flag'],
-                            style: const TextStyle(fontSize: 24),
+                        leading: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color:
+                                isInactive
+                                    ? theme.colorScheme.error.withOpacity(0.1)
+                                    : theme.colorScheme.primary.withOpacity(
+                                      0.1,
+                                    ),
+                            shape: BoxShape.circle,
                           ),
-                        ),
-                      ),
-                      title: Text(
-                        currency['code'],
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      subtitle: Text(
-                        currency['name'],
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface.withOpacity(0.7),
-                        ),
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.notifications_outlined),
-                            onPressed:
-                                () => _showSetAlertDialog(currency['code']),
-                            tooltip: 'Set Alert',
-                          ),
-                          RichText(
-                            textAlign: TextAlign.end,
-                            text: TextSpan(
-                              style: theme.textTheme.titleMedium,
-                              children: [
-                                TextSpan(
-                                  text: currency['symbol'],
-                                  style: TextStyle(
-                                    color: theme.colorScheme.primary,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const TextSpan(text: ' '),
-                                TextSpan(
-                                  text: currency['rate'].toStringAsFixed(4),
-                                ),
-                              ],
+                          child: Center(
+                            child: Text(
+                              currency['flag'],
+                              style: const TextStyle(fontSize: 24),
                             ),
                           ),
-                        ],
+                        ),
+                        title: Row(
+                          children: [
+                            Text(
+                              currency['code'],
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color:
+                                    isInactive
+                                        ? theme.colorScheme.error
+                                        : theme.colorScheme.onSurface,
+                              ),
+                            ),
+                            if (isInactive) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.error,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'BLOCKED',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              currency['name'],
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurface.withOpacity(
+                                  0.7,
+                                ),
+                              ),
+                            ),
+                            if (isInactive)
+                              Text(
+                                'Temporarily blocked by team',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.error,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                          ],
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (!isInactive) // Only show alert button for active currencies
+                              IconButton(
+                                icon: const Icon(Icons.notifications_outlined),
+                                onPressed:
+                                    () => _showSetAlertDialog(currency['code']),
+                                tooltip: 'Set Alert',
+                              ),
+                            RichText(
+                              textAlign: TextAlign.end,
+                              text: TextSpan(
+                                style: theme.textTheme.titleMedium,
+                                children: [
+                                  TextSpan(
+                                    text: currency['symbol'],
+                                    style: TextStyle(
+                                      color:
+                                          isInactive
+                                              ? theme.colorScheme.error
+                                              : theme.colorScheme.primary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const TextSpan(text: ' '),
+                                  TextSpan(
+                                    text: currency['rate'].toStringAsFixed(4),
+                                    style: TextStyle(
+                                      color:
+                                          isInactive
+                                              ? theme.colorScheme.error
+                                              : theme.colorScheme.onSurface,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        onTap:
+                            isInactive
+                                ? () {
+                                  // Show message when user taps on inactive currency
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        '${currency['name']} is temporarily blocked by the team',
+                                      ),
+                                      backgroundColor: Colors.orange,
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
+                                : null, // No action for active currencies
                       ),
                     );
                   },
@@ -1444,28 +1653,61 @@ class _RateListPageState extends State<RateListPage> {
 
   DropdownMenuItem<String> _buildDropdownItem(String currency) {
     final theme = Theme.of(context);
+    final currencyInfo =
+        _getCurrencyFromDatabase(currency) ??
+        _getCurrencyFromHardcoded(currency);
+    final isInactive = currencyInfo?['status'] == 'inactive';
+
     return DropdownMenuItem<String>(
       value: currency,
+      enabled: !isInactive, // Disable inactive currencies in dropdown
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
           children: [
             Text(
-              _currencyData[currency]?['flag'] ?? '🏳',
+              currencyInfo?['flag'] ?? '🏳',
               style: const TextStyle(fontSize: 20),
             ),
             const SizedBox(width: 12),
-            Text(currency, style: theme.textTheme.bodyLarge),
+            Text(
+              currency,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color:
+                    isInactive
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.onSurface,
+              ),
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                _currencyData[currency]?['name'] ?? '',
+                currencyInfo?['name'] ?? '',
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withOpacity(0.7),
+                  color:
+                      isInactive
+                          ? theme.colorScheme.error.withOpacity(0.7)
+                          : theme.colorScheme.onSurface.withOpacity(0.7),
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            if (isInactive)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.error,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                child: Text(
+                  'BLOCKED',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 8,
+                  ),
+                ),
+              ),
           ],
         ),
       ),
