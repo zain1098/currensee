@@ -41,3 +41,7 @@ windows/runner/Debug/
 windows/runner/Release/
 windows/runner/Profile/
 node_modules
+
+# Service account key file
+serviceAccountKey.json
+serviceAccountKey.json.json
