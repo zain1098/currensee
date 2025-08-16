@@ -368,7 +368,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   // Initialize network connectivity monitoring
   void _initializeNetworkMonitoring() {
-    // Check initial connectivity
+    // Check initial connectivity immediately
     _checkConnectivity();
 
     // Listen to connectivity changes
@@ -381,8 +381,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     });
   }
 
-  // Check current connectivity status
+    // Check current connectivity status
   Future<void> _checkConnectivity() async {
+    setState(() {
+      _isCheckingConnection = true;
+    });
+
     try {
       final connectivityResult = await Connectivity().checkConnectivity();
       if (connectivityResult.isNotEmpty) {
@@ -390,12 +394,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       } else {
         setState(() {
           _isConnected = false;
+          _isCheckingConnection = false;
         });
       }
     } catch (e) {
       print('Error checking connectivity: $e');
       setState(() {
         _isConnected = false;
+        _isCheckingConnection = false;
       });
     }
   }
@@ -404,6 +410,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void _handleConnectivityChange(ConnectivityResult result) {
     setState(() {
       _isConnected = result != ConnectivityResult.none;
+      _isCheckingConnection = false;
     });
     print('Connectivity changed: $result, isConnected: $_isConnected');
   }

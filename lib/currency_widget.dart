@@ -157,24 +157,24 @@ Future<void> updateCurrencyWidget({
     await HomeWidget.saveWidgetData('result', result);
     await HomeWidget.saveWidgetData('rate_info', rateInfo);
 
-    // Trigger widget update
+    // Trigger widget update with better error handling
     try {
       await HomeWidget.updateWidget(
         androidName: 'Curren.See.HomeWidgetProvider',
         iOSName: 'HomeWidgetProvider',
       );
-
-      // Also call native method to ensure widget updates
-      try {
-        const platform = MethodChannel('currensee_widget_channel');
-        await platform.invokeMethod('updateWidget');
-      } catch (methodChannelError) {
-        print('MethodChannel update error: $methodChannelError');
-        // Continue without MethodChannel if it fails
-      }
     } catch (e) {
       print('HomeWidget update error: $e');
       // Widget update failed but don't throw - app should continue working
+    }
+
+    // Also call native method to ensure widget updates
+    try {
+      const platform = MethodChannel('currensee_widget_channel');
+      await platform.invokeMethod('updateWidget');
+    } catch (methodChannelError) {
+      print('MethodChannel update error: $methodChannelError');
+      // Continue without MethodChannel if it fails
     }
 
     print('Widget updated successfully: $amount $fromCode = $result $toCode');
@@ -242,8 +242,8 @@ Future<void> initializeWidget() async {
     );
     print('Widget initialized successfully');
 
-    // Force update the widget after initialization
-    await Future.delayed(const Duration(milliseconds: 500), () async {
+    // Force update the widget after initialization with better error handling
+    await Future.delayed(const Duration(milliseconds: 1000), () async {
       try {
         await HomeWidget.updateWidget(
           androidName: 'Curren.See.HomeWidgetProvider',
@@ -252,6 +252,7 @@ Future<void> initializeWidget() async {
         print('Widget force updated after initialization');
       } catch (e) {
         print('Error force updating widget: $e');
+        // Don't retry if it fails - widget might not be available
       }
     });
   } catch (e) {

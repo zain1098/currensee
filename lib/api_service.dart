@@ -10,8 +10,8 @@ class ApiService {
   static final Map<String, dynamic> _rateCache = {};
   static final Map<String, DateTime> _cacheTimestamps = {};
   static const Duration _cacheExpiry = Duration(
-    minutes: 15,
-  ); // 15 minutes cache
+    minutes: 30,
+  ); // 30 minutes cache
   static const int _maxCacheSize = 50;
 
   // Request batching and debouncing
@@ -114,7 +114,7 @@ class ApiService {
         try {
           await _fetchSingleRate(currency);
           // Add delay between requests to prevent overwhelming
-          await Future.delayed(const Duration(milliseconds: 150));
+          await Future.delayed(const Duration(milliseconds: 300));
         } catch (e) {
           print('Error fetching rate for $currency: $e');
           // Continue with other requests even if one fails
@@ -124,7 +124,7 @@ class ApiService {
       // Process remaining requests if any with longer delay
       if (_batchQueue.isNotEmpty) {
         await Future.delayed(
-          const Duration(milliseconds: 500),
+          const Duration(milliseconds: 1000),
         ); // Increased rate limiting
         _processBatchRequests();
       }

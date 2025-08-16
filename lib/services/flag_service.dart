@@ -14,7 +14,7 @@ class FlagService {
   static final Map<String, String> _flagCache = {};
   static const int _maxCacheSize = 100;
   static final Map<String, DateTime> _cacheTimestamps = {};
-  static const Duration _cacheExpiry = Duration(hours: 48); // 48 hours cache
+  static const Duration _cacheExpiry = Duration(hours: 72); // 72 hours cache
 
   // Preload tracking
   static final Set<String> _preloadedFlags = {};
@@ -267,8 +267,8 @@ class FlagService {
       final total = uniqueCodes.length;
       int completed = 0;
 
-      // Process in batches of 10 for better performance
-      const batchSize = 10;
+      // Process in batches of 5 for better performance
+      const batchSize = 5;
       for (int i = 0; i < uniqueCodes.length; i += batchSize) {
         final batch = uniqueCodes.skip(i).take(batchSize).toList();
 
@@ -286,9 +286,9 @@ class FlagService {
           }),
         );
 
-        // Small delay between batches to prevent overwhelming
+        // Increased delay between batches to prevent overwhelming
         if (i + batchSize < uniqueCodes.length) {
-          await Future.delayed(const Duration(milliseconds: 50));
+          await Future.delayed(const Duration(milliseconds: 200));
         }
       }
     } finally {
