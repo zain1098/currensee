@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import 'main.dart';
 import 'currency_widget.dart';
 import 'services/currency_service.dart';
+import 'services/connectivity_service.dart';
 
 class CurrencyConverterScreen extends StatefulWidget {
   final bool showSuccess;
@@ -68,10 +69,24 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
     }
     initializeCurrencies();
     amountController.text = amount.toStringAsFixed(2);
+
+    // Add scroll listeners to detect manual scrolling
+    _fromScrollController.addListener(_onFromScrollChanged);
+    _toScrollController.addListener(_onToScrollChanged);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startAutoScroll(_fromScrollController, isFrom: true);
-      _startAutoScroll(_toScrollController, isFrom: false);
       _setupAutoUpdate();
+
+      // Check connectivity after UI is built
+      _checkConnectivityOnStart();
+
+      // Start auto-scroll with a delay to ensure UI is ready
+      Future.delayed(const Duration(milliseconds: 1000), () {
+        if (mounted) {
+          _startAutoScroll(_fromScrollController, isFrom: true);
+          _startAutoScroll(_toScrollController, isFrom: false);
+        }
+      });
     });
   }
 
@@ -155,24 +170,51 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
   }
 
   void _startAutoScroll(ScrollController controller, {required bool isFrom}) {
-    // Only define scrollStep once
-    const double scrollStep = 1.0; // 1 pixel per tick
-    const int targetFps = 30; // 30 frames per second
+    // Cancel any existing timer first
+    if (isFrom) {
+      _fromAutoScrollTimer?.cancel();
+    } else {
+      _toAutoScrollTimer?.cancel();
+    }
+
+    // Balanced speed for smooth movement
+    const double scrollStep = 1.2; // Slightly faster step
+    const int targetFps = 15; // Moderate FPS for smooth animation
     const Duration scrollDuration = Duration(milliseconds: 1000 ~/ targetFps);
+
     Timer? timer;
     timer = Timer.periodic(scrollDuration, (_) {
+      // Check if user is scrolling
       if ((isFrom && _userScrollingFrom) || (!isFrom && _userScrollingTo)) {
         return;
       }
-      if (!controller.hasClients) return;
-      final maxScroll = controller.position.maxScrollExtent;
-      final current = controller.offset;
-      double next = current + scrollStep;
-      if (next >= maxScroll) {
-        next = 0;
+
+      // Check if controller is still valid
+      if (!controller.hasClients || !mounted) {
+        timer?.cancel();
+        return;
       }
-      controller.jumpTo(next);
+
+      try {
+        final maxScroll = controller.position.maxScrollExtent;
+        if (maxScroll <= 0) return; // No content to scroll
+
+        final current = controller.offset;
+        double next = current + scrollStep;
+
+        // Smooth loop back to start
+        if (next >= maxScroll) {
+          next = 0;
+        }
+
+        // Use jumpTo for more reliable movement with faster speed
+        controller.jumpTo(next);
+      } catch (e) {
+        print('Auto-scroll error: $e');
+        timer?.cancel();
+      }
     });
+
     if (isFrom) {
       _fromAutoScrollTimer = timer;
     } else {
@@ -191,15 +233,47 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
   }
 
   void _resumeAutoScroll(bool isFrom) {
-    Future.delayed(const Duration(seconds: 2), () {
-      if (isFrom) {
-        _userScrollingFrom = false;
-        _startAutoScroll(_fromScrollController, isFrom: true);
-      } else {
-        _userScrollingTo = false;
-        _startAutoScroll(_toScrollController, isFrom: false);
+    // Shorter delay for more responsive resumption
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted) {
+        if (isFrom) {
+          _userScrollingFrom = false;
+          _startAutoScroll(_fromScrollController, isFrom: true);
+        } else {
+          _userScrollingTo = false;
+          _startAutoScroll(_toScrollController, isFrom: false);
+        }
       }
     });
+  }
+
+  // Scroll listener methods for better detection
+  void _onFromScrollChanged() {
+    if (!mounted) return;
+
+    if (_fromScrollController.position.isScrollingNotifier.value) {
+      if (!_userScrollingFrom) {
+        _pauseAutoScroll(true);
+      }
+    } else {
+      if (_userScrollingFrom) {
+        _resumeAutoScroll(true);
+      }
+    }
+  }
+
+  void _onToScrollChanged() {
+    if (!mounted) return;
+
+    if (_toScrollController.position.isScrollingNotifier.value) {
+      if (!_userScrollingTo) {
+        _pauseAutoScroll(false);
+      }
+    } else {
+      if (_userScrollingTo) {
+        _resumeAutoScroll(false);
+      }
+    }
   }
 
   Future<void> initializeCurrencies() async {
@@ -263,6 +337,12 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
       return;
     }
 
+    // Check connectivity first
+    if (!ConnectivityService().isConnected) {
+      _showNetworkErrorScreen();
+      return;
+    }
+
     setState(() {
       isLoading = true;
       errorMessage = null;
@@ -304,9 +384,41 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
         isLoading = false;
       });
 
-      // If network fails, show option to go offline
-      _showOfflineOption();
+      // Check if it's a connectivity issue
+      if (!ConnectivityService().isConnected) {
+        _showNetworkErrorScreen();
+      } else {
+        // If network fails, show option to go offline
+        _showOfflineOption();
+      }
     }
+  }
+
+  // Show network error screen
+  void _showNetworkErrorScreen() {
+    ConnectivityService().showNetworkErrorScreen(
+      context,
+      onRetry: () {
+        // Retry fetching exchange rates
+        fetchExchangeRates();
+      },
+      onContinueOffline: () {
+        // Continue in offline mode
+        final appSettings = Provider.of<AppSettings>(context, listen: false);
+        appSettings.setOfflineMode(true);
+        _handleOfflineMode();
+      },
+    );
+  }
+
+  // Check connectivity on app start
+  void _checkConnectivityOnStart() {
+    // Add a small delay to ensure UI is fully loaded
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted && !ConnectivityService().isConnected) {
+        _showNetworkErrorScreen();
+      }
+    });
   }
 
   // Show offline option when network fails
@@ -700,98 +812,106 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                       ),
 
                       const SizedBox(height: 20), // Reduced spacing
-                      // From Currency Selector
-                      DescribedFeatureOverlay(
-                        featureId: 'from_currency_feature',
-                        tapTarget: Icon(Icons.currency_exchange),
-                        title: const Text('Source Currency'),
-                        description: const Text(
-                          'Select the currency you want to convert FROM. Swipe horizontally to see more options.',
-                        ),
-                        backgroundColor: Colors.green,
-                        contentLocation: ContentLocation.below,
-                        overflowMode: OverflowMode.wrapBackground,
-                        enablePulsingAnimation: true,
-                        child: SizedBox(
-                          key: _fromCurrencyKey,
-                          child: _buildCurrencySelector(
-                            title: 'From Currency',
-                            currency: fromCurrency,
-                            onCurrencySelected: (currency) {
-                              setState(() {
-                                fromCurrency = currency;
-                              });
-                              convertCurrency();
-                            },
-                          ),
-                        ),
-                      ),
-
-                      // Swap Button
-                      DescribedFeatureOverlay(
-                        featureId: 'swap_feature',
-                        tapTarget: Icon(Icons.swap_horiz),
-                        title: const Text('Swap Currencies'),
-                        description: const Text(
-                          'Tap here to instantly swap between source and target currencies.',
-                        ),
-                        backgroundColor: Colors.blue,
-                        contentLocation: ContentLocation.above,
-                        overflowMode: OverflowMode.wrapBackground,
-                        enablePulsingAnimation: true,
-                        child: Container(
-                          key: _swapKey,
-                          margin: const EdgeInsets.symmetric(vertical: 8),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF4A6CD1), Color(0xFF8A4ED2)],
+                      // Currency Selectors Column Layout
+                      Column(
+                        children: [
+                          // From Currency Selector
+                          DescribedFeatureOverlay(
+                            featureId: 'from_currency_feature',
+                            tapTarget: Icon(Icons.currency_exchange),
+                            title: const Text('Source Currency'),
+                            description: const Text(
+                              'Select the currency you want to convert FROM. Swipe horizontally to see more options.',
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.blue.withOpacity(0.3),
-                                blurRadius: 8,
-                                spreadRadius: 2,
-                                offset: const Offset(0, 4),
+                            backgroundColor: Colors.green,
+                            contentLocation: ContentLocation.below,
+                            overflowMode: OverflowMode.wrapBackground,
+                            enablePulsingAnimation: true,
+                            child: SizedBox(
+                              key: _fromCurrencyKey,
+                              child: _buildCurrencySelector(
+                                title: 'From Currency',
+                                currency: fromCurrency,
+                                onCurrencySelected: (currency) {
+                                  setState(() {
+                                    fromCurrency = currency;
+                                  });
+                                  convertCurrency();
+                                },
                               ),
-                            ],
-                          ),
-                          child: IconButton(
-                            icon: const Icon(
-                              Icons.swap_vert,
-                              size: 32,
-                              color: Colors.white,
                             ),
-                            onPressed: swapCurrencies,
                           ),
-                        ),
-                      ),
 
-                      // To Currency Selector
-                      DescribedFeatureOverlay(
-                        featureId: 'to_currency_feature',
-                        tapTarget: Icon(Icons.currency_exchange),
-                        title: const Text('Target Currency'),
-                        description: const Text(
-                          'Select the currency you want to convert TO. Swipe horizontally to see more options.',
-                        ),
-                        backgroundColor: Colors.orange,
-                        contentLocation: ContentLocation.below,
-                        overflowMode: OverflowMode.wrapBackground,
-                        enablePulsingAnimation: true,
-                        child: SizedBox(
-                          key: _toCurrencyKey,
-                          child: _buildCurrencySelector(
-                            title: 'To Currency',
-                            currency: toCurrency,
-                            onCurrencySelected: (currency) {
-                              setState(() {
-                                toCurrency = currency;
-                              });
-                              convertCurrency();
-                            },
+                          // Swap Button
+                          DescribedFeatureOverlay(
+                            featureId: 'swap_feature',
+                            tapTarget: Icon(Icons.swap_vert),
+                            title: const Text('Swap Currencies'),
+                            description: const Text(
+                              'Tap here to instantly swap between source and target currencies.',
+                            ),
+                            backgroundColor: Colors.blue,
+                            contentLocation: ContentLocation.above,
+                            overflowMode: OverflowMode.wrapBackground,
+                            enablePulsingAnimation: true,
+                            child: Container(
+                              key: _swapKey,
+                              margin: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF4A6CD1),
+                                    Color(0xFF8A4ED2),
+                                  ],
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.blue.withOpacity(0.3),
+                                    blurRadius: 8,
+                                    spreadRadius: 2,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: IconButton(
+                                icon: const Icon(
+                                  Icons.swap_vert,
+                                  size: 32,
+                                  color: Colors.white,
+                                ),
+                                onPressed: swapCurrencies,
+                              ),
+                            ),
                           ),
-                        ),
+
+                          // To Currency Selector
+                          DescribedFeatureOverlay(
+                            featureId: 'to_currency_feature',
+                            tapTarget: Icon(Icons.currency_exchange),
+                            title: const Text('Target Currency'),
+                            description: const Text(
+                              'Select the currency you want to convert TO. Swipe horizontally to see more options.',
+                            ),
+                            backgroundColor: Colors.orange,
+                            contentLocation: ContentLocation.below,
+                            overflowMode: OverflowMode.wrapBackground,
+                            enablePulsingAnimation: true,
+                            child: SizedBox(
+                              key: _toCurrencyKey,
+                              child: _buildCurrencySelector(
+                                title: 'To Currency',
+                                currency: toCurrency,
+                                onCurrencySelected: (currency) {
+                                  setState(() {
+                                    toCurrency = currency;
+                                  });
+                                  convertCurrency();
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
 
                       const SizedBox(height: 16), // Reduced spacing
@@ -869,6 +989,43 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
               ),
             ),
           ),
+
+          // Connectivity Status Indicator
+          Positioned(
+            top: 15,
+            right: 20,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color:
+                    ConnectivityService().isConnected
+                        ? Colors.green.withOpacity(0.9)
+                        : Colors.orange.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    ConnectivityService().isConnected
+                        ? Icons.wifi
+                        : Icons.wifi_off,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    ConnectivityService().getConnectivityStatus(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -890,13 +1047,22 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
           ),
         ),
         SizedBox(
-          height: 140, // Increased height to accommodate content
+          height: 140, // Height for horizontal scrolling
           child: NotificationListener<UserScrollNotification>(
             onNotification: (notification) {
+              final isFrom = title == 'From Currency';
+
+              // Pause auto-scroll when user starts scrolling
               if (notification.direction.name != 'idle') {
-                _pauseAutoScroll(title == 'From Currency');
+                _pauseAutoScroll(isFrom);
               } else {
-                _resumeAutoScroll(title == 'From Currency');
+                // Only resume if user has stopped scrolling for a while
+                // This prevents immediate resumption
+                Future.delayed(const Duration(milliseconds: 500), () {
+                  if (mounted) {
+                    _resumeAutoScroll(isFrom);
+                  }
+                });
               }
               return false;
             },
@@ -914,10 +1080,10 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                 return GestureDetector(
                   onTap: () => onCurrencySelected(curr),
                   child: Container(
-                    width: 100, // Increased width
+                    width: 120, // Fixed width for horizontal scrolling
                     margin: const EdgeInsets.only(
-                      right: 12,
-                    ), // Increased margin
+                      right: 8,
+                    ), // Right margin for horizontal spacing
                     decoration: BoxDecoration(
                       gradient:
                           isSelected
@@ -1203,6 +1369,11 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
     amountController.dispose();
     _fromAutoScrollTimer?.cancel();
     _toAutoScrollTimer?.cancel();
+
+    // Remove scroll listeners before disposing controllers
+    _fromScrollController.removeListener(_onFromScrollChanged);
+    _toScrollController.removeListener(_onToScrollChanged);
+
     _fromScrollController.dispose();
     _toScrollController.dispose();
     _autoUpdateTimer?.cancel();

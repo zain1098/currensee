@@ -318,7 +318,25 @@ class _RateListPageState extends State<RateListPage> {
     _loadNotificationHistory();
 
     // Initialize AlertService if not already initialized
-    _alertService.initialize();
+    _alertService.initialize().then((_) {
+      // After AlertService is initialized, check for missed alerts
+      _checkForMissedAlerts();
+    });
+  }
+
+  // Check for missed alerts when app reopens
+  Future<void> _checkForMissedAlerts() async {
+    try {
+      // Trigger a manual check to catch any missed alerts
+      await _alertService.manualCheckAlerts();
+
+      // Refresh alerts list
+      await _loadAlerts();
+
+      print('Missed alerts check completed');
+    } catch (e) {
+      print('Error checking for missed alerts: $e');
+    }
   }
 
   // Add method to load currencies from database

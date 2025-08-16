@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:path/path.dart' as path;
 import 'package:flutter/services.dart';
 import 'package:lottie/lottie.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
 
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -17,7 +19,13 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:share_plus/share_plus.dart';
 import 'support_help_screen.dart';
 import 'dart:convert';
+import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'services/performance_monitor.dart';
+import 'services/flag_service.dart';
+import 'api_service.dart';
+import 'services/lottie_manager.dart';
 
 // Add ShineText widget for animated gradient text
 class ShineText extends StatefulWidget {
@@ -142,6 +150,14 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _obscureNewPassword = true;
   bool _obscureConfirmPassword = true;
 
+  // Version update variables
+  Map<String, dynamic>? _currentAppVersion;
+  Map<String, dynamic>? _latestAppVersion;
+  bool _isUpdateAvailable = false;
+  bool _isCheckingUpdate = false;
+  List<Map<String, dynamic>> _updateNotifications = [];
+  DateTime? _lastCheckTime;
+
   final List<String> _languages = [
     'English',
     'Spanish',
@@ -175,6 +191,24 @@ class _SettingsPageState extends State<SettingsPage> {
     _loadNotificationHistory();
     _loadAvailableSounds();
     _clearOldDefaultPairsOnLoad();
+    _loadCurrentAppVersion();
+    _loadUpdateNotifications();
+
+    // Auto-check for updates after a short delay to ensure UI is ready
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        _checkForAppUpdate();
+      }
+    });
+
+    // Start periodic version check
+    _startPeriodicVersionCheck();
+  }
+
+  @override
+  void dispose() {
+    // Cancel any ongoing timers when widget is disposed
+    super.dispose();
   }
 
   Future<LottieComposition> _loadAnimation() async {
@@ -794,6 +828,979 @@ class _SettingsPageState extends State<SettingsPage> {
     return availableRawSounds.contains(sound);
   }
 
+  // Version Update Methods
+  Future<void> _loadCurrentAppVersion() async {
+    setState(() {
+      _currentAppVersion = {
+        'version':
+            '2.3.1', // Current app version (lower than Firebase version 2.3.4)
+        'buildNumber': '1',
+        'platform': kIsWeb ? 'Web' : (Platform.isAndroid ? 'Android' : 'iOS'),
+      };
+    });
+  }
+
+  // Manual version check (with UI updates and loading state)
+  Future<void> _checkForAppUpdate() async {
+    setState(() => _isCheckingUpdate = true);
+
+    try {
+      print('🔍 Manual version check...');
+
+      // Check if user is authenticated
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception('User not authenticated');
+      }
+
+      // Try to create app_versions collection if it doesn't exist
+      await _ensureAppVersionsCollection();
+
+      // Get latest version from Firestore (using existing 'current' document)
+      final versionDoc =
+          await FirebaseFirestore.instance
+              .collection('app_versions')
+              .doc('current')
+              .get();
+
+      if (versionDoc.exists) {
+        final latestVersion = versionDoc.data()!;
+        print('📱 Latest version from database: ${latestVersion['version']}');
+
+        setState(() {
+          _latestAppVersion = latestVersion;
+        });
+
+        // Compare versions
+        final currentVersion = _currentAppVersion!['version'];
+        final latestVersionStr = latestVersion['version'];
+
+        print(
+          '📊 Comparing versions: Current=$currentVersion, Latest=$latestVersionStr',
+        );
+
+        if (_compareVersions(latestVersionStr, currentVersion) > 0) {
+          print('✅ Update available!');
+          setState(() {
+            _isUpdateAvailable = true;
+          });
+
+          // Send notification to user
+          await _sendUpdateNotification(latestVersion);
+
+          // Show snackbar if app is in foreground
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'New version ${latestVersion['version']} available!',
+                ),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 3),
+                action: SnackBarAction(
+                  label: 'Download',
+                  onPressed: () => _downloadLatestVersion(),
+                ),
+              ),
+            );
+          }
+        } else {
+          print('✅ App is up to date');
+          setState(() {
+            _isUpdateAvailable = false;
+          });
+
+          // Show success message for manual check
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('App is up to date!'),
+                backgroundColor: Colors.blue,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        }
+      } else {
+        print('❌ No version document found in database');
+        setState(() {
+          _isUpdateAvailable = false;
+        });
+
+        // Show error message for manual check
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'No update information available. Please try again later.',
+              ),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('❌ Error checking for app update: $e');
+      setState(() {
+        _isUpdateAvailable = false;
+      });
+
+      // Show user-friendly error message for manual check
+      if (mounted) {
+        String errorMessage = 'Could not check for updates. Please try again.';
+
+        if (e.toString().contains('permission-denied')) {
+          errorMessage =
+              'Access denied. Please check your internet connection.';
+        } else if (e.toString().contains('not-found')) {
+          errorMessage = 'Update service temporarily unavailable.';
+        } else if (e.toString().contains('unavailable')) {
+          errorMessage = 'Service temporarily unavailable. Please try again.';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isCheckingUpdate = false;
+        _lastCheckTime = DateTime.now();
+      });
+    }
+  }
+
+  // Ensure app_versions collection exists
+  Future<void> _ensureAppVersionsCollection() async {
+    try {
+      // Check if the 'current' document exists in app_versions collection
+      final currentDoc =
+          await FirebaseFirestore.instance
+              .collection('app_versions')
+              .doc('current')
+              .get();
+
+      if (currentDoc.exists) {
+        print('✅ App versions collection verified - current document exists');
+      } else {
+        print(
+          '⚠️ App versions collection exists but current document not found',
+        );
+      }
+    } catch (e) {
+      print('⚠️ Could not verify app_versions collection: $e');
+      // Continue anyway, the main check will handle the error
+    }
+  }
+
+  int _compareVersions(String version1, String version2) {
+    final v1Parts = version1.split('.').map(int.parse).toList();
+    final v2Parts = version2.split('.').map(int.parse).toList();
+
+    for (int i = 0; i < 3; i++) {
+      final v1 = i < v1Parts.length ? v1Parts[i] : 0;
+      final v2 = i < v2Parts.length ? v2Parts[i] : 0;
+
+      if (v1 > v2) return 1;
+      if (v1 < v2) return -1;
+    }
+    return 0;
+  }
+
+  // Start periodic version check
+  void _startPeriodicVersionCheck() {
+    Timer.periodic(const Duration(minutes: 5), (timer) async {
+      if (mounted) {
+        print('🔄 Silent periodic version check triggered (every 5 minutes)');
+        await _checkForAppUpdateInBackground();
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
+  // Background version check (no UI updates, only notifications)
+  Future<void> _checkForAppUpdateInBackground() async {
+    try {
+      print('🔍 Background version check...');
+
+      // Check if user is authenticated
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        print('❌ User not authenticated for background check');
+        return;
+      }
+
+      // Get latest version from Firestore (using existing 'current' document)
+      final versionDoc =
+          await FirebaseFirestore.instance
+              .collection('app_versions')
+              .doc('current')
+              .get();
+
+      if (versionDoc.exists) {
+        final latestVersion = versionDoc.data()!;
+        final currentVersion = _currentAppVersion!['version'];
+        final latestVersionStr = latestVersion['version'];
+
+        print(
+          '📊 Background check - Current=$currentVersion, Latest=$latestVersionStr',
+        );
+
+        if (_compareVersions(latestVersionStr, currentVersion) > 0) {
+          print('✅ Background check: Update available!');
+
+          // Update state without UI refresh
+          _isUpdateAvailable = true;
+          _latestAppVersion = latestVersion;
+
+          // Send notification for update (silent - no UI messages)
+          await _sendUpdateNotification(latestVersion);
+
+          // Only show notification, no snackbar in background
+          print('📱 Background update notification sent');
+        }
+      }
+
+      // Update last check time silently
+      _lastCheckTime = DateTime.now();
+    } catch (e) {
+      print('❌ Error in background version check: $e');
+      // Don't show any UI messages for background errors
+    }
+  }
+
+  Future<void> _sendUpdateNotification(Map<String, dynamic> versionData) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // Check if notification already exists
+      final existingNotification =
+          await FirebaseFirestore.instance
+              .collection('update_notifications')
+              .where('userId', isEqualTo: user.uid)
+              .where('version', isEqualTo: versionData['version'])
+              .get();
+
+      if (existingNotification.docs.isNotEmpty) return; // Already notified
+
+      // Get user data
+      final userDoc =
+          await FirebaseFirestore.instance
+              .collection('currentUser')
+              .doc(user.uid)
+              .get();
+
+      final userData = userDoc.data() ?? {};
+
+      // Create notification
+      final notificationData = {
+        'userId': user.uid,
+        'userEmail': user.email ?? '',
+        'userDisplayName': user.displayName ?? userData['displayName'] ?? '',
+        'userPhotoURL': user.photoURL ?? userData['photoURL'] ?? '',
+        'userEmailVerified': user.emailVerified,
+        'userCreatedAt': userData['createdAt'],
+        'userLastLoginAt': userData['lastLoginAt'],
+        'version': versionData['version'],
+        'buildNumber': versionData['buildNumber'],
+        'updateTitle': versionData['title'] ?? 'App Update Available',
+        'updateDescription':
+            '${versionData['description'] ?? 'A new version is available'}\n\n📱 Click the Download APK button to get the latest version directly!',
+        'downloadUrl': versionData['downloadUrl'] ?? '',
+        'isRead': false,
+        'timestamp': FieldValue.serverTimestamp(),
+        'platform': kIsWeb ? 'Web' : (Platform.isAndroid ? 'Android' : 'iOS'),
+      };
+
+      // Save to update_notifications collection
+      await FirebaseFirestore.instance
+          .collection('update_notifications')
+          .add(notificationData);
+
+      // Save to notification_history for admin
+      await FirebaseFirestore.instance.collection('notification_history').add({
+        ...notificationData,
+        'type': 'app_update',
+        'status': 'sent',
+      });
+
+      // Add to local notification history
+      await _addNotificationToHistory(
+        notificationData['updateTitle'],
+        '${notificationData['updateDescription']}\n\n📱 Click the Download APK button to get the latest version directly!',
+      );
+
+      // Show mobile notification
+      await _showAppUpdateNotification(notificationData);
+
+      setState(() {});
+    } catch (e) {
+      print('Error sending update notification: $e');
+    }
+  }
+
+  Future<void> _showAppUpdateNotification(
+    Map<String, dynamic> notificationData,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String selectedSound =
+          prefs.getString('notificationSound') ?? 'notification.mp3';
+
+      String soundName = selectedSound.replaceAll('.mp3', '');
+      String channelId = 'app_updates_$soundName';
+
+      final AndroidNotificationDetails androidDetails =
+          AndroidNotificationDetails(
+            channelId,
+            'App Updates',
+            importance: Importance.high,
+            priority: Priority.high,
+            ticker: 'ticker',
+            sound: RawResourceAndroidNotificationSound(soundName),
+            icon: '@mipmap/ic_launcher',
+          );
+
+      final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+        presentSound: true,
+        sound: selectedSound,
+      );
+
+      final NotificationDetails platformDetails = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      final title = notificationData['updateTitle'] ?? 'App Update Available';
+      final body =
+          'Version ${notificationData['version']} is available. Open app to download directly!';
+
+      await FlutterLocalNotificationsPlugin().show(
+        DateTime.now().millisecondsSinceEpoch.remainder(100000),
+        title,
+        body,
+        platformDetails,
+      );
+
+      print('App update notification shown: $title');
+    } catch (e) {
+      print('Error showing app update notification: $e');
+    }
+  }
+
+  Future<void> _loadUpdateNotifications() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final notificationsSnapshot =
+          await FirebaseFirestore.instance
+              .collection('update_notifications')
+              .where('userId', isEqualTo: user.uid)
+              .orderBy('timestamp', descending: true)
+              .get();
+
+      setState(() {
+        _updateNotifications =
+            notificationsSnapshot.docs.map((doc) => doc.data()).toList();
+      });
+    } catch (e) {
+      print('Error loading update notifications: $e');
+    }
+  }
+
+  Future<void> _deleteUpdateNotification(String notificationId) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // Get notification data before deletion
+      final notificationDoc =
+          await FirebaseFirestore.instance
+              .collection('update_notifications')
+              .doc(notificationId)
+              .get();
+
+      if (notificationDoc.exists) {
+        final notificationData = notificationDoc.data()!;
+
+        // Save to notification_history before deletion
+        await FirebaseFirestore.instance
+            .collection('notification_history')
+            .add({
+              ...notificationData,
+              'type': 'app_update',
+              'status': 'deleted_by_user',
+              'deletedAt': FieldValue.serverTimestamp(),
+            });
+
+        // Delete from update_notifications
+        await FirebaseFirestore.instance
+            .collection('update_notifications')
+            .doc(notificationId)
+            .delete();
+
+        // Refresh notifications
+        await _loadUpdateNotifications();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Update notification deleted'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error deleting update notification: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error deleting notification: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  /// Downloads the latest APK version
+  ///
+  /// This function handles APK downloads in two ways:
+  /// 1. If a downloadUrl is set in Firebase database, it uses that URL
+  /// 2. Otherwise, it uses the default GitHub release link
+  ///
+  /// For future updates:
+  /// - Upload new APK to GitHub releases with the same filename (app-latest.apk)
+  /// - The link will automatically work without code changes
+  /// - Or set a specific downloadUrl in Firebase for more control
+  Future<void> _downloadLatestVersion() async {
+    try {
+      String downloadUrl;
+
+      // Check if we have a download URL from Firebase, otherwise use GitHub
+      if (_latestAppVersion != null &&
+          _latestAppVersion!['downloadUrl'] != null &&
+          _latestAppVersion!['downloadUrl'].toString().isNotEmpty) {
+        // Use the download URL from Firebase database
+        downloadUrl = _latestAppVersion!['downloadUrl'];
+        print('📥 Using download URL from database: $downloadUrl');
+      } else {
+        // Use your GitHub release link for direct APK download
+        // This will always point to the latest version you upload
+        downloadUrl =
+            'https://github.com/Zain1098/CurrenSee-APK-Update/releases/download/v1.0.0/app-latest.apk';
+        print('📥 Using default GitHub download URL: $downloadUrl');
+      }
+
+      // Validate URL format
+      if (!downloadUrl.startsWith('http://') &&
+          !downloadUrl.startsWith('https://')) {
+        throw Exception('Invalid URL format: $downloadUrl');
+      }
+
+      print('🔗 Attempting to open URL: $downloadUrl');
+
+      final Uri url = Uri.parse(downloadUrl);
+
+      // First, try to check if the URL is accessible
+      try {
+        final response = await http.head(url);
+        print('🌐 URL accessibility check: ${response.statusCode}');
+        if (response.statusCode != 200) {
+          print('⚠️ URL returned status code: ${response.statusCode}');
+        }
+      } catch (e) {
+        print('⚠️ URL accessibility check failed: $e');
+        // Continue anyway, as the URL might still be valid
+      }
+
+      // Check if URL can be launched
+      final canLaunch = await canLaunchUrl(url);
+      print('🔍 Can launch URL: $canLaunch');
+
+      if (canLaunch) {
+        // Try to launch the URL
+        final launched = await launchUrl(
+          url,
+          mode: LaunchMode.externalApplication,
+        );
+
+        print('🚀 Launch result: $launched');
+
+        if (launched) {
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Opening download link in browser...'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        } else {
+          // Launch failed
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to open download link. Please try again.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      } else {
+        // Cannot launch URL - try alternative approach
+        print('⚠️ Cannot launch URL directly, trying alternative method');
+
+        // Try to open in browser with different mode
+        try {
+          final launched = await launchUrl(
+            url,
+            mode: LaunchMode.platformDefault,
+          );
+
+          if (launched) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Opening download link...'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          } else {
+            throw Exception('Failed to launch URL');
+          }
+        } catch (e) {
+          print('❌ Alternative launch method failed: $e');
+
+          // Show detailed error message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Could not open download link. Please check your internet connection and try again.',
+              ),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
+              action: SnackBarAction(
+                label: 'Copy Link',
+                onPressed: () {
+                  // Copy link to clipboard
+                  Clipboard.setData(ClipboardData(text: downloadUrl));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Download link copied to clipboard'),
+                      backgroundColor: Colors.blue,
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('❌ Error in _downloadLatestVersion: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error opening download link: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
+  Future<void> _openDownloadLink(String downloadUrl) async {
+    try {
+      final Uri url = Uri.parse(downloadUrl);
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open download link'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error opening download link: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error opening link: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Widget _buildAppUpdateSection() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header with status indicator
+            Row(
+              children: [
+                const Icon(Icons.system_update, color: Colors.blue, size: 20),
+                const SizedBox(width: 8),
+                const Text(
+                  'Version & Updates',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                const Spacer(),
+                if (_isCheckingUpdate) ...[
+                  const Text(
+                    'Checking...',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.orange,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Compact version info and status
+            Row(
+              children: [
+                // Current version
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.info_outline,
+                          color: Colors.blue,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Current',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              Text(
+                                '${_currentAppVersion?['version'] ?? '2.3.1'}',
+                                style: const TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Status indicator
+                Expanded(child: _buildStatusIndicator()),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            // Check for Updates Button
+            SizedBox(
+              width: double.infinity,
+              height: 36,
+              child: ElevatedButton.icon(
+                onPressed: _isCheckingUpdate ? null : _checkForAppUpdate,
+                icon:
+                    _isCheckingUpdate
+                        ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                        : const Icon(Icons.refresh, size: 16),
+                label: Text(
+                  _isCheckingUpdate ? 'Checking...' : 'Check for Updates',
+                  style: const TextStyle(fontSize: 13),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+              ),
+            ),
+
+            // Update Notifications (compact)
+            if (_updateNotifications.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const Divider(height: 1),
+              const SizedBox(height: 8),
+              ..._updateNotifications.map((notification) {
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.blue.shade100),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.new_releases,
+                            color: Colors.blue,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Version ${notification['version']}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  notification['timestamp'] != null
+                                      ? _formatTimestamp(
+                                        notification['timestamp'],
+                                      )
+                                      : '',
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.delete,
+                              color: Colors.red,
+                              size: 18,
+                            ),
+                            onPressed:
+                                () => _deleteUpdateNotification(
+                                  notification['id'],
+                                ),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      // Direct Download Button
+                      SizedBox(
+                        width: double.infinity,
+                        height: 32,
+                        child: ElevatedButton.icon(
+                          onPressed: () => _downloadLatestVersion(),
+                          icon: const Icon(Icons.download, size: 16),
+                          label: const Text(
+                            'Download APK',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusIndicator() {
+    if (_isUpdateAvailable && _latestAppVersion != null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.green.shade50,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: Colors.green.shade200),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.new_releases, color: Colors.green, size: 16),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Available',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.green,
+                          fontSize: 12,
+                        ),
+                      ),
+                      Text(
+                        'v${_latestAppVersion!['version']}',
+                        style: const TextStyle(
+                          color: Colors.green,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            // Download button in status indicator
+            SizedBox(
+              width: double.infinity,
+              height: 28,
+              child: ElevatedButton.icon(
+                onPressed: _downloadLatestVersion,
+                icon: const Icon(Icons.download, size: 14),
+                label: const Text(
+                  'Download Now',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (_isCheckingUpdate) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.orange.shade50,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: Colors.orange.shade200),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 6),
+            const Text(
+              'Checking',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.orange,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.blue.shade50,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.blue, size: 16),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Up to date',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Colors.blue,
+                      fontSize: 12,
+                    ),
+                  ),
+                  if (_lastCheckTime != null)
+                    Text(
+                      'Last: ${_lastCheckTime!.toString().substring(11, 16)}',
+                      style: const TextStyle(fontSize: 10, color: Colors.grey),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  String _formatTimestamp(dynamic timestamp) {
+    try {
+      if (timestamp is Timestamp) {
+        final dateTime = timestamp.toDate();
+        return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+      }
+      return '';
+    } catch (e) {
+      return '';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -875,6 +1882,28 @@ class _SettingsPageState extends State<SettingsPage> {
                   listen: false,
                 ).setOfflineMode(value);
               },
+            ),
+            const SizedBox(height: 20),
+
+            // --- Performance Monitoring Section ---
+            _buildSectionHeader('Performance'),
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ListTile(
+                leading: const Icon(Icons.analytics, color: Colors.blue),
+                title: const Text(
+                  'Performance Monitoring',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: const Text(
+                  'Monitor app performance and cache status',
+                ),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                onTap: _showPerformanceMonitoringDialog,
+              ),
             ),
             const SizedBox(height: 20),
 
@@ -1113,6 +2142,11 @@ class _SettingsPageState extends State<SettingsPage> {
                 listen: false,
               ).setBiometricAuth(value);
             }),
+            const SizedBox(height: 20),
+
+            // --- App Updates Section ---
+            _buildSectionHeader('App Updates'),
+            _buildAppUpdateSection(),
             const SizedBox(height: 20),
 
             // Widget sections removed - simplified implementation
@@ -1766,17 +2800,54 @@ class _SettingsPageState extends State<SettingsPage> {
               onPressed: () async {
                 final user = FirebaseAuth.instance.currentUser;
                 if (user != null && selectedRating > 0) {
-                  await FirebaseFirestore.instance
-                      .collection('rate_this_app')
-                      .add({
-                        'userId': user.uid,
-                        'rating': selectedRating,
-                        'timestamp': FieldValue.serverTimestamp(),
-                      });
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Thank you for rating!')),
-                  );
+                  try {
+                    // Get user's complete profile data from Firestore
+                    final userDoc =
+                        await FirebaseFirestore.instance
+                            .collection('currentUser')
+                            .doc(user.uid)
+                            .get();
+
+                    final userData = userDoc.data() ?? {};
+
+                    // Save complete user data with rating
+                    await FirebaseFirestore.instance
+                        .collection('rate_this_app')
+                        .add({
+                          'userId': user.uid,
+                          'userEmail': user.email ?? '',
+                          'userDisplayName':
+                              user.displayName ?? userData['displayName'] ?? '',
+                          'userPhotoURL':
+                              user.photoURL ?? userData['photoURL'] ?? '',
+                          'userEmailVerified': user.emailVerified,
+                          'userCreatedAt': userData['createdAt'],
+                          'userLastLoginAt': userData['lastLoginAt'],
+                          'rating': selectedRating,
+                          'timestamp': FieldValue.serverTimestamp(),
+                          'appVersion': '2.3.1',
+                          'platform':
+                              kIsWeb
+                                  ? 'Web'
+                                  : (Platform.isAndroid ? 'Android' : 'iOS'),
+                        });
+
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Thank you for rating!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  } catch (e) {
+                    print('Error saving rating: $e');
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error saving rating: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
                 }
               },
               child: const Text('Submit'),
@@ -3145,6 +4216,297 @@ class _SettingsPageState extends State<SettingsPage> {
           },
         );
       },
+    );
+  }
+
+  /// Show performance monitoring dialog
+  void _showPerformanceMonitoringDialog() {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.analytics, color: Colors.blue),
+                SizedBox(width: 8),
+                Text('Performance Monitoring'),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Performance Statistics
+                  const Text(
+                    'Performance Statistics',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildPerformanceStats(),
+                  const SizedBox(height: 16),
+
+                  // Cache Statistics
+                  const Text(
+                    'Cache Statistics',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildCacheStats(),
+                  const SizedBox(height: 16),
+
+                  // Actions
+                  const Text(
+                    'Actions',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildPerformanceActions(),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  /// Build performance statistics widget
+  Widget _buildPerformanceStats() {
+    final stats = PerformanceMonitor.getPerformanceStats();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            _buildStatRow('Total Operations', '${stats['totalOperations']}'),
+            _buildStatRow('Average Duration', '${stats['averageDuration']}ms'),
+            _buildStatRow('Error Count', '${stats['errorCount']}'),
+            _buildStatRow('Active Timers', '${stats['activeTimers']}'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Build cache statistics widget
+  Widget _buildCacheStats() {
+    final flagStats = FlagService.getCacheStats();
+    final apiStats = ApiService.getCacheStats();
+    final lottieStats = LottieManager.getCacheStats();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            _buildStatRow(
+              'Flag Cache',
+              '${flagStats['cacheSize']}/${flagStats['maxCacheSize']}',
+            ),
+            _buildStatRow(
+              'API Cache',
+              '${apiStats['cacheSize']}/${apiStats['maxCacheSize']}',
+            ),
+            _buildStatRow(
+              'Lottie Cache',
+              '${lottieStats['cacheSize']}/${lottieStats['maxCacheSize']}',
+            ),
+            _buildStatRow(
+              'Pending API Requests',
+              '${apiStats['pendingRequests']}',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Build performance actions widget
+  Widget _buildPerformanceActions() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.refresh, color: Colors.blue),
+              title: const Text('Clear All Caches'),
+              subtitle: const Text('Free up memory'),
+              onTap: () {
+                FlagService.clearCache();
+                ApiService.clearCache();
+                LottieManager.clearCache();
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('All caches cleared!'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.analytics, color: Colors.green),
+              title: const Text('Generate Report'),
+              subtitle: const Text('View detailed performance data'),
+              onTap: () {
+                Navigator.pop(context);
+                _showPerformanceReport();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.clear_all, color: Colors.orange),
+              title: const Text('Clear Performance Logs'),
+              subtitle: const Text('Reset performance tracking'),
+              onTap: () {
+                PerformanceMonitor.clearLogs();
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Performance logs cleared!'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Build stat row widget
+  Widget _buildStatRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 14)),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.blue,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Show performance report dialog
+  void _showPerformanceReport() {
+    final report = PerformanceMonitor.generateReport();
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.assessment, color: Colors.green),
+                SizedBox(width: 8),
+                Text('Performance Report'),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Generated: ${report['generatedAt']}'),
+                  const SizedBox(height: 16),
+
+                  if (report['recentErrors'].isNotEmpty) ...[
+                    const Text(
+                      'Recent Errors',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...report['recentErrors']
+                        .map(
+                          (error) => Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    error['operation'] ?? 'Unknown',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Text(
+                                    error['error'] ?? 'Unknown error',
+                                    style: const TextStyle(color: Colors.red),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    const SizedBox(height: 16),
+                  ],
+
+                  if (report['recentPerformance'].isNotEmpty) ...[
+                    const Text(
+                      'Recent Performance',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...report['recentPerformance']
+                        .take(5)
+                        .map(
+                          (perf) => Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(perf['operation'] ?? 'Unknown'),
+                                  ),
+                                  Text(
+                                    '${perf['duration']}ms',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
     );
   }
 }

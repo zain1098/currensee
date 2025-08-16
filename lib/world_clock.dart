@@ -46,6 +46,8 @@ class _WorldClockPageState extends State<WorldClockPage>
 
   List<ClockLocation> _searchResults = [];
   bool _showAddLocation = false;
+  bool _isLoading = true; // Add loading state
+  String? _errorMessage; // Add error state
   late AnimationController _fabController;
   late AnimationController _clockChangeController;
   late Animation<double> _clockChangeAnimation;
@@ -54,7 +56,8 @@ class _WorldClockPageState extends State<WorldClockPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _loadPreferences();
+
+    // Initialize animation controllers
     _listController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -78,10 +81,70 @@ class _WorldClockPageState extends State<WorldClockPage>
     _clockChangeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _clockChangeController, curve: Curves.easeInOut),
     );
-    _updateAllTimes();
+
+    // Start timer and animations
     _startTimer();
     _listController.forward();
-    _loadLocationsFromFirebase(); // Load Firebase data
+
+    // Load data in correct order
+    _initializeData();
+  }
+
+  // Initialize data in the correct order
+  Future<void> _initializeData() async {
+    try {
+      // Load basic preferences first (UI settings)
+      await _loadBasicPreferences();
+
+      // Then load locations from Firebase (which will also load location preferences)
+      await _loadLocationsFromFirebase();
+
+      // Finally update times
+      _updateAllTimes();
+
+      // Mark loading as complete
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Failed to initialize: $e';
+      });
+      rethrow;
+    }
+  }
+
+  // Load only basic UI preferences
+  Future<void> _loadBasicPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      is24HourFormat = prefs.getBool('24hour') ?? false;
+      showAnalog = prefs.getBool('analog') ?? false;
+      showDate = prefs.getBool('showDate') ?? true;
+      showDayProgress = prefs.getBool('showDayProgress') ?? true;
+      showWeather = prefs.getBool('showWeather') ?? true;
+    });
+  }
+
+  // Retry loading data
+  Future<void> _retryLoading() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await _initializeData();
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Failed to load data: $e';
+      });
+    }
   }
 
   // Load locations from Firebase
@@ -116,20 +179,13 @@ class _WorldClockPageState extends State<WorldClockPage>
                 return location;
               }).toList();
 
-          // Update locations list if empty (only active locations)
-          if (locations.isEmpty) {
-            final activeLocations =
-                allLocations.where((loc) => loc.status == 'active').toList();
-            if (activeLocations.isNotEmpty) {
-              locations = [activeLocations[0]];
-              _selectedTimezone = activeLocations[0].timezone;
-            }
-          }
-
           print(
             '✅ Loaded ${allLocations.length} locations from Firebase (${allLocations.where((loc) => loc.status == 'active').length} active)',
           );
         });
+
+        // Now load preferences after locations are loaded
+        await _loadPreferences();
       } else {
         print('⚠️ No locations found in Firebase, using fallback data');
         _loadFallbackLocations();
@@ -194,12 +250,10 @@ class _WorldClockPageState extends State<WorldClockPage>
         );
         print('🏳️ Country code extracted: ${location.countryCode}');
       }
-
-      if (locations.isEmpty) {
-        locations = [allLocations[0]];
-        _selectedTimezone = allLocations[0].timezone;
-      }
     });
+
+    // Load preferences after fallback locations are set
+    _loadPreferences();
   }
 
   @override
@@ -228,16 +282,29 @@ class _WorldClockPageState extends State<WorldClockPage>
       showDate = prefs.getBool('showDate') ?? true;
       showDayProgress = prefs.getBool('showDayProgress') ?? true;
       showWeather = prefs.getBool('showWeather') ?? true;
-      final savedLocations = prefs.getStringList('savedLocations') ?? [];
-      locations =
-          allLocations
-              .where((loc) => savedLocations.contains(loc.timezone))
-              .toList();
-      if (locations.isEmpty) {
-        locations = [allLocations[0]];
-        _selectedTimezone = allLocations[0].timezone;
-      } else {
-        _selectedTimezone = locations[0].timezone;
+
+      // Only try to load saved locations if allLocations is not empty
+      if (allLocations.isNotEmpty) {
+        final savedLocations = prefs.getStringList('savedLocations') ?? [];
+        locations =
+            allLocations
+                .where((loc) => savedLocations.contains(loc.timezone))
+                .toList();
+
+        if (locations.isEmpty && allLocations.isNotEmpty) {
+          // Use first active location as default
+          final activeLocations =
+              allLocations.where((loc) => loc.status == 'active').toList();
+          if (activeLocations.isNotEmpty) {
+            locations = [activeLocations[0]];
+            _selectedTimezone = activeLocations[0].timezone;
+          } else if (allLocations.isNotEmpty) {
+            locations = [allLocations[0]];
+            _selectedTimezone = allLocations[0].timezone;
+          }
+        } else if (locations.isNotEmpty) {
+          _selectedTimezone = locations[0].timezone;
+        }
       }
     });
   }
@@ -251,8 +318,9 @@ class _WorldClockPageState extends State<WorldClockPage>
   }
 
   void _startTimer() {
+    _timer?.cancel(); // Cancel existing timer if any
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
+      if (mounted && locations.isNotEmpty) {
         _updateAllTimes();
       }
     });
@@ -399,10 +467,84 @@ class _WorldClockPageState extends State<WorldClockPage>
 
   @override
   Widget build(BuildContext context) {
-    final selectedLocation = locations.firstWhere(
-      (loc) => loc.timezone == _selectedTimezone,
-      orElse: () => locations.first,
-    );
+    // Handle loading state
+    if (_isLoading) {
+      return Scaffold(
+        key: _scaffoldKey,
+        appBar: CustomAppBar(
+          title: 'World Clock',
+          onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              const Text('Loading world clock data...'),
+              if (_errorMessage != null) ...[
+                const SizedBox(height: 16),
+                Text(
+                  _errorMessage!,
+                  style: const TextStyle(color: Colors.red),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: _retryLoading,
+                  child: const Text('Retry'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Handle case when locations is empty
+    if (locations.isEmpty) {
+      return Scaffold(
+        key: _scaffoldKey,
+        appBar: CustomAppBar(
+          title: 'World Clock',
+          onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: Colors.red),
+              const SizedBox(height: 16),
+              const Text(
+                'No locations available',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text('Please check your internet connection'),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _retryLoading,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Safe way to get selected location
+    ClockLocation selectedLocation;
+    try {
+      selectedLocation = locations.firstWhere(
+        (loc) => loc.timezone == _selectedTimezone,
+        orElse: () => locations.first,
+      );
+    } catch (e) {
+      // Fallback to first location if selected timezone not found
+      selectedLocation = locations.first;
+      _selectedTimezone = selectedLocation.timezone;
+    }
+
     final isNight = _isNightTime(selectedLocation.localTime ?? DateTime.now());
     final mediaQuery = MediaQuery.of(context);
     final bottomPadding = mediaQuery.viewInsets.bottom;
@@ -623,412 +765,310 @@ class _WorldClockPageState extends State<WorldClockPage>
         ),
       ),
       body: SafeArea(
-        child: Stack(
+        child: Column(
           children: [
-            Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0,
-                    vertical: 8.0,
-                  ),
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search cities...',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () {
-                          _searchController.clear();
-                          _searchResults.clear();
-                          setState(() {});
-                        },
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8.0),
-                      ),
-                      filled: true,
-                      fillColor: Theme.of(context).cardColor,
-                    ),
-                    onChanged: _searchLocations,
-                  ),
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.only(
-                      bottom:
-                          isKeyboardVisible
-                              ? 0
-                              : 200, // Increased padding to prevent flag overflow
-                    ),
-                    child: Center(
-                      child: ScaleTransition(
-                        scale: _clockChangeAnimation,
-                        child: FadeTransition(
-                          opacity: _clockChangeAnimation,
-                          child: _ClockCard(
-                            location: selectedLocation,
-                            isNight: isNight,
-                            showAnalog: showAnalog,
-                            showDate: showDate,
-                            showDayProgress: showDayProgress,
-                            showWeather: showWeather,
-                            isMainClock: true,
-                            onSettingsPressed: _showSettingsDialog,
-                          ),
-                        ),
+            // Main clock area - takes available space
+            Expanded(
+              child: SingleChildScrollView(
+                child: Center(
+                  child: ScaleTransition(
+                    scale: _clockChangeAnimation,
+                    child: FadeTransition(
+                      opacity: _clockChangeAnimation,
+                      child: _ClockCard(
+                        location: selectedLocation,
+                        isNight: isNight,
+                        showAnalog: showAnalog,
+                        showDate: showDate,
+                        showDayProgress: showDayProgress,
+                        showWeather: showWeather,
+                        isMainClock: true,
+                        onSettingsPressed: _showSettingsDialog,
                       ),
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
+            // My Locations section - always at bottom
             if (!isKeyboardVisible)
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  height: 200, // Increased height to prevent flag overflow
-                  padding: const EdgeInsets.only(
-                    top: 12,
-                    bottom: 20,
-                  ), // Increased bottom padding
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).scaffoldBackgroundColor,
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(24),
-                      topRight: Radius.circular(24),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 15,
-                        offset: const Offset(0, -5),
-                      ),
-                    ],
+              Container(
+                height: 200,
+                padding: const EdgeInsets.only(top: 12, bottom: 20),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(24),
+                    topRight: Radius.circular(24),
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'My Locations',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color:
-                                    Theme.of(
-                                      context,
-                                    ).textTheme.bodyLarge?.color,
-                              ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 15,
+                      offset: const Offset(0, -5),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'My Locations',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color:
+                                  Theme.of(context).textTheme.bodyLarge?.color,
                             ),
-                            GestureDetector(
-                              onTap: _toggleAddLocation,
-                              child: Container(
-                                width: 44,
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Theme.of(context).colorScheme.primary,
-                                      Theme.of(context).colorScheme.secondary,
-                                    ],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary.withOpacity(0.18),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
+                          ),
+                          GestureDetector(
+                            onTap: _toggleAddLocation,
+                            child: Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Theme.of(context).colorScheme.primary,
+                                    Theme.of(context).colorScheme.secondary,
                                   ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
                                 ),
-                                child: const Icon(
-                                  Icons.add,
-                                  color: Colors.white,
-                                  size: 28,
-                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary.withOpacity(0.18),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.add,
+                                color: Colors.white,
+                                size: 28,
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        height:
-                            120, // Increased height to prevent flag overflow
-                        child: ListView.separated(
-                          controller: _scrollController,
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: locations.length,
-                          separatorBuilder:
-                              (context, i) => const SizedBox(width: 16),
-                          itemBuilder: (context, index) {
-                            final location = locations[index];
-                            final isSelected =
-                                _selectedTimezone == location.timezone;
-                            return GestureDetector(
-                              onTap: () => _selectLocation(location),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 300),
-                                width:
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 120,
+                      child: ListView.separated(
+                        controller: _scrollController,
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: locations.length,
+                        separatorBuilder:
+                            (context, i) => const SizedBox(width: 16),
+                        itemBuilder: (context, index) {
+                          final location = locations[index];
+                          final isSelected =
+                              _selectedTimezone == location.timezone;
+                          return GestureDetector(
+                            onTap: () => _selectLocation(location),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              width: isSelected ? 85 : 75,
+                              height: isSelected ? 85 : 75,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient:
                                     isSelected
-                                        ? 85
-                                        : 75, // Reduced size slightly
-                                height:
+                                        ? LinearGradient(
+                                          colors: [
+                                            Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
+                                            Theme.of(
+                                              context,
+                                            ).colorScheme.secondary,
+                                          ],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        )
+                                        : LinearGradient(
+                                          colors: [
+                                            Theme.of(context).cardColor,
+                                            Theme.of(context).cardColor,
+                                          ],
+                                        ),
+                                boxShadow:
                                     isSelected
-                                        ? 85
-                                        : 75, // Reduced size slightly
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient:
-                                      isSelected
-                                          ? LinearGradient(
-                                            colors: [
-                                              Theme.of(
-                                                context,
-                                              ).colorScheme.primary,
-                                              Theme.of(
-                                                context,
-                                              ).colorScheme.secondary,
-                                            ],
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                          )
-                                          : LinearGradient(
-                                            colors: [
-                                              Theme.of(context).cardColor,
-                                              Theme.of(context).cardColor,
-                                            ],
-                                          ),
-                                  boxShadow:
-                                      isSelected
-                                          ? [
-                                            BoxShadow(
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .primary
-                                                  .withOpacity(0.25),
-                                              blurRadius: 12,
-                                              offset: const Offset(0, 3),
-                                            ),
-                                          ]
-                                          : null,
-                                  border: Border.all(
-                                    color:
-                                        isSelected
-                                            ? Theme.of(context)
+                                        ? [
+                                          BoxShadow(
+                                            color: Theme.of(context)
                                                 .colorScheme
                                                 .primary
-                                                .withOpacity(0.8)
-                                            : Theme.of(
-                                              context,
-                                            ).dividerColor.withOpacity(0.2),
-                                    width: isSelected ? 2.5 : 1.0,
-                                  ),
+                                                .withOpacity(0.25),
+                                            blurRadius: 12,
+                                            offset: const Offset(0, 3),
+                                          ),
+                                        ]
+                                        : null,
+                                border: Border.all(
+                                  color:
+                                      isSelected
+                                          ? Theme.of(
+                                            context,
+                                          ).colorScheme.primary.withOpacity(0.8)
+                                          : Theme.of(
+                                            context,
+                                          ).dividerColor.withOpacity(0.2),
+                                  width: isSelected ? 2.5 : 1.0,
                                 ),
-                                child: Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    Center(
-                                      child: Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          // Use FlagService for flags with error handling
-                                          if (location.countryCode != null)
-                                            Container(
-                                              width: 26,
-                                              height: 16,
-                                              constraints: const BoxConstraints(
-                                                maxWidth: 26,
-                                                maxHeight: 16,
+                              ),
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Center(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        // Use FlagService for flags with error handling
+                                        if (location.countryCode != null)
+                                          Container(
+                                            width: 26,
+                                            height: 16,
+                                            constraints: const BoxConstraints(
+                                              maxWidth: 26,
+                                              maxHeight: 16,
+                                            ),
+                                            margin: const EdgeInsets.only(
+                                              bottom: 2,
+                                            ),
+                                            child: ClipRect(
+                                              child: Builder(
+                                                builder: (context) {
+                                                  try {
+                                                    return FlagService.getFlagWidget(
+                                                      location.countryCode!,
+                                                      size: FlagSize.small,
+                                                    );
+                                                  } catch (e) {
+                                                    // Fallback to emoji flag if FlagService fails
+                                                    return Text(
+                                                      location.flag,
+                                                      style: TextStyle(
+                                                        fontSize:
+                                                            isSelected
+                                                                ? 24
+                                                                : 20,
+                                                      ),
+                                                    );
+                                                  }
+                                                },
                                               ),
-                                              margin: const EdgeInsets.only(
-                                                bottom: 2,
-                                              ),
-                                              child: ClipRect(
-                                                child: Builder(
-                                                  builder: (context) {
-                                                    try {
-                                                      return FlagService.getFlagWidget(
-                                                        location.countryCode!,
-                                                        size: FlagSize.small,
-                                                      );
-                                                    } catch (e) {
-                                                      // Fallback to emoji flag if FlagService fails
-                                                      return Text(
-                                                        location.flag,
-                                                        style: TextStyle(
-                                                          fontSize:
-                                                              isSelected
-                                                                  ? 24
-                                                                  : 20,
-                                                        ),
-                                                      );
-                                                    }
-                                                  },
-                                                ),
-                                              ),
-                                            )
-                                          else
-                                            Text(
-                                              location.flag,
-                                              style: TextStyle(
-                                                fontSize:
-                                                    isSelected
-                                                        ? 26
-                                                        : 22, // Reduced font sizes
-                                                shadows:
-                                                    isSelected
-                                                        ? [
-                                                          Shadow(
-                                                            color: Colors.black
-                                                                .withOpacity(
-                                                                  0.2,
-                                                                ),
-                                                            blurRadius: 2,
-                                                            offset:
-                                                                const Offset(
-                                                                  0,
-                                                                  1,
-                                                                ),
+                                            ),
+                                          )
+                                        else
+                                          Text(
+                                            location.flag,
+                                            style: TextStyle(
+                                              fontSize: isSelected ? 26 : 22,
+                                              shadows:
+                                                  isSelected
+                                                      ? [
+                                                        Shadow(
+                                                          color: Colors.black
+                                                              .withOpacity(0.2),
+                                                          blurRadius: 2,
+                                                          offset: const Offset(
+                                                            0,
+                                                            1,
                                                           ),
-                                                        ]
-                                                        : null,
-                                              ),
-                                            ),
-                                          const SizedBox(height: 6),
-                                          Text(
-                                            location.city,
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              fontSize:
-                                                  isSelected
-                                                      ? 12
-                                                      : 10, // Reduced font sizes
-                                              color:
-                                                  isSelected
-                                                      ? Colors.white
-                                                      : Theme.of(context)
-                                                          .textTheme
-                                                          .bodyLarge
-                                                          ?.color,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          Text(
-                                            'UTC${location.utcOffset}',
-                                            style: TextStyle(
-                                              fontSize:
-                                                  isSelected
-                                                      ? 10
-                                                      : 8, // Reduced font sizes
-                                              color:
-                                                  isSelected
-                                                      ? Colors.white
-                                                          .withOpacity(0.9)
-                                                      : Theme.of(context)
-                                                          .textTheme
-                                                          .bodySmall
-                                                          ?.color,
+                                                        ),
+                                                      ]
+                                                      : null,
                                             ),
                                           ),
-                                        ],
-                                      ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          location.city,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: isSelected ? 12 : 10,
+                                            color:
+                                                isSelected
+                                                    ? Colors.white
+                                                    : Theme.of(context)
+                                                        .textTheme
+                                                        .bodyLarge
+                                                        ?.color,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        Text(
+                                          'UTC${location.utcOffset}',
+                                          style: TextStyle(
+                                            fontSize: isSelected ? 10 : 8,
+                                            color:
+                                                isSelected
+                                                    ? Colors.white.withOpacity(
+                                                      0.9,
+                                                    )
+                                                    : Theme.of(context)
+                                                        .textTheme
+                                                        .bodySmall
+                                                        ?.color,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    if (isSelected)
-                                      Positioned(
-                                        top: -6, // Reduced top position
-                                        right: -6, // Reduced right position
-                                        child: GestureDetector(
-                                          onTap:
-                                              () => _removeLocation(location),
-                                          child: Container(
-                                            width: 24, // Reduced size
-                                            height: 24, // Reduced size
-                                            decoration: BoxDecoration(
-                                              color: Colors.redAccent,
-                                              shape: BoxShape.circle,
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: Colors.redAccent
-                                                      .withOpacity(0.25),
-                                                  blurRadius: 6,
-                                                  offset: const Offset(0, 2),
-                                                ),
-                                              ],
-                                            ),
-                                            child: const Icon(
-                                              Icons.close,
-                                              size: 14, // Reduced icon size
-                                              color: Colors.white,
-                                            ),
+                                  ),
+                                  if (isSelected)
+                                    Positioned(
+                                      top: -6,
+                                      right: -6,
+                                      child: GestureDetector(
+                                        onTap: () => _removeLocation(location),
+                                        child: Container(
+                                          width: 24,
+                                          height: 24,
+                                          decoration: BoxDecoration(
+                                            color: Colors.redAccent,
+                                            shape: BoxShape.circle,
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.redAccent
+                                                    .withOpacity(0.25),
+                                                blurRadius: 6,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: const Icon(
+                                            Icons.close,
+                                            size: 14,
+                                            color: Colors.white,
                                           ),
                                         ),
                                       ),
-                                  ],
-                                ),
+                                    ),
+                                ],
                               ),
-                            );
-                          },
-                        ),
+                            ),
+                          );
+                        },
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-            if (_searchController.text.isNotEmpty && _searchResults.isNotEmpty)
-              Positioned(
-                top: 80,
-                left: 16,
-                right: 16,
-                child: Material(
-                  elevation: 4,
-                  borderRadius: BorderRadius.circular(12),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    constraints: const BoxConstraints(maxHeight: 300),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).cardColor,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: ListView.builder(
-                      padding: EdgeInsets.zero,
-                      shrinkWrap: true,
-                      itemCount: _searchResults.length,
-                      itemBuilder: (context, index) {
-                        final location = _searchResults[index];
-                        return _SearchResultItem(
-                          location: location,
-                          isAdded: locations.contains(location),
-                          onTap: () {
-                            if (!locations.contains(location)) {
-                              _addLocation(location);
-                            }
-                            _searchController.clear();
-                            _searchResults.clear();
-                            setState(() {});
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              ),
+
             if (_showAddLocation)
               Positioned.fill(
                 child: GestureDetector(
@@ -1070,7 +1110,6 @@ class _WorldClockPageState extends State<WorldClockPage>
                                 ),
                                 const SizedBox(height: 10),
                                 TextField(
-                                  autofocus: true,
                                   decoration: InputDecoration(
                                     hintText: 'Search cities...',
                                     prefixIcon: const Icon(Icons.search),

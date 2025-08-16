@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
 import 'package:money_tracker/world_clock.dart';
 import 'home_page.dart';
 import 'news_page.dart';
@@ -38,6 +39,10 @@ import 'redlist_widget.dart';
 import 'alert_service.dart';
 import 'messaging_service.dart';
 import 'services/user_status_service.dart';
+import 'services/maintenance_service.dart';
+import 'services/connectivity_service.dart';
+import 'services/lottie_manager.dart';
+import 'services/performance_monitor.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,7 +59,7 @@ void main() async {
   // Set Firebase Auth persistence for all platforms
   if (kIsWeb) {
     await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
-  } // For mobile, persistence is local by default, no need to set
+  }
 
   // Initialize notifications
   const AndroidInitializationSettings initializationSettingsAndroid =
@@ -92,28 +97,12 @@ void main() async {
     print('Error initializing MessagingService: $e');
   }
 
-  // Initialize widgets with default pairs
+  // Initialize ConnectivityService
   try {
-    await initializeWatchlistWidget();
-    print('Watchlist widget initialized successfully');
+    ConnectivityService().initialize();
+    print('ConnectivityService initialized successfully');
   } catch (e) {
-    print('Error initializing watchlist widget: $e');
-  }
-
-  // Initialize RedList widget
-  try {
-    await initializeRedListWidget();
-    print('RedList widget initialized successfully');
-  } catch (e) {
-    print('Error initializing RedList widget: $e');
-  }
-
-  // Initialize Mini Chart widget
-  try {
-    await initializeMiniChartWidget();
-    print('Mini Chart widget initialized successfully');
-  } catch (e) {
-    print('Error initializing mini chart widget: $e');
+    print('Error initializing ConnectivityService: $e');
   }
 
   // Setup platform channel for widget communication
@@ -368,8 +357,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         setState(() {
           _appInitialized = true;
         });
-        // Check biometric authentication after app is initialized
-        _checkBiometricLock();
+        // Check maintenance mode first, then biometric authentication
+        _checkMaintenanceMode();
+
+        // Start periodic maintenance check
+        _startPeriodicMaintenanceCheck();
       }
     });
   }
@@ -424,6 +416,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
     try {
       await _checkConnectivity();
+      // If connection is restored, restart the app to show normal flow
+      if (_isConnected) {
+        _restartApp();
+      }
     } finally {
       setState(() {
         _isCheckingConnection = false;
@@ -435,8 +431,18 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void _continueOffline() {
     final appSettings = Provider.of<AppSettings>(context, listen: false);
     appSettings.setOfflineMode(true);
+
+    // Force immediate state change to bypass all internet checks
     setState(() {
-      // Force rebuild to show offline mode
+      // This will trigger a rebuild and show the normal app flow
+      // since settings.offlineMode will now be true
+    });
+
+    // Also restart the app to ensure all components are updated
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        _restartApp();
+      }
     });
   }
 
@@ -494,17 +500,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         });
       }
 
-      // Check biometric lock only if user is logged in, biometric is enabled, and not already authenticated
-      if (user != null &&
-          !_isAuthenticating &&
-          !_showLockScreen &&
-          _appInitialized &&
-          !_hasAuthenticatedInSession) {
-        print('App resumed, checking biometric lock...');
-        // Add a small delay to ensure Firebase auth state is properly loaded
-        Future.delayed(const Duration(milliseconds: 800), () {
-          if (mounted && !_showLockScreen && !_hasAuthenticatedInSession) {
-            _checkBiometricLock();
+      // Check maintenance mode first, then biometric lock if needed
+      if (_appInitialized) {
+        print('App resumed, checking maintenance mode...');
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            _checkMaintenanceMode();
           }
         });
       }
@@ -529,6 +530,82 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       });
     }
     // Removed the inactive state handler to prevent unnecessary resets
+  }
+
+  // Check maintenance mode and show modal if needed
+  Future<void> _checkMaintenanceMode() async {
+    // Skip maintenance check if offline mode is enabled
+    final settings = Provider.of<AppSettings>(context, listen: false);
+    if (settings.offlineMode) {
+      print('Offline mode enabled, skipping maintenance check');
+      _checkBiometricLock();
+      return;
+    }
+
+    // Skip maintenance check if not connected
+    if (!_isConnected) {
+      print('No internet connection, skipping maintenance check');
+      _checkBiometricLock();
+      return;
+    }
+
+    try {
+      print('Checking maintenance mode...');
+      final isMaintenanceActive =
+          await MaintenanceService.checkAndShowMaintenanceModal(context);
+
+      if (isMaintenanceActive) {
+        print('Maintenance mode is active - app access blocked');
+        // Don't proceed with biometric check if maintenance is active
+        return;
+      } else {
+        print('No maintenance mode - proceeding with normal app flow');
+        // Continue with biometric authentication
+        _checkBiometricLock();
+      }
+    } catch (e) {
+      print('Error checking maintenance mode: $e');
+      // If maintenance check fails, continue with normal flow
+      _checkBiometricLock();
+    }
+  }
+
+  // Periodic maintenance check
+  void _startPeriodicMaintenanceCheck() {
+    Timer.periodic(const Duration(seconds: 30), (timer) async {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      // Skip periodic check if offline mode is enabled
+      final settings = Provider.of<AppSettings>(context, listen: false);
+      if (settings.offlineMode) {
+        print('Offline mode enabled, skipping periodic maintenance check');
+        return;
+      }
+
+      // Skip periodic check if not connected
+      if (!_isConnected) {
+        print('No internet connection, skipping periodic maintenance check');
+        return;
+      }
+
+      try {
+        final maintenanceData =
+            await MaintenanceService.checkMaintenanceStatus();
+        if (maintenanceData != null && maintenanceData['isEnabled'] == true) {
+          print('Maintenance mode detected during periodic check');
+          // Force show maintenance modal and block app
+          if (Navigator.of(context).canPop()) {
+            Navigator.of(context).pop(); // Close any open dialogs
+          }
+          MaintenanceService.showMaintenanceModal(context, maintenanceData);
+        }
+      } catch (e) {
+        print('Error in periodic maintenance check: $e');
+      }
+    });
   }
 
   Future<void> _checkBiometricLock() async {
@@ -690,10 +767,54 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       key: _appKey, // Use the restart key here
       // In main.dart, modify the MaterialApp routes:
       home:
-          !_isConnected && !settings.offlineMode
+          _isConnected && !settings.offlineMode
+              ? FutureBuilder<Map<String, dynamic>?>(
+                future: MaintenanceService.checkMaintenanceStatus(),
+                builder: (context, snapshot) {
+                  // Show loading while checking maintenance
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Scaffold(
+                      body: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+
+                  // Check if maintenance mode is active
+                  if (snapshot.hasData &&
+                      snapshot.data != null &&
+                      snapshot.data!['isEnabled'] == true) {
+                    // Show maintenance screen
+                    return Scaffold(
+                      body: Builder(
+                        builder: (context) {
+                          // Show maintenance modal
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            MaintenanceService.showMaintenanceModal(
+                              context,
+                              snapshot.data!,
+                            );
+                          });
+                          return const Center(
+                            child: Text('App is under maintenance'),
+                          );
+                        },
+                      ),
+                    );
+                  }
+
+                  // Normal app flow
+                  return _showLockScreen
+                      ? BiometricLockScreen(
+                        onUnlock: _authenticate,
+                        error: _lockError,
+                        biometricAvailable: _biometricAvailable,
+                        isAuthenticating: _isAuthenticating,
+                      )
+                      : const AuthGate();
+                },
+              )
+              : !_isConnected && !settings.offlineMode
               ? NetworkErrorScreen(
                 onRetry: _retryConnection,
-                onContinueOffline: _continueOffline,
                 isChecking: _isCheckingConnection,
               )
               : _showLockScreen
@@ -1402,7 +1523,6 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> {
             onRetry: () {
               _initConnectivity();
             },
-            onContinueOffline: () => setState(() => _showOfflineMode = true),
           );
         }
 

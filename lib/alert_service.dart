@@ -204,21 +204,41 @@ class AlertService {
 
   // Start background monitoring
   void _startBackgroundMonitoring() {
-    // Check alerts every 2 minutes for more responsive alerts
-    _alertCheckTimer = Timer.periodic(const Duration(minutes: 2), (timer) {
+    // Check alerts every 1 minute for more responsive alerts
+    _alertCheckTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
       _checkAlertsInBackground();
     });
 
     // Also check immediately
     _checkAlertsInBackground();
 
-    debugPrint('Background monitoring started - checking every 2 minutes');
+    debugPrint('Background monitoring started - checking every 1 minute');
+  }
+
+  // Check connectivity and retry if needed
+  Future<bool> _checkConnectivity() async {
+    try {
+      final response = await http.get(
+        Uri.parse('https://open.er-api.com/v6/latest/USD'),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Connectivity check failed: $e');
+      return false;
+    }
   }
 
   // Check alerts in background
   Future<void> _checkAlertsInBackground() async {
     try {
       debugPrint('Checking alerts in background...');
+
+      // Check connectivity first
+      final isConnected = await _checkConnectivity();
+      if (!isConnected) {
+        debugPrint('No internet connection - skipping alert check');
+        return;
+      }
 
       // Fetch latest rates
       await _fetchLatestRates();
@@ -307,7 +327,6 @@ class AlertService {
         }
       } else {
         debugPrint('API request failed with status: ${response.statusCode}');
-        debugPrint('Response body: ${response.body}');
       }
     } catch (e) {
       debugPrint('Error fetching rates: $e');
@@ -320,76 +339,16 @@ class AlertService {
     double currentRate,
   ) async {
     try {
-      // Get user's preferred notification sound
       final prefs = await SharedPreferences.getInstance();
       String selectedSound =
           prefs.getString('notificationSound') ?? 'notification.mp3';
 
       // Validate sound file exists
-      const availableSounds = [
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_001_41155.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_002_41156.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_003_41157.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_004_41158.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_005_41159.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_006_41160.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_007_41161.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_008_41162.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_009_41163.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_010_41164.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_011_41165.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_012_41166.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_013_41167.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_014_41168.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_015_41169.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_016_41170.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_017_41171.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_018_41181.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_019_41182.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_020_41183.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_021_41184.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_022_41185.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_023_41186.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_024_41187.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_025_41188.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_026_41189.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_027_41190.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_028_41172.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_029_41173.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_030_41191.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_031_41192.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_032_41193.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_033_41194.mp3',
-        'zapsplat_multimedia_notification_bell_chime_ring_alert_034_41195.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_001_41174.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_002_41175.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_003_41196.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_004_41197.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_005_41198.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_006_41199.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_007_41200.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_008_41201.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_009_41202.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_010_41203.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_011_41204.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_012_41205.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_013_41206.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_014_41207.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_015_41208.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_016_41209.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_017_41210.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_018_41211.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_019_41112.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_020_41213.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_021_41214.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_022_41215.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_023_41216.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_024_41217.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_025_41218.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_026_41219.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_027_41220.mp3',
-        'zapsplat_multimedia_notification_bell_glassy_chime_028_41221.mp3',
+      final availableSounds = [
         'notification.mp3',
+        'alert.mp3',
+        'bell.mp3',
+        'chime.mp3',
       ];
 
       if (!availableSounds.contains(selectedSound)) {
@@ -470,18 +429,26 @@ class AlertService {
       final entry = {
         'title': title,
         'body': body,
-        'soundName': soundName,
         'timestamp': DateTime.now().toIso8601String(),
+        'alertId': alert.id,
+        'baseCurrency': alert.baseCurrency,
+        'targetCurrency': alert.targetCurrency,
+        'targetRate': alert.targetRate.toString(),
+        'currentRate': currentRate.toString(),
+        'triggerType': alert.triggerType,
+        'sound': soundName,
       };
 
+      // Add to beginning of list (newest first)
       history.insert(0, jsonEncode(entry));
 
-      // Keep only last 50 notifications
-      if (history.length > 50) {
-        history.removeRange(50, history.length);
+      // Keep only last 100 notifications
+      if (history.length > 100) {
+        history.removeRange(100, history.length);
       }
 
       await prefs.setStringList('notification_history', history);
+      debugPrint('Notification added to history');
     } catch (e) {
       debugPrint('Error adding notification to history: $e');
     }
@@ -493,29 +460,33 @@ class AlertService {
     double currentRate,
     String title,
     String body,
-    String sound,
+    String soundName,
   ) async {
     try {
+      if (_currentUser == null) return;
+
       await _firestore.collection('alert_history').add({
-        'userId': alert.userId,
+        'userId': _currentUser!.uid,
         'alertId': alert.id,
         'baseCurrency': alert.baseCurrency,
         'targetCurrency': alert.targetCurrency,
         'targetRate': alert.targetRate,
         'triggerType': alert.triggerType,
-        'createdAt': alert.createdAt.toIso8601String(),
-        'triggeredAt': DateTime.now().toIso8601String(),
+        'triggeredAt': FieldValue.serverTimestamp(),
         'currentRate': currentRate,
         'notificationTitle': title,
         'notificationBody': body,
-        'sound': sound,
+        'sound': soundName,
+        'createdAt': FieldValue.serverTimestamp(),
       });
+
+      debugPrint('Alert history saved to Firestore');
     } catch (e) {
       debugPrint('Error saving alert history: $e');
     }
   }
 
-  // Remove alert from Firestore and local list
+  // Remove alert from Firestore
   Future<void> _removeAlert(String alertId) async {
     try {
       await _firestore.collection('alerts').doc(alertId).delete();
@@ -532,12 +503,12 @@ class AlertService {
       final docRef = await _firestore.collection('alerts').add(alert.toMap());
       final newAlert = CurrencyAlert(
         id: docRef.id,
+        userId: alert.userId,
         baseCurrency: alert.baseCurrency,
         targetCurrency: alert.targetCurrency,
         targetRate: alert.targetRate,
         triggerType: alert.triggerType,
         createdAt: alert.createdAt,
-        userId: alert.userId,
         userEmail: alert.userEmail,
       );
 
@@ -545,39 +516,29 @@ class AlertService {
       debugPrint('Alert added: ${newAlert.id}');
 
       // Immediately check if this alert should be triggered
-      await _checkSpecificAlert(newAlert);
+      await checkSpecificAlert(newAlert);
     } catch (e) {
       debugPrint('Error adding alert: $e');
+      rethrow;
     }
   }
 
-  // Check a specific alert immediately
-  Future<void> _checkSpecificAlert(CurrencyAlert alert) async {
+  // Check specific alert immediately
+  Future<void> checkSpecificAlert(CurrencyAlert alert) async {
     try {
-      debugPrint(
-        'Checking specific alert immediately: ${alert.targetCurrency}',
-      );
+      debugPrint('Checking specific alert: ${alert.targetCurrency}');
 
-      // Fetch latest rates if not available
-      if (_currentRates.isEmpty) {
-        await _fetchLatestRates();
-      }
-
-      if (alert.baseCurrency != _baseCurrency) {
-        debugPrint('Alert base currency mismatch, skipping immediate check');
-        return;
-      }
+      // Fetch latest rates
+      await _fetchLatestRates();
 
       final currentRate = _currentRates[alert.targetCurrency];
       if (currentRate == null) {
-        debugPrint(
-          'No current rate found for ${alert.targetCurrency}, skipping immediate check',
-        );
+        debugPrint('No rate found for ${alert.targetCurrency}');
         return;
       }
 
       debugPrint(
-        'Immediate check: ${alert.targetCurrency} - Target: ${alert.targetRate} (${alert.triggerType}), Current: $currentRate',
+        'Current rate for ${alert.targetCurrency}: $currentRate, Target: ${alert.targetRate}',
       );
 
       final shouldTrigger =
@@ -642,69 +603,56 @@ class AlertService {
   }
 
   // Stop background monitoring
-  void stopBackgroundMonitoring() {
-    _alertCheckTimer?.cancel();
-    _alertCheckTimer = null;
-    _isInitialized = false;
-    debugPrint('AlertService background monitoring stopped');
-  }
-
-  // Dispose resources
   void dispose() {
-    stopBackgroundMonitoring();
+    _alertCheckTimer?.cancel();
+    debugPrint('AlertService disposed');
   }
 }
 
-// Update CurrencyAlert model
+// Currency Alert model
 class CurrencyAlert {
   final String? id;
+  final String userId;
   final String baseCurrency;
   final String targetCurrency;
   final double targetRate;
-  final String triggerType; // "above", "below", "equal"
+  final String triggerType; // 'above', 'below', 'equal'
   final DateTime createdAt;
-  final String userId;
-  final String? userEmail;
+  final String? userEmail; // Add userEmail field
 
   CurrencyAlert({
     this.id,
+    required this.userId,
     required this.baseCurrency,
     required this.targetCurrency,
     required this.targetRate,
     required this.triggerType,
     required this.createdAt,
-    required this.userId,
-    this.userEmail,
+    this.userEmail, // Add userEmail parameter
   });
+
+  factory CurrencyAlert.fromMap(String id, Map<String, dynamic> data) {
+    return CurrencyAlert(
+      id: id,
+      userId: data['userId'] ?? '',
+      baseCurrency: data['baseCurrency'] ?? 'USD',
+      targetCurrency: data['targetCurrency'] ?? '',
+      targetRate: (data['targetRate'] ?? 0.0).toDouble(),
+      triggerType: data['triggerType'] ?? 'above',
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      userEmail: data['userEmail'], // Add userEmail from data
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {
+      'userId': userId,
       'baseCurrency': baseCurrency,
       'targetCurrency': targetCurrency,
       'targetRate': targetRate,
       'triggerType': triggerType,
-      'createdAt': createdAt.toIso8601String(),
-      'userId': userId,
-      'userEmail': userEmail,
+      'createdAt': Timestamp.fromDate(createdAt),
+      'userEmail': userEmail, // Add userEmail to map
     };
-  }
-
-  factory CurrencyAlert.fromMap(String id, Map<String, dynamic> map) {
-    // Backward compatibility: if triggerType is missing, use isAbove
-    String triggerType =
-        map['triggerType'] ??
-        (map['isAbove'] == null
-            ? 'above'
-            : (map['isAbove'] == true ? 'above' : 'below'));
-    return CurrencyAlert(
-      id: id,
-      baseCurrency: map['baseCurrency'],
-      targetCurrency: map['targetCurrency'],
-      targetRate: map['targetRate'],
-      triggerType: triggerType,
-      createdAt: DateTime.parse(map['createdAt']),
-      userId: map['userId'],
-      userEmail: map['userEmail'],
-    );
   }
 }

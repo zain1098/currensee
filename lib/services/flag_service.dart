@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:async';
 
 /// 🌍 Flag Service for CurrenSee App
 /// Handles flag loading from API with fallback and error handling
@@ -9,10 +10,17 @@ class FlagService {
   static const String _fallbackFlagApi = 'https://flagcdn.com/w40/';
   static const String _highResFlagApi = 'https://flagcdn.com/w80/';
 
-  // Flag cache for better performance
+  // Enhanced flag cache with size limit and memory management
   static final Map<String, String> _flagCache = {};
+  static const int _maxCacheSize = 100;
+  static final Map<String, DateTime> _cacheTimestamps = {};
+  static const Duration _cacheExpiry = Duration(hours: 48); // 48 hours cache
 
-  /// Get flag URL for a country code
+  // Preload tracking
+  static final Set<String> _preloadedFlags = {};
+  static bool _isPreloading = false;
+
+  /// Get flag URL for a country code with enhanced caching
   static String getFlagUrl(
     String countryCode, {
     FlagSize size = FlagSize.medium,
@@ -20,10 +28,19 @@ class FlagService {
     if (countryCode.isEmpty) return '';
 
     final normalizedCode = countryCode.toLowerCase();
+    final cacheKey = '${normalizedCode}_${size.name}';
 
-    // Check cache first
-    if (_flagCache.containsKey('${normalizedCode}_${size.name}')) {
-      return _flagCache['${normalizedCode}_${size.name}']!;
+    // Check cache first with expiry
+    if (_flagCache.containsKey(cacheKey)) {
+      final timestamp = _cacheTimestamps[cacheKey];
+      if (timestamp != null &&
+          DateTime.now().difference(timestamp) < _cacheExpiry) {
+        return _flagCache[cacheKey]!;
+      } else {
+        // Remove expired cache entry
+        _flagCache.remove(cacheKey);
+        _cacheTimestamps.remove(cacheKey);
+      }
     }
 
     String flagUrl;
@@ -39,13 +56,42 @@ class FlagService {
         break;
     }
 
-    // Cache the URL
-    _flagCache['${normalizedCode}_${size.name}'] = flagUrl;
+    // Cache the URL with timestamp
+    _cacheFlagUrl(cacheKey, flagUrl);
 
     return flagUrl;
   }
 
-  /// Get flag widget with error handling and fallback
+  /// Cache flag URL with memory management
+  static void _cacheFlagUrl(String key, String url) {
+    // Evict old cache entries if cache is full
+    if (_flagCache.length >= _maxCacheSize) {
+      _evictOldCacheEntries();
+    }
+
+    _flagCache[key] = url;
+    _cacheTimestamps[key] = DateTime.now();
+  }
+
+  /// Evict old cache entries based on timestamp
+  static void _evictOldCacheEntries() {
+    if (_cacheTimestamps.isEmpty) return;
+
+    // Find oldest entries
+    final sortedEntries =
+        _cacheTimestamps.entries.toList()
+          ..sort((a, b) => a.value.compareTo(b.value));
+
+    // Remove oldest 20% of entries
+    final entriesToRemove = (sortedEntries.length * 0.2).ceil();
+    for (int i = 0; i < entriesToRemove && i < sortedEntries.length; i++) {
+      final key = sortedEntries[i].key;
+      _flagCache.remove(key);
+      _cacheTimestamps.remove(key);
+    }
+  }
+
+  /// Get flag widget with enhanced error handling and performance
   static Widget getFlagWidget(
     String countryCode, {
     FlagSize size = FlagSize.medium,
@@ -75,6 +121,13 @@ class FlagService {
       width: width ?? _getDefaultWidth(size),
       height: height ?? _getDefaultHeight(size),
       fit: fit,
+      // Enhanced caching parameters
+      memCacheWidth: (width ?? _getDefaultWidth(size)).toInt(),
+      memCacheHeight: (height ?? _getDefaultHeight(size)).toInt(),
+      maxWidthDiskCache: 1024,
+      maxHeightDiskCache: 1024,
+      cacheKey: _generateCacheKey(flagUrl, width, height),
+      // Optimized placeholder and error handling
       placeholder:
           (context, url) =>
               placeholder ??
@@ -122,6 +175,11 @@ class FlagService {
             ),
           ),
     );
+  }
+
+  /// Generate consistent cache key for CachedNetworkImage
+  static String _generateCacheKey(String url, double? width, double? height) {
+    return '${url}_${width?.toInt() ?? 0}_${height?.toInt() ?? 0}';
   }
 
   /// Get flag widget for currency code
@@ -185,27 +243,80 @@ class FlagService {
     );
   }
 
-  /// Preload flags for better performance
+  /// Enhanced preload flags with batch processing and progress tracking
   static Future<void> preloadFlags(
     List<String> countryCodes, {
     FlagSize size = FlagSize.medium,
+    Function(int, int)? onProgress,
   }) async {
-    for (final countryCode in countryCodes) {
-      if (countryCode.isNotEmpty) {
-        final flagUrl = getFlagUrl(countryCode, size: size);
-        try {
-          // Preload image - Note: precacheImage requires BuildContext
-          // This will be handled in the UI layer where context is available
-        } catch (e) {
-          // Ignore preload errors
+    if (_isPreloading) return;
+    _isPreloading = true;
+
+    try {
+      final uniqueCodes =
+          countryCodes
+              .where(
+                (code) =>
+                    code.isNotEmpty &&
+                    !_preloadedFlags.contains('${code}_${size.name}'),
+              )
+              .toList();
+
+      if (uniqueCodes.isEmpty) return;
+
+      final total = uniqueCodes.length;
+      int completed = 0;
+
+      // Process in batches of 10 for better performance
+      const batchSize = 10;
+      for (int i = 0; i < uniqueCodes.length; i += batchSize) {
+        final batch = uniqueCodes.skip(i).take(batchSize).toList();
+
+        await Future.wait(
+          batch.map((countryCode) async {
+            try {
+              final flagUrl = getFlagUrl(countryCode, size: size);
+              _preloadedFlags.add('${countryCode}_${size.name}');
+              completed++;
+              onProgress?.call(completed, total);
+            } catch (e) {
+              // Ignore preload errors but continue
+              print('Failed to preload flag for $countryCode: $e');
+            }
+          }),
+        );
+
+        // Small delay between batches to prevent overwhelming
+        if (i + batchSize < uniqueCodes.length) {
+          await Future.delayed(const Duration(milliseconds: 50));
         }
       }
+    } finally {
+      _isPreloading = false;
     }
   }
 
-  /// Clear flag cache
+  /// Clear flag cache with enhanced cleanup
   static void clearCache() {
     _flagCache.clear();
+    _cacheTimestamps.clear();
+    _preloadedFlags.clear();
+  }
+
+  /// Get cache statistics for monitoring
+  static Map<String, dynamic> getCacheStats() {
+    return {
+      'cacheSize': _flagCache.length,
+      'maxCacheSize': _maxCacheSize,
+      'preloadedFlags': _preloadedFlags.length,
+      'isPreloading': _isPreloading,
+      'oldestEntry':
+          _cacheTimestamps.values.isNotEmpty
+              ? _cacheTimestamps.values
+                  .reduce((a, b) => a.isBefore(b) ? a : b)
+                  .toIso8601String()
+              : null,
+    };
   }
 
   /// Get default flag dimensions
