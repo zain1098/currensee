@@ -381,7 +381,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     });
   }
 
-    // Check current connectivity status
+  // Check current connectivity status
   Future<void> _checkConnectivity() async {
     setState(() {
       _isCheckingConnection = true;

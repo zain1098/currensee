@@ -22,6 +22,8 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'services/connectivity_service.dart';
 
 // Add ShineText widget for animated gradient text
 class ShineText extends StatefulWidget {
@@ -826,14 +828,31 @@ class _SettingsPageState extends State<SettingsPage> {
 
   // Version Update Methods
   Future<void> _loadCurrentAppVersion() async {
-    setState(() {
-      _currentAppVersion = {
-        'version':
-            '2.3.1', // Current app version (lower than Firebase version 2.3.4)
-        'buildNumber': '1',
-        'platform': kIsWeb ? 'Web' : (Platform.isAndroid ? 'Android' : 'iOS'),
-      };
-    });
+    try {
+      PackageInfo packageInfo = await PackageInfo.fromPlatform();
+
+      setState(() {
+        _currentAppVersion = {
+          'version': packageInfo.version, // Dynamic version from package info
+          'buildNumber': packageInfo.buildNumber,
+          'platform': kIsWeb ? 'Web' : (Platform.isAndroid ? 'Android' : 'iOS'),
+        };
+      });
+
+      print(
+        '📱 Current app version: ${packageInfo.version} (${packageInfo.buildNumber})',
+      );
+    } catch (e) {
+      print('❌ Error loading app version: $e');
+      // Fallback to default version if package info fails
+      setState(() {
+        _currentAppVersion = {
+          'version': '1.0.0', // Default fallback version
+          'buildNumber': '1',
+          'platform': kIsWeb ? 'Web' : (Platform.isAndroid ? 'Android' : 'iOS'),
+        };
+      });
+    }
   }
 
   // Manual version check (with UI updates and loading state)
@@ -847,6 +866,12 @@ class _SettingsPageState extends State<SettingsPage> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         throw Exception('User not authenticated');
+      }
+
+      // Check internet connectivity first
+      final isConnected = await ConnectivityService().checkConnectivity();
+      if (!isConnected) {
+        throw Exception('No internet connection available');
       }
 
       // Try to create app_versions collection if it doesn't exist
@@ -868,7 +893,7 @@ class _SettingsPageState extends State<SettingsPage> {
         });
 
         // Compare versions
-        final currentVersion = _currentAppVersion!['version'];
+        final currentVersion = _currentAppVersion?['version'] ?? '1.0.0';
         final latestVersionStr = latestVersion['version'];
 
         print(
@@ -884,19 +909,34 @@ class _SettingsPageState extends State<SettingsPage> {
           // Send notification to user
           await _sendUpdateNotification(latestVersion);
 
-          // Show snackbar if app is in foreground
+          // Show detailed update message for manual check
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(
-                  'New version ${latestVersion['version']} available!',
+                content: Row(
+                  children: [
+                    const Icon(Icons.system_update, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Update Available!',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            'Current: v$currentVersion → Latest: v$latestVersionStr',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 backgroundColor: Colors.green,
                 duration: const Duration(seconds: 3),
-                action: SnackBarAction(
-                  label: 'Download',
-                  onPressed: () => _downloadLatestVersion(),
-                ),
               ),
             );
           }
@@ -906,13 +946,34 @@ class _SettingsPageState extends State<SettingsPage> {
             _isUpdateAvailable = false;
           });
 
-          // Show success message for manual check
+          // Show detailed success message for manual check
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('App is up to date!'),
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.check_circle, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'App is Up to Date!',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            'Current version: v$currentVersion',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
                 backgroundColor: Colors.blue,
-                duration: Duration(seconds: 2),
+                duration: const Duration(seconds: 3),
               ),
             );
           }
@@ -927,11 +988,19 @@ class _SettingsPageState extends State<SettingsPage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text(
-                'No update information available. Please try again later.',
+              content: Row(
+                children: [
+                  Icon(Icons.warning, color: Colors.white),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'No update information available. Please try again later.',
+                    ),
+                  ),
+                ],
               ),
               backgroundColor: Colors.orange,
-              duration: Duration(seconds: 2),
+              duration: Duration(seconds: 3),
             ),
           );
         }
@@ -953,11 +1022,22 @@ class _SettingsPageState extends State<SettingsPage> {
           errorMessage = 'Update service temporarily unavailable.';
         } else if (e.toString().contains('unavailable')) {
           errorMessage = 'Service temporarily unavailable. Please try again.';
+        } else if (e.toString().contains('No internet connection')) {
+          errorMessage =
+              'No internet connection. Please check your network and try again.';
+        } else if (e.toString().contains('User not authenticated')) {
+          errorMessage = 'Please login to check for updates.';
         }
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(errorMessage),
+            content: Row(
+              children: [
+                const Icon(Icons.error, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(child: Text(errorMessage)),
+              ],
+            ),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 3),
           ),
@@ -995,8 +1075,12 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   int _compareVersions(String version1, String version2) {
-    final v1Parts = version1.split('.').map(int.parse).toList();
-    final v2Parts = version2.split('.').map(int.parse).toList();
+    // Remove 'v' prefix if present and clean version strings
+    final cleanVersion1 = version1.replaceAll(RegExp(r'^v'), '');
+    final cleanVersion2 = version2.replaceAll(RegExp(r'^v'), '');
+
+    final v1Parts = cleanVersion1.split('.').map(int.parse).toList();
+    final v2Parts = cleanVersion2.split('.').map(int.parse).toList();
 
     for (int i = 0; i < 3; i++) {
       final v1 = i < v1Parts.length ? v1Parts[i] : 0;
@@ -1010,9 +1094,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   // Start periodic version check
   void _startPeriodicVersionCheck() {
-    Timer.periodic(const Duration(minutes: 5), (timer) async {
+    Timer.periodic(const Duration(seconds: 15), (timer) async {
       if (mounted) {
-        print('🔄 Silent periodic version check triggered (every 5 minutes)');
+        print('🔄 Silent periodic version check triggered (every 15 seconds)');
         await _checkForAppUpdateInBackground();
       } else {
         timer.cancel();
@@ -1020,7 +1104,7 @@ class _SettingsPageState extends State<SettingsPage> {
     });
   }
 
-  // Background version check (no UI updates, only notifications)
+  // Background version check (with notifications and in-app messages)
   Future<void> _checkForAppUpdateInBackground() async {
     try {
       print('🔍 Background version check...');
@@ -1029,6 +1113,13 @@ class _SettingsPageState extends State<SettingsPage> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         print('❌ User not authenticated for background check');
+        return;
+      }
+
+      // Check internet connectivity first
+      final isConnected = await ConnectivityService().checkConnectivity();
+      if (!isConnected) {
+        print('❌ No internet connection for background check');
         return;
       }
 
@@ -1041,7 +1132,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
       if (versionDoc.exists) {
         final latestVersion = versionDoc.data()!;
-        final currentVersion = _currentAppVersion!['version'];
+        final currentVersion = _currentAppVersion?['version'] ?? '1.0.0';
         final latestVersionStr = latestVersion['version'];
 
         print(
@@ -1055,12 +1146,38 @@ class _SettingsPageState extends State<SettingsPage> {
           _isUpdateAvailable = true;
           _latestAppVersion = latestVersion;
 
-          // Send notification for update (silent - no UI messages)
+          // Send push notification to user
           await _sendUpdateNotification(latestVersion);
 
-          // Only show notification, no snackbar in background
-          print('📱 Background update notification sent');
+          // Show in-app message for 3 seconds
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.system_update, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'New version ${latestVersion['version']} available!',
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+
+          print('📱 Background update notification and in-app message sent');
+        } else {
+          print('✅ Background check: App is up to date');
+          _isUpdateAvailable = false;
         }
+      } else {
+        print('❌ No version document found in background check');
       }
 
       // Update last check time silently
@@ -1506,7 +1623,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                 ),
                               ),
                               Text(
-                                '${_currentAppVersion?['version'] ?? '2.3.1'}',
+                                '${_currentAppVersion?['version'] ?? '1.0.0'}',
                                 style: const TextStyle(
                                   color: Colors.grey,
                                   fontSize: 11,
@@ -2663,7 +2780,7 @@ class _SettingsPageState extends State<SettingsPage> {
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 4),
-        const Text('Version 2.3.1'),
+        Text('Version ${_currentAppVersion?['version'] ?? '1.0.0'}'),
         const SizedBox(height: 12),
         const Text(
           'This app provides real-time currency conversion using the latest exchange rates.',
@@ -2799,7 +2916,8 @@ class _SettingsPageState extends State<SettingsPage> {
                           'userLastLoginAt': userData['lastLoginAt'],
                           'rating': selectedRating,
                           'timestamp': FieldValue.serverTimestamp(),
-                          'appVersion': '2.3.1',
+                          'appVersion':
+                              _currentAppVersion?['version'] ?? '1.0.0',
                           'platform':
                               kIsWeb
                                   ? 'Web'
