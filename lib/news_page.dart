@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'main.dart'; // For CustomAppBar
 import 'trend_chart.dart';
 import 'rate_list_page.dart';
+import 'task_page.dart';
 import 'calculator_page.dart';
 import 'setting_page.dart';
 import 'world_clock.dart';
@@ -336,6 +337,12 @@ class _NewsScreenState extends State<NewsScreen> {
                 title: 'Calculator',
                 onTap:
                     () => _navigateAndClose(context, const CalculatorsScreen()),
+              ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.task_alt,
+                title: 'Currency Tasks',
+                onTap: () => _navigateAndClose(context, const TaskPage()),
               ),
               const SizedBox(height: 16),
               const Divider(color: Colors.white24, height: 1),

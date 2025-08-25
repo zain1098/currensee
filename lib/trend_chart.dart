@@ -10,6 +10,7 @@ import 'main.dart'; // For CustomAppBar
 import 'news_page.dart';
 import 'world_clock.dart';
 import 'rate_list_page.dart';
+import 'task_page.dart';
 import 'package:provider/provider.dart';
 import 'calculator_page.dart';
 import 'setting_page.dart';
@@ -172,10 +173,40 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
   Future<void> _loadCurrenciesFromDatabase() async {
     try {
       final loadedCurrencies = await CurrencyService.loadCurrencies();
+
+      // Get favorite currencies from app settings
+      final appSettings = Provider.of<AppSettings>(context, listen: false);
+      final favoriteCurrencies = appSettings.favoriteCurrencies;
+
+      // Sort currencies: favorites first, then others
+      final sortedCurrencies = <Currency>[];
+
+      // Add favorite currencies first
+      for (final favoriteCode in favoriteCurrencies) {
+        try {
+          final favoriteCurrency = loadedCurrencies.firstWhere(
+            (c) => c.code == favoriteCode,
+          );
+          sortedCurrencies.add(favoriteCurrency);
+        } catch (e) {
+          // Currency not found, skip it
+          print(
+            'Favorite currency $favoriteCode not found in loaded currencies',
+          );
+        }
+      }
+
+      // Add remaining currencies
+      for (final currency in loadedCurrencies) {
+        if (!favoriteCurrencies.contains(currency.code)) {
+          sortedCurrencies.add(currency);
+        }
+      }
+
       setState(() {
-        _currencies = loadedCurrencies;
+        _currencies = sortedCurrencies;
       });
-      
+
       // Set default currencies with fallback logic
       if (_currencies.isNotEmpty) {
         // Get preferred from currency (USD) with fallback
@@ -183,11 +214,12 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
           (c) => c.code == 'USD',
           orElse: () => _currencies.first,
         );
-        
+
         // Get preferred to currency (EUR) with fallback
         Currency preferredTo = _currencies.firstWhere(
           (c) => c.code == 'EUR',
-          orElse: () => _currencies.length > 1 ? _currencies[1] : _currencies.first,
+          orElse:
+              () => _currencies.length > 1 ? _currencies[1] : _currencies.first,
         );
 
         // Ensure from and to currencies are different
@@ -204,7 +236,7 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
           toCurrency = preferredTo.code;
         });
       }
-      
+
       _fetchExchangeRates();
     } catch (e) {
       print('Error loading currencies from database: $e');
@@ -473,11 +505,14 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
       ),
       drawer: Drawer(
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+              colors:
+                  Theme.of(context).brightness == Brightness.dark
+                      ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+                      : [const Color(0xFF1E3A8A), const Color(0xFF3B82F6)],
             ),
           ),
           child: ListView(
@@ -487,15 +522,21 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
               Container(
                 height: 180,
                 padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(
-                  borderRadius: BorderRadius.only(
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.only(
                     bottomLeft: Radius.circular(20),
                     bottomRight: Radius.circular(20),
                   ),
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
+                    colors:
+                        Theme.of(context).brightness == Brightness.dark
+                            ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+                            : [
+                              const Color(0xFF1E3A8A),
+                              const Color(0xFF2563EB),
+                            ],
                   ),
                 ),
                 child: Column(
@@ -602,8 +643,14 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
                 onTap:
                     () => _navigateAndClose(context, const CalculatorsScreen()),
               ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.task_alt,
+                title: 'Currency Tasks',
+                onTap: () => _navigateAndClose(context, const TaskPage()),
+              ),
               const SizedBox(height: 16),
-              const Divider(color: Colors.white24, height: 1),
+              Divider(color: Theme.of(context).dividerColor, height: 1),
               const SizedBox(height: 16),
               // Settings Section
               _buildDrawerItem(
@@ -667,7 +714,7 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
                     () => _navigateAndClose(context, const SupportHelpScreen()),
               ),
               const SizedBox(height: 16),
-              const Divider(color: Colors.white24, height: 1),
+              Divider(color: Theme.of(context).dividerColor, height: 1),
               const SizedBox(height: 16),
               _buildDrawerItem(
                 context,
@@ -692,22 +739,40 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
             ),
             child: TabBar(
               controller: _tabController,
-              tabs: const [
+              tabs: [
                 Tab(
                   text: 'Chart',
-                  icon: Icon(Icons.show_chart, color: Colors.white),
+                  icon: Icon(
+                    Icons.show_chart,
+                    color:
+                        Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white
+                            : Colors.white,
+                  ),
                 ),
                 Tab(
                   text: 'Analysis',
-                  icon: Icon(Icons.insights, color: Colors.white),
+                  icon: Icon(
+                    Icons.insights,
+                    color:
+                        Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white
+                            : Colors.white,
+                  ),
                 ),
               ],
               indicatorColor: Colors.white,
-              labelStyle: const TextStyle(
+              labelStyle: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color:
+                    Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : Colors.white,
               ),
-              unselectedLabelColor: Colors.white70,
+              unselectedLabelColor:
+                  Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white70
+                      : Colors.white70,
             ),
           ),
           // Rest of the body content
@@ -747,14 +812,14 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
     final toCurrencyInfo = _getCurrencyInfo(toCurrency);
     final fromIsInactive = fromCurrencyInfo['status'] == 'inactive';
     final toIsInactive = toCurrencyInfo['status'] == 'inactive';
-    
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Theme.of(context).shadowColor.withOpacity(0.05),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -774,9 +839,10 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
-                      color: (fromIsInactive || toIsInactive) 
-                          ? Theme.of(context).colorScheme.error
-                          : null,
+                      color:
+                          (fromIsInactive || toIsInactive)
+                              ? Theme.of(context).colorScheme.error
+                              : Theme.of(context).textTheme.titleLarge?.color,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -784,7 +850,10 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
                   if (fromIsInactive || toIsInactive) ...[
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: Theme.of(context).colorScheme.error,
                         borderRadius: BorderRadius.circular(4),
@@ -839,10 +908,11 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
               Text(
                 '1 $fromCurrency = ',
                 style: TextStyle(
-                  fontSize: 16, 
-                  color: fromIsInactive 
-                      ? Theme.of(context).colorScheme.error
-                      : Colors.grey,
+                  fontSize: 16,
+                  color:
+                      fromIsInactive
+                          ? Theme.of(context).colorScheme.error
+                          : Theme.of(context).hintColor,
                 ),
               ),
               Text(
@@ -850,18 +920,20 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: (fromIsInactive || toIsInactive) 
-                      ? Theme.of(context).colorScheme.error
-                      : null,
+                  color:
+                      (fromIsInactive || toIsInactive)
+                          ? Theme.of(context).colorScheme.error
+                          : Theme.of(context).textTheme.headlineMedium?.color,
                 ),
               ),
               Text(
                 ' $toCurrency',
                 style: TextStyle(
-                  fontSize: 16, 
-                  color: toIsInactive 
-                      ? Theme.of(context).colorScheme.error
-                      : Colors.grey,
+                  fontSize: 16,
+                  color:
+                      toIsInactive
+                          ? Theme.of(context).colorScheme.error
+                          : Theme.of(context).hintColor,
                 ),
               ),
             ],
@@ -871,7 +943,7 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
             Text(
               'One or more currencies are temporarily blocked by the team',
               style: TextStyle(
-                fontSize: 12, 
+                fontSize: 12,
                 color: Theme.of(context).colorScheme.error,
                 fontStyle: FontStyle.italic,
               ),
@@ -880,7 +952,7 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
           const SizedBox(height: 8),
           Text(
             'Last updated: ${DateFormat.yMMMd().add_jm().format(DateTime.now())}',
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
+            style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
           ),
         ],
       ),
@@ -972,11 +1044,11 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Theme.of(context).shadowColor.withOpacity(0.05),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -985,9 +1057,12 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text(
+          Text(
             'Chart Colors',
-            style: TextStyle(fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).textTheme.titleMedium?.color,
+            ),
           ),
           Row(
             children: [
@@ -1066,30 +1141,30 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
         height: 400,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Theme.of(context).shadowColor.withOpacity(0.1),
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),
           ],
         ),
-        child: const Text(
+        child: Text(
           'No candle data available for selected range.',
-          style: TextStyle(fontSize: 16, color: Colors.grey),
+          style: TextStyle(fontSize: 16, color: Theme.of(context).hintColor),
         ),
       );
     }
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Theme.of(context).shadowColor.withOpacity(0.1),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -1121,11 +1196,11 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
                   return Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Theme.of(context).cardColor,
                       borderRadius: BorderRadius.circular(6),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
+                          color: Theme.of(context).shadowColor.withOpacity(0.1),
                           blurRadius: 6,
                         ),
                       ],
@@ -1133,9 +1208,27 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(DateFormat.yMMMd().format(data.date)),
-                        Text('Rate: ${data.rate.toStringAsFixed(4)}'),
-                        Text('Change: ${change.toStringAsFixed(2)}%'),
+                        Text(
+                          DateFormat.yMMMd().format(data.date),
+                          style: TextStyle(
+                            color:
+                                Theme.of(context).textTheme.bodyMedium?.color,
+                          ),
+                        ),
+                        Text(
+                          'Rate: ${data.rate.toStringAsFixed(4)}',
+                          style: TextStyle(
+                            color:
+                                Theme.of(context).textTheme.bodyMedium?.color,
+                          ),
+                        ),
+                        Text(
+                          'Change: ${change.toStringAsFixed(2)}%',
+                          style: TextStyle(
+                            color:
+                                Theme.of(context).textTheme.bodyMedium?.color,
+                          ),
+                        ),
                       ],
                     ),
                   );
@@ -1144,11 +1237,11 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
                   return Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Theme.of(context).cardColor,
                       borderRadius: BorderRadius.circular(6),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
+                          color: Theme.of(context).shadowColor.withOpacity(0.1),
                           blurRadius: 6,
                         ),
                       ],
@@ -1157,12 +1250,42 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(DateFormat.yMMMd().format(data.date)),
+                        Text(
+                          DateFormat.yMMMd().format(data.date),
+                          style: TextStyle(
+                            color:
+                                Theme.of(context).textTheme.bodyMedium?.color,
+                          ),
+                        ),
                         const SizedBox(height: 4),
-                        Text('Open: ${data.open.toStringAsFixed(4)}'),
-                        Text('High: ${data.high.toStringAsFixed(4)}'),
-                        Text('Low: ${data.low.toStringAsFixed(4)}'),
-                        Text('Close: ${data.close.toStringAsFixed(4)}'),
+                        Text(
+                          'Open: ${data.open.toStringAsFixed(4)}',
+                          style: TextStyle(
+                            color:
+                                Theme.of(context).textTheme.bodyMedium?.color,
+                          ),
+                        ),
+                        Text(
+                          'High: ${data.high.toStringAsFixed(4)}',
+                          style: TextStyle(
+                            color:
+                                Theme.of(context).textTheme.bodyMedium?.color,
+                          ),
+                        ),
+                        Text(
+                          'Low: ${data.low.toStringAsFixed(4)}',
+                          style: TextStyle(
+                            color:
+                                Theme.of(context).textTheme.bodyMedium?.color,
+                          ),
+                        ),
+                        Text(
+                          'Close: ${data.close.toStringAsFixed(4)}',
+                          style: TextStyle(
+                            color:
+                                Theme.of(context).textTheme.bodyMedium?.color,
+                          ),
+                        ),
                         const SizedBox(height: 4),
                         Text(
                           'Change: ${change.toStringAsFixed(2)}%',
@@ -1339,11 +1462,11 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Theme.of(context).shadowColor.withOpacity(0.1),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -1354,33 +1477,44 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Currency Converter',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).textTheme.titleLarge?.color,
+                ),
               ),
               IconButton(
                 icon: Icon(
                   Icons.swap_horiz,
-                  color: (_getCurrencyInfo(fromCurrency)['status'] == 'inactive' || 
-                          _getCurrencyInfo(toCurrency)['status'] == 'inactive')
-                      ? Theme.of(context).colorScheme.error
-                      : Theme.of(context).primaryColor,
+                  color:
+                      (_getCurrencyInfo(fromCurrency)['status'] == 'inactive' ||
+                              _getCurrencyInfo(toCurrency)['status'] ==
+                                  'inactive')
+                          ? Theme.of(context).colorScheme.error
+                          : Theme.of(context).primaryColor,
                 ),
                 onPressed: () {
-                  final fromIsInactive = _getCurrencyInfo(fromCurrency)['status'] == 'inactive';
-                  final toIsInactive = _getCurrencyInfo(toCurrency)['status'] == 'inactive';
-                  
+                  final fromIsInactive =
+                      _getCurrencyInfo(fromCurrency)['status'] == 'inactive';
+                  final toIsInactive =
+                      _getCurrencyInfo(toCurrency)['status'] == 'inactive';
+
                   if (fromIsInactive || toIsInactive) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Cannot swap currencies when one or more are blocked'),
-                        backgroundColor: Colors.orange,
+                        content: Text(
+                          'Cannot swap currencies when one or more are blocked',
+                        ),
+                        backgroundColor:
+                            Theme.of(context).colorScheme.secondary,
                         duration: const Duration(seconds: 2),
                       ),
                     );
                     return;
                   }
-                  
+
                   setState(() {
                     final temp = fromCurrency;
                     fromCurrency = toCurrency;
@@ -1411,9 +1545,10 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
                   keyboardType: TextInputType.number,
                   style: TextStyle(
                     fontSize: 18,
-                    color: _getCurrencyInfo(fromCurrency)['status'] == 'inactive'
-                        ? Theme.of(context).colorScheme.error
-                        : null,
+                    color:
+                        _getCurrencyInfo(fromCurrency)['status'] == 'inactive'
+                            ? Theme.of(context).colorScheme.error
+                            : null,
                   ),
                   controller: TextEditingController(
                     text: _conversionAmount.toStringAsFixed(2),
@@ -1451,9 +1586,10 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
                   ),
                   style: TextStyle(
                     fontSize: 18,
-                    color: _getCurrencyInfo(toCurrency)['status'] == 'inactive'
-                        ? Theme.of(context).colorScheme.error
-                        : null,
+                    color:
+                        _getCurrencyInfo(toCurrency)['status'] == 'inactive'
+                            ? Theme.of(context).colorScheme.error
+                            : null,
                   ),
                 ),
               ),
@@ -1462,27 +1598,32 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () {
-              final fromIsInactive = _getCurrencyInfo(fromCurrency)['status'] == 'inactive';
-              final toIsInactive = _getCurrencyInfo(toCurrency)['status'] == 'inactive';
-              
+              final fromIsInactive =
+                  _getCurrencyInfo(fromCurrency)['status'] == 'inactive';
+              final toIsInactive =
+                  _getCurrencyInfo(toCurrency)['status'] == 'inactive';
+
               if (fromIsInactive || toIsInactive) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Cannot refresh rates when currencies are blocked'),
-                    backgroundColor: Colors.orange,
+                    content: Text(
+                      'Cannot refresh rates when currencies are blocked',
+                    ),
+                    backgroundColor: Theme.of(context).colorScheme.secondary,
                     duration: const Duration(seconds: 2),
                   ),
                 );
                 return;
               }
-              
+
               _fetchExchangeRates();
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: (_getCurrencyInfo(fromCurrency)['status'] == 'inactive' || 
-                               _getCurrencyInfo(toCurrency)['status'] == 'inactive')
-                  ? Theme.of(context).colorScheme.error
-                  : Theme.of(context).primaryColor,
+              backgroundColor:
+                  (_getCurrencyInfo(fromCurrency)['status'] == 'inactive' ||
+                          _getCurrencyInfo(toCurrency)['status'] == 'inactive')
+                      ? Theme.of(context).colorScheme.error
+                      : Theme.of(context).primaryColor,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -1493,7 +1634,10 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
               children: [
                 Icon(Icons.refresh, color: Colors.white),
                 const SizedBox(width: 8),
-                Text('Refresh Rates', style: const TextStyle(color: Colors.white)),
+                Text(
+                  'Refresh Rates',
+                  style: const TextStyle(color: Colors.white),
+                ),
               ],
             ),
           ),
@@ -1545,51 +1689,58 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
       ),
-      items: availableCurrencies.map((currency) {
-        final currencyInfo = _getCurrencyInfo(currency);
-        final isInactive = currencyInfo['status'] == 'inactive';
-        
-        return DropdownMenuItem<String>(
-          value: currency,
-          enabled: !isInactive, // Disable inactive currencies
-          child: Opacity(
-            opacity: isInactive ? 0.6 : 1.0,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(currencyInfo['flag']),
-                const SizedBox(width: 8),
-                Text(
-                  currency,
-                  style: TextStyle(
-                    color: isInactive 
-                        ? Theme.of(context).colorScheme.error
-                        : null,
-                  ),
-                ),
-                if (isInactive) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.error,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      'BLOCKED',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 8,
+      items:
+          availableCurrencies.map((currency) {
+            final currencyInfo = _getCurrencyInfo(currency);
+            final isInactive = currencyInfo['status'] == 'inactive';
+
+            return DropdownMenuItem<String>(
+              value: currency,
+              enabled: !isInactive, // Disable inactive currencies
+              child: Opacity(
+                opacity: isInactive ? 0.6 : 1.0,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(currencyInfo['flag']),
+                    const SizedBox(width: 8),
+                    Text(
+                      currency,
+                      style: TextStyle(
+                        color:
+                            isInactive
+                                ? Theme.of(context).colorScheme.error
+                                : null,
                       ),
                     ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        );
-      }).toList(),
+                    if (isInactive) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.error,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'BLOCKED',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 8,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
       onChanged: (newValue) {
         if (newValue != null) {
           final currencyInfo = _getCurrencyInfo(newValue);
@@ -1597,8 +1748,10 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
             // Show message when user tries to select inactive currency
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('${currencyInfo['name']} is temporarily blocked by the team'),
-                backgroundColor: Colors.orange,
+                content: Text(
+                  '${currencyInfo['name']} is temporarily blocked by the team',
+                ),
+                backgroundColor: Theme.of(context).colorScheme.secondary,
                 duration: const Duration(seconds: 2),
               ),
             );
@@ -1783,25 +1936,33 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Technical Analysis',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).textTheme.headlineMedium?.color,
+            ),
           ),
           const SizedBox(height: 20),
           Card(
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: Colors.grey[300]!),
+              side: BorderSide(color: Theme.of(context).dividerColor),
             ),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Key Indicators',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).textTheme.titleLarge?.color,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   _buildIndicatorRow(
@@ -1830,9 +1991,13 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
             ),
           ),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             'Support & Resistance Levels',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).textTheme.titleLarge?.color,
+            ),
           ),
           const SizedBox(height: 16),
           Table(
@@ -1896,10 +2061,16 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
             height: 200,
             child: SfCartesianChart(
               primaryXAxis: CategoryAxis(
-                labelStyle: const TextStyle(fontSize: 12),
+                labelStyle: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).textTheme.bodyMedium?.color,
+                ),
               ),
               primaryYAxis: NumericAxis(
                 numberFormat: NumberFormat.compactCurrency(symbol: ''),
+                labelStyle: TextStyle(
+                  color: Theme.of(context).textTheme.bodyMedium?.color,
+                ),
               ),
               series: <CartesianSeries>[
                 LineSeries<ForecastData, String>(
@@ -1907,7 +2078,7 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
                   xValueMapper: (data, _) => data.period,
                   yValueMapper: (data, _) => data.rate,
                   name: 'Forecast',
-                  color: Colors.blue,
+                  color: Theme.of(context).primaryColor,
                   width: 3,
                   markerSettings: const MarkerSettings(isVisible: true),
                 ),
@@ -1927,16 +2098,28 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
   ) {
     return TableRow(
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+        border: Border(
+          bottom: BorderSide(color: Theme.of(context).dividerColor),
+        ),
       ),
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Text(level),
+          child: Text(
+            level,
+            style: TextStyle(
+              color: Theme.of(context).textTheme.bodyMedium?.color,
+            ),
+          ),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Text(rate.toStringAsFixed(4)),
+          child: Text(
+            rate.toStringAsFixed(4),
+            style: TextStyle(
+              color: Theme.of(context).textTheme.bodyMedium?.color,
+            ),
+          ),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -1964,7 +2147,13 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                name,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).textTheme.titleMedium?.color,
+                ),
+              ),
               Chip(
                 label: Text(value),
                 backgroundColor: color.withOpacity(0.1),
@@ -1975,13 +2164,13 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
           const SizedBox(height: 8),
           LinearProgressIndicator(
             value: level / 100,
-            backgroundColor: Colors.grey[200],
+            backgroundColor: Theme.of(context).dividerColor,
             color: color,
             minHeight: 6,
             borderRadius: BorderRadius.circular(3),
           ),
           const SizedBox(height: 4),
-          Text(status, style: TextStyle(color: Colors.grey[600])),
+          Text(status, style: TextStyle(color: Theme.of(context).hintColor)),
         ],
       ),
     );
@@ -2024,6 +2213,11 @@ Widget _buildDrawerItem(
   required String title,
   required VoidCallback onTap,
 }) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  final textColor = isDark ? Colors.white : Colors.white;
+  final iconColor = isDark ? Colors.white : Colors.white;
+  final chevronColor = isDark ? Colors.white70 : Colors.white70;
+
   return Padding(
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     child: Material(
@@ -2032,25 +2226,31 @@ Widget _buildDrawerItem(
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        splashColor: Colors.white.withOpacity(0.1),
-        highlightColor: Colors.white.withOpacity(0.05),
+        splashColor:
+            isDark
+                ? Colors.white.withOpacity(0.1)
+                : Colors.black.withOpacity(0.1),
+        highlightColor:
+            isDark
+                ? Colors.white.withOpacity(0.05)
+                : Colors.black.withOpacity(0.05),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
           child: Row(
             children: [
-              Icon(icon, color: Colors.white, size: 24),
+              Icon(icon, color: iconColor, size: 24),
               const SizedBox(width: 16),
               Text(
                 title,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: textColor,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),
               ),
               const Spacer(),
-              const Icon(Icons.chevron_right, color: Colors.white70, size: 20),
+              Icon(Icons.chevron_right, color: chevronColor, size: 20),
             ],
           ),
         ),

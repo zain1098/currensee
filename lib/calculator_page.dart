@@ -7,6 +7,7 @@ import 'trend_chart.dart';
 import 'rate_list_page.dart';
 import 'setting_page.dart';
 import 'world_clock.dart';
+import 'task_page.dart';
 import 'package:lottie/lottie.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
@@ -493,6 +494,11 @@ class _CalculatorsScreenState extends State<CalculatorsScreen> {
     required String title,
     required VoidCallback onTap,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.white;
+    final iconColor = isDark ? Colors.white : Colors.white;
+    final chevronColor = isDark ? Colors.white70 : Colors.white70;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Material(
@@ -501,29 +507,31 @@ class _CalculatorsScreenState extends State<CalculatorsScreen> {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(12),
-          splashColor: Colors.white.withOpacity(0.1),
-          highlightColor: Colors.white.withOpacity(0.05),
+          splashColor:
+              isDark
+                  ? Colors.white.withOpacity(0.1)
+                  : Colors.black.withOpacity(0.1),
+          highlightColor:
+              isDark
+                  ? Colors.white.withOpacity(0.05)
+                  : Colors.black.withOpacity(0.05),
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
             decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
             child: Row(
               children: [
-                Icon(icon, color: Colors.white, size: 24),
+                Icon(icon, color: iconColor, size: 24),
                 const SizedBox(width: 16),
                 Text(
                   title,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: textColor,
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
                 const Spacer(),
-                const Icon(
-                  Icons.chevron_right,
-                  color: Colors.white70,
-                  size: 20,
-                ),
+                Icon(Icons.chevron_right, color: chevronColor, size: 20),
               ],
             ),
           ),
@@ -542,11 +550,14 @@ class _CalculatorsScreenState extends State<CalculatorsScreen> {
       ),
       drawer: Drawer(
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+              colors:
+                  Theme.of(context).brightness == Brightness.dark
+                      ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+                      : [const Color(0xFF1E3A8A), const Color(0xFF3B82F6)],
             ),
           ),
           child: ListView(
@@ -556,15 +567,21 @@ class _CalculatorsScreenState extends State<CalculatorsScreen> {
               Container(
                 height: 180,
                 padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(
-                  borderRadius: BorderRadius.only(
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.only(
                     bottomLeft: Radius.circular(20),
                     bottomRight: Radius.circular(20),
                   ),
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
+                    colors:
+                        Theme.of(context).brightness == Brightness.dark
+                            ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+                            : [
+                              const Color(0xFF1E3A8A),
+                              const Color(0xFF2563EB),
+                            ],
                   ),
                 ),
                 child: Column(
@@ -671,8 +688,14 @@ class _CalculatorsScreenState extends State<CalculatorsScreen> {
                 onTap:
                     () => _navigateAndClose(context, const CalculatorsScreen()),
               ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.task_alt,
+                title: 'Currency Tasks',
+                onTap: () => _navigateAndClose(context, const TaskPage()),
+              ),
               const SizedBox(height: 16),
-              const Divider(color: Colors.white24, height: 1),
+              Divider(color: Theme.of(context).dividerColor, height: 1),
               const SizedBox(height: 16),
               // Settings Section
               _buildDrawerItem(
@@ -736,7 +759,7 @@ class _CalculatorsScreenState extends State<CalculatorsScreen> {
                     () => _navigateAndClose(context, const SupportHelpScreen()),
               ),
               const SizedBox(height: 16),
-              const Divider(color: Colors.white24, height: 1),
+              Divider(color: Theme.of(context).dividerColor, height: 1),
               const SizedBox(height: 16),
               _buildDrawerItem(
                 context,
@@ -757,7 +780,9 @@ class _CalculatorsScreenState extends State<CalculatorsScreen> {
         onTap: (index) => setState(() => _currentIndex = index),
         type: BottomNavigationBarType.fixed,
         selectedItemColor: Theme.of(context).colorScheme.secondary,
-        unselectedItemColor: Colors.grey,
+        unselectedItemColor: Theme.of(
+          context,
+        ).colorScheme.onSurface.withOpacity(0.6),
         selectedFontSize: 12,
         unselectedFontSize: 12,
         items: const [
@@ -878,7 +903,7 @@ class _CurrencySearchDropdownState extends State<CurrencySearchDropdown> {
                       Expanded(
                         child: Text(
                           CurrencyUtils.currencyNames[value] ?? '',
-                          style: const TextStyle(color: Colors.grey),
+                          style: TextStyle(color: Theme.of(context).hintColor),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -975,6 +1000,7 @@ class _TipCalculatorState extends State<TipCalculator> {
           ),
           const SizedBox(height: 20),
           CalculatorUtils.buildResultCard(
+            context,
             title: 'Results',
             children: [
               CalculatorUtils.buildResultRow(
@@ -1065,6 +1091,7 @@ class _SplitBillCalculatorState extends State<SplitBillCalculator> {
           ),
           const SizedBox(height: 20),
           CalculatorUtils.buildResultCard(
+            context,
             title: 'Split Results',
             children: [
               CalculatorUtils.buildResultRow(
@@ -1141,6 +1168,7 @@ class _DiscountCalculatorState extends State<DiscountCalculator> {
           ),
           const SizedBox(height: 20),
           CalculatorUtils.buildResultCard(
+            context,
             title: 'Discount Results',
             children: [
               CalculatorUtils.buildResultRow(
@@ -1221,6 +1249,7 @@ class _TaxCalculatorState extends State<TaxCalculator> {
           ),
           const SizedBox(height: 20),
           CalculatorUtils.buildResultCard(
+            context,
             title: 'Tax Results',
             children: [
               CalculatorUtils.buildResultRow(
@@ -1296,6 +1325,7 @@ class _SalaryConverterState extends State<SalaryConverter> {
           ),
           const SizedBox(height: 20),
           CalculatorUtils.buildResultCard(
+            context,
             title: 'Salary Conversion',
             children: [
               CalculatorUtils.buildResultRow(
@@ -1400,6 +1430,7 @@ class _LoanCalculatorState extends State<LoanCalculator> {
           ),
           const SizedBox(height: 20),
           CalculatorUtils.buildResultCard(
+            context,
             title: 'Loan Results',
             children: [
               CalculatorUtils.buildResultRow(
@@ -1499,6 +1530,7 @@ class _UnitPriceCalculatorState extends State<UnitPriceCalculator> {
           ),
           const SizedBox(height: 20),
           CalculatorUtils.buildResultCard(
+            context,
             title: 'Unit Price Results',
             children: [
               CalculatorUtils.buildResultRow(
@@ -1568,6 +1600,7 @@ class _TravelBudgetEstimatorState extends State<TravelBudgetEstimator> {
           ),
           const SizedBox(height: 20),
           CalculatorUtils.buildResultCard(
+            context,
             title: 'Travel Budget',
             children: [
               CalculatorUtils.buildResultRow(
@@ -1665,6 +1698,7 @@ class _ExchangeProfitCalculatorState extends State<ExchangeProfitCalculator> {
           ),
           const SizedBox(height: 20),
           CalculatorUtils.buildResultCard(
+            context,
             title: 'Exchange Profit Results',
             children: [
               CalculatorUtils.buildResultRow(
@@ -1715,13 +1749,14 @@ class CalculatorUtils {
     );
   }
 
-  static Widget buildResultCard({
+  static Widget buildResultCard(
+    BuildContext context, {
     required String title,
     required List<Widget> children,
   }) {
     return Card(
       elevation: 4,
-      color: Colors.blue[50],
+      color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -1730,13 +1765,16 @@ class CalculatorUtils {
           children: [
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.blue,
+                color: Theme.of(context).colorScheme.primary,
               ),
             ),
-            const Divider(thickness: 1.5, color: Colors.blue),
+            Divider(
+              thickness: 1.5,
+              color: Theme.of(context).colorScheme.primary,
+            ),
             ...children,
           ],
         ),

@@ -48,13 +48,21 @@ class _ShineTextState extends State<ShineText>
           blendMode: BlendMode.srcIn,
           shaderCallback: (bounds) {
             return LinearGradient(
-              colors: [
-                Colors.white,
-                const Color(0xFFD4AF37),
-                Colors.white,
-                const Color(0xFFD4AF37),
-                Colors.white,
-              ],
+              colors: Theme.of(context).brightness == Brightness.dark
+                  ? [
+                      Colors.white,
+                      const Color(0xFFD4AF37),
+                      Colors.white,
+                      const Color(0xFFD4AF37),
+                      Colors.white,
+                    ]
+                  : [
+                      Colors.white,
+                      const Color(0xFFD4AF37),
+                      Colors.white,
+                      const Color(0xFFD4AF37),
+                      Colors.white,
+                    ],
               stops: const [0.0, 0.25, 0.5, 0.75, 1.0],
               begin: _alignAnimation.value,
               end: _alignAnimation.value + const Alignment(0.3, 0),
@@ -116,10 +124,12 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
       appBar: AppBar(
         title: ShineText(
           text: 'Help & Support',
-          textStyle: const TextStyle(
+          textStyle: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.bold,
-            color: Colors.white,
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Colors.white
+                : Colors.white,
             letterSpacing: 1.0,
           ),
         ),
@@ -171,7 +181,7 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
         border: Border.all(color: const Color(0xFF1E3A8A).withOpacity(0.2)),
         boxShadow: [
           BoxShadow(
-            color: Colors.blueGrey.withOpacity(0.1),
+            color: Theme.of(context).shadowColor.withOpacity(0.1),
             blurRadius: 10,
             spreadRadius: 2,
           ),
@@ -186,7 +196,9 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: const Color(0xFF1E3A8A),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white
+                  : const Color(0xFF1E3A8A),
             ),
             textAlign: TextAlign.center,
           ),
@@ -197,10 +209,9 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
             style: TextStyle(
               fontSize: 16,
               height: 1.5,
-              color:
-                  Theme.of(context).brightness == Brightness.dark
-                      ? Colors.grey[300]
-                      : Colors.grey[700],
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.grey[300]
+                  : Colors.grey[700],
             ),
           ),
         ],
@@ -217,10 +228,9 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
-            color:
-                Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white
-                    : Colors.grey[800],
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Colors.white
+                : Colors.grey[800],
           ),
         ),
         const SizedBox(height: 15),
@@ -315,10 +325,9 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color:
-                    Theme.of(context).brightness == Brightness.dark
-                        ? Colors.white
-                        : Colors.grey[800],
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white
+                    : Colors.grey[800],
               ),
             ),
             TextButton(
@@ -340,10 +349,9 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(15),
         side: BorderSide(
-          color:
-              Theme.of(context).brightness == Brightness.dark
-                  ? Colors.grey.shade700
-                  : Colors.grey.shade200,
+          color: Theme.of(context).brightness == Brightness.dark
+              ? Colors.grey.shade700
+              : Colors.grey.shade200,
         ),
       ),
       child: ExpansionTile(
@@ -358,10 +366,9 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
             child: Text(
               faq['answer']!,
               style: TextStyle(
-                color:
-                    Theme.of(context).brightness == Brightness.dark
-                        ? Colors.grey[300]
-                        : Colors.grey[700],
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[300]
+                    : Colors.grey[700],
               ),
             ),
           ),
@@ -388,10 +395,9 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    color:
-                        Theme.of(context).brightness == Brightness.dark
-                            ? Colors.white
-                            : Colors.grey[800],
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : Colors.grey[800],
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -411,16 +417,14 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
       key: _contactFormKey,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color:
-            Theme.of(context).brightness == Brightness.dark
-                ? const Color(0xFF1E293B)
-                : Colors.grey[50],
+        color: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF1E293B)
+            : Colors.grey[50],
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color:
-              Theme.of(context).brightness == Brightness.dark
-                  ? Colors.grey.shade700
-                  : Colors.grey.shade200,
+          color: Theme.of(context).brightness == Brightness.dark
+              ? Colors.grey.shade700
+              : Colors.grey.shade200,
         ),
       ),
       child: Column(
@@ -431,7 +435,9 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Colors.grey[800],
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white
+                  : Colors.grey[800],
             ),
           ),
           const SizedBox(height: 15),
@@ -440,7 +446,9 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
             style: TextStyle(
               fontSize: 16,
               height: 1.5,
-              color: Colors.grey[700],
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.grey[300]
+                  : Colors.grey[700],
             ),
           ),
           const SizedBox(height: 20),
@@ -457,7 +465,9 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey[800]
+                        : Colors.white,
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -476,7 +486,9 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey[800]
+                        : Colors.white,
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -499,7 +511,9 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey[800]
+                        : Colors.white,
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -518,7 +532,7 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
                   child: ElevatedButton(
                     onPressed: _isSubmitting ? null : _submitForm,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1E3A8A),
+                      backgroundColor: Theme.of(context).colorScheme.primary,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -533,11 +547,11 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
                                 color: Colors.white,
                               ),
                             )
-                            : const Text(
+                            : Text(
                               'Submit Request',
                               style: TextStyle(
                                 fontSize: 18,
-                                color: Colors.white,
+                                color: Theme.of(context).colorScheme.onPrimary,
                               ),
                             ),
                   ),
@@ -586,8 +600,8 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
 
         // Show sending message
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
+          SnackBar(
+            content: const Row(
               children: [
                 SizedBox(
                   width: 16,
@@ -601,8 +615,8 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
                 Text('Sending your message...'),
               ],
             ),
-            backgroundColor: Colors.blue,
-            duration: Duration(seconds: 2),
+            backgroundColor: Theme.of(context).colorScheme.primary,
+            duration: const Duration(seconds: 2),
           ),
         );
 
@@ -622,22 +636,22 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
         // Show appropriate message based on email success
         if (emailSent) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
+            SnackBar(
+              content: const Text(
                 'Message sent successfully! We\'ll get back to you soon.',
               ),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 4),
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              duration: const Duration(seconds: 4),
             ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
+            SnackBar(
+              content: const Text(
                 'Message saved! Email delivery failed, but we\'ll still review your request.',
               ),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 4),
+              backgroundColor: Theme.of(context).colorScheme.secondary,
+              duration: const Duration(seconds: 4),
             ),
           );
         }
@@ -650,7 +664,7 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to send: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
             duration: const Duration(seconds: 5),
           ),
         );

@@ -8,5 +8,5 @@
     android:initialLayout="@layout/home_widget"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
-    android:previewImage="@mipmap/ic_launcher"
-    android:label="Quick Converter" /> 
+    android:previewImage="@drawable/widget_quick_converter_icon"
+    android:label="@string/widget_quick_converter_label" /> 

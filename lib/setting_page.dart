@@ -1,7 +1,7 @@
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
-import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:lottie/lottie.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -24,6 +24,8 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'services/connectivity_service.dart';
+import 'task_history_page.dart';
+import 'services/currency_service.dart';
 
 // Add ShineText widget for animated gradient text
 class ShineText extends StatefulWidget {
@@ -195,12 +197,27 @@ class _SettingsPageState extends State<SettingsPage> {
     // Auto-check for updates after a short delay to ensure UI is ready
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {
-        _checkForAppUpdate();
+        _refreshAndCheckForUpdates();
       }
     });
 
-    // Start periodic version check
-    _startPeriodicVersionCheck();
+    // Note: Periodic version check is now handled in main.dart
+    // _startPeriodicVersionCheck();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Update appearance mode when system brightness changes
+    if (_selectedAppearance == 'System') {
+      final appSettings = Provider.of<AppSettings>(context, listen: false);
+      final currentBrightness = appSettings.getCurrentBrightness(context);
+      if (_darkMode != currentBrightness) {
+        setState(() {
+          _darkMode = currentBrightness;
+        });
+      }
+    }
   }
 
   @override
@@ -223,17 +240,35 @@ class _SettingsPageState extends State<SettingsPage> {
               .doc(user.uid)
               .get();
 
+      final userData = userDoc.data() ?? {};
+
       setState(() {
-        _userName = userDoc.data()?['displayName'] ?? user.displayName ?? '';
+        _userName = userData['displayName'] ?? user.displayName ?? '';
         _userEmail = user.email ?? '';
-        _userPhotoUrl = userDoc.data()?['photoURL'] ?? user.photoURL ?? '';
+        _userPhotoUrl = userData['photoURL'] ?? user.photoURL ?? '';
         _nameController.text = _userName;
       });
+
+      // Check if local image exists and load it for offline access
+      if (userData['localPhotoPath'] != null) {
+        final File localFile = File(userData['localPhotoPath']);
+        if (await localFile.exists()) {
+          // Local file exists, can be used for offline display
+          print('Local profile image found: ${localFile.path}');
+        }
+      }
     }
   }
 
   Future<void> _pickAndUploadImage() async {
     try {
+      // Check if running on web platform
+      if (kIsWeb) {
+        _showWebImagePickerDialog();
+        return;
+      }
+
+      // Mobile platform permissions
       if (Platform.isIOS) {
         await Permission.photos.request();
         if (!await Permission.photos.isGranted) {
@@ -249,26 +284,72 @@ class _SettingsPageState extends State<SettingsPage> {
 
       if (pickedFile == null) return;
 
-      setState(() => _isUploadingImage = true);
+      await _uploadImageToFirebase(pickedFile);
+    } catch (e) {
+      setState(() => _isUploadingImage = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error updating profile: ${e.toString()}')),
+      );
+    }
+  }
 
+  void _showWebImagePickerDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.camera_alt, color: Colors.blue),
+              SizedBox(width: 8),
+              Text('Upload Profile Picture'),
+            ],
+          ),
+          content: const Text(
+            'Image upload is currently only available on mobile devices. '
+            'Please use the mobile app to upload your profile picture.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _uploadImageToFirebase(XFile pickedFile) async {
+    setState(() => _isUploadingImage = true);
+
+    try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      final String fileName = path.basename(pickedFile.path);
+      // Save image locally first
+      final String localPath = await _saveImageLocally(pickedFile, user.uid);
+
+      final String fileName =
+          '${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final Reference storageRef = FirebaseStorage.instance
           .ref()
           .child('user_profile_images')
           .child(user.uid)
           .child(fileName);
 
-      final UploadTask uploadTask = storageRef.putFile(File(pickedFile.path));
+      final UploadTask uploadTask = storageRef.putFile(File(localPath));
       final TaskSnapshot snapshot = await uploadTask.whenComplete(() {});
       final String downloadUrl = await snapshot.ref.getDownloadURL();
 
       await user.updatePhotoURL(downloadUrl);
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update(
-        {'photoURL': downloadUrl},
-      );
+      await FirebaseFirestore.instance
+          .collection('currentUser')
+          .doc(user.uid)
+          .update({
+            'photoURL': downloadUrl,
+            'localPhotoPath': localPath, // Save local path for offline access
+          });
 
       setState(() {
         _userPhotoUrl = downloadUrl;
@@ -276,13 +357,51 @@ class _SettingsPageState extends State<SettingsPage> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile picture updated successfully!')),
+        const SnackBar(
+          content: Text('Profile picture updated successfully!'),
+          backgroundColor: Colors.green,
+        ),
       );
     } catch (e) {
       setState(() => _isUploadingImage = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error updating profile: ${e.toString()}')),
+        SnackBar(
+          content: Text('Error updating profile: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
       );
+    }
+  }
+
+  Future<String> _saveImageLocally(XFile pickedFile, String userId) async {
+    try {
+      // Get app documents directory
+      final Directory appDir = await getApplicationDocumentsDirectory();
+      final Directory userImagesDir = Directory('${appDir.path}/user_images');
+
+      // Create directory if it doesn't exist
+      if (!await userImagesDir.exists()) {
+        await userImagesDir.create(recursive: true);
+      }
+
+      // Create user-specific directory
+      final Directory userDir = Directory('${userImagesDir.path}/$userId');
+      if (!await userDir.exists()) {
+        await userDir.create(recursive: true);
+      }
+
+      // Generate unique filename
+      final String fileName =
+          'profile_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final String localPath = '${userDir.path}/$fileName';
+
+      // Copy file to local directory
+      final File originalFile = File(pickedFile.path);
+      final File localFile = await originalFile.copy(localPath);
+
+      return localFile.path;
+    } catch (e) {
+      throw Exception('Failed to save image locally: $e');
     }
   }
 
@@ -485,9 +604,9 @@ class _SettingsPageState extends State<SettingsPage> {
                   Navigator.pop(context);
                   await _performAccountDeletion(user);
                 },
-                child: const Text(
+                child: Text(
                   'Delete',
-                  style: TextStyle(color: Colors.red),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ),
             ],
@@ -569,9 +688,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
       // 8. Show success message
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Account deleted successfully'),
-          backgroundColor: Colors.green,
+        SnackBar(
+          content: const Text('Account deleted successfully'),
+          backgroundColor: Theme.of(context).colorScheme.primary,
         ),
       );
     } catch (e) {
@@ -584,7 +703,7 @@ class _SettingsPageState extends State<SettingsPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to delete account: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
     }
@@ -855,12 +974,15 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  // Manual version check (with UI updates and loading state)
-  Future<void> _checkForAppUpdate() async {
+  // Combined function: refresh current app version and check for updates
+  Future<void> _refreshAndCheckForUpdates() async {
     setState(() => _isCheckingUpdate = true);
 
     try {
-      print('🔍 Manual version check...');
+      print('🔄 Refreshing current app version and checking for updates...');
+
+      // First, refresh the current app version
+      await _loadCurrentAppVersion();
 
       // Check if user is authenticated
       final user = FirebaseAuth.instance.currentUser;
@@ -960,11 +1082,11 @@ class _SettingsPageState extends State<SettingsPage> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            'App is Up to Date!',
+                            'No Update Available!',
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           Text(
-                            'Current version: v$currentVersion',
+                            'Current version: v$currentVersion (Latest)',
                             style: const TextStyle(fontSize: 12),
                           ),
                         ],
@@ -1044,10 +1166,9 @@ class _SettingsPageState extends State<SettingsPage> {
         );
       }
     } finally {
-      setState(() {
-        _isCheckingUpdate = false;
-        _lastCheckTime = DateTime.now();
-      });
+      if (mounted) {
+        setState(() => _isCheckingUpdate = false);
+      }
     }
   }
 
@@ -1562,7 +1683,11 @@ class _SettingsPageState extends State<SettingsPage> {
             // Header with status indicator
             Row(
               children: [
-                const Icon(Icons.system_update, color: Colors.blue, size: 20),
+                Icon(
+                  Icons.system_update,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
                 const Text(
                   'Version & Updates',
@@ -1600,14 +1725,14 @@ class _SettingsPageState extends State<SettingsPage> {
                       vertical: 8,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
+                      color: Theme.of(context).cardColor,
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.info_outline,
-                          color: Colors.blue,
+                          color: Theme.of(context).colorScheme.primary,
                           size: 16,
                         ),
                         const SizedBox(width: 6),
@@ -1624,9 +1749,17 @@ class _SettingsPageState extends State<SettingsPage> {
                               ),
                               Text(
                                 '${_currentAppVersion?['version'] ?? '1.0.0'}',
-                                style: const TextStyle(
-                                  color: Colors.grey,
+                                style: TextStyle(
+                                  color: Theme.of(context).hintColor,
                                   fontSize: 11,
+                                ),
+                              ),
+                              Text(
+                                'Auto-refreshes on app resume',
+                                style: TextStyle(
+                                  color: Theme.of(context).hintColor,
+                                  fontSize: 9,
+                                  fontStyle: FontStyle.italic,
                                 ),
                               ),
                             ],
@@ -1644,12 +1777,13 @@ class _SettingsPageState extends State<SettingsPage> {
 
             const SizedBox(height: 12),
 
-            // Check for Updates Button
+            // Combined Check for Updates Button
             SizedBox(
               width: double.infinity,
               height: 36,
               child: ElevatedButton.icon(
-                onPressed: _isCheckingUpdate ? null : _checkForAppUpdate,
+                onPressed:
+                    _isCheckingUpdate ? null : _refreshAndCheckForUpdates,
                 icon:
                     _isCheckingUpdate
                         ? const SizedBox(
@@ -1663,8 +1797,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   style: const TextStyle(fontSize: 13),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(6),
                   ),
@@ -1998,6 +2132,11 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(height: 20),
 
+            // --- Favorite Currencies Section ---
+            _buildSectionHeader('Favorite Currencies'),
+            _buildFavoriteCurrenciesSection(),
+            const SizedBox(height: 20),
+
             // --- Notification Settings Section (moved up, always visible) ---
             _buildSectionHeader('Notification Settings'),
             Card(
@@ -2011,7 +2150,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     ListTile(
-                      leading: const Icon(Icons.music_note, color: Colors.blue),
+                      leading: Icon(
+                        Icons.music_note,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                       title: const Text(
                         'Notification Sound',
                         style: TextStyle(fontWeight: FontWeight.bold),
@@ -2029,11 +2171,14 @@ class _SettingsPageState extends State<SettingsPage> {
                                           : _availableSounds.first,
                                   isExpanded: true,
                                   icon: const Icon(Icons.arrow_drop_down),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 16,
-                                    color: Colors.black,
+                                    color:
+                                        Theme.of(
+                                          context,
+                                        ).textTheme.bodyLarge?.color,
                                   ),
-                                  dropdownColor: Colors.white,
+                                  dropdownColor: Theme.of(context).cardColor,
                                   items:
                                       _availableSounds.map((sound) {
                                         return DropdownMenuItem<String>(
@@ -2094,15 +2239,17 @@ class _SettingsPageState extends State<SettingsPage> {
                         if (_notificationHistory.isEmpty) {
                           return Column(
                             children: [
-                              const Icon(
+                              Icon(
                                 Icons.notifications_off,
                                 size: 40,
-                                color: Colors.grey,
+                                color: Theme.of(context).hintColor,
                               ),
                               const SizedBox(height: 8),
-                              const Text(
+                              Text(
                                 'No notifications yet.',
-                                style: TextStyle(color: Colors.grey),
+                                style: TextStyle(
+                                  color: Theme.of(context).hintColor,
+                                ),
                               ),
                             ],
                           );
@@ -2131,7 +2278,10 @@ class _SettingsPageState extends State<SettingsPage> {
                                         ),
                                         child: Icon(
                                           Icons.music_note,
-                                          color: Colors.blueGrey,
+                                          color:
+                                              Theme.of(
+                                                context,
+                                              ).colorScheme.secondary,
                                           size: 20,
                                         ),
                                       ),
@@ -2152,9 +2302,12 @@ class _SettingsPageState extends State<SettingsPage> {
                                           const SizedBox(height: 2),
                                           Text(
                                             notif['body'] ?? '',
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 13,
-                                              color: Colors.black87,
+                                              color:
+                                                  Theme.of(
+                                                    context,
+                                                  ).textTheme.bodyMedium?.color,
                                             ),
                                             overflow: TextOverflow.ellipsis,
                                             maxLines:
@@ -2176,15 +2329,18 @@ class _SettingsPageState extends State<SettingsPage> {
                                                   .substring(0, 16)
                                                   .replaceAll('T', ' ')
                                               : '',
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 12,
-                                            color: Colors.grey,
+                                            color: Theme.of(context).hintColor,
                                           ),
                                         ),
                                         IconButton(
-                                          icon: const Icon(
+                                          icon: Icon(
                                             Icons.delete,
-                                            color: Colors.red,
+                                            color:
+                                                Theme.of(
+                                                  context,
+                                                ).colorScheme.error,
                                             size: 20,
                                           ),
                                           onPressed:
@@ -2207,10 +2363,15 @@ class _SettingsPageState extends State<SettingsPage> {
                       alignment: Alignment.centerRight,
                       child: TextButton.icon(
                         onPressed: _clearNotificationHistory,
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        label: const Text(
+                        icon: Icon(
+                          Icons.delete,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                        label: Text(
                           'Clear History',
-                          style: TextStyle(color: Colors.red),
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
                         ),
                       ),
                     ),
@@ -2240,7 +2401,8 @@ class _SettingsPageState extends State<SettingsPage> {
             _buildAppUpdateSection(),
             const SizedBox(height: 20),
 
-            // Widget sections removed - simplified implementation
+            _buildSectionHeader('Data Management'),
+            _buildDataManagementSection(),
             const SizedBox(height: 20),
 
             _buildSectionHeader('About'),
@@ -2254,155 +2416,347 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildUserProfileSection() {
     return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            _buildProfileImage(),
-            const SizedBox(height: 16),
-            Text(
-              _userName,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _userEmail,
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 16),
-            _isEditingProfile
-                ? Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      TextFormField(
-                        controller: _nameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Full Name',
-                          border: OutlineInputBorder(),
+      elevation: 6,
+      shadowColor: Colors.black.withOpacity(0.1),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Theme.of(context).colorScheme.surface,
+              Theme.of(context).colorScheme.surface.withOpacity(0.8),
+            ],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            children: [
+              // Profile Image Section
+              Stack(
+                children: [
+                  _buildProfileImage(),
+                  if (_isEditingProfile)
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.surface,
+                            width: 3,
+                          ),
                         ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter your name';
-                          }
-                          return null;
-                        },
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.camera_alt,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          onPressed: _pickAndUploadImage,
+                        ),
                       ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          ElevatedButton(
-                            onPressed: () {
-                              setState(() {
-                                _isEditingProfile = false;
-                              });
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.grey,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                            ),
-                            child: const Text('Cancel'),
-                          ),
-                          ElevatedButton(
-                            onPressed: _updateProfile,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                            ),
-                            child: const Text('Save Profile'),
-                          ),
-                        ],
+                    ),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+
+              // User Info Section
+              Column(
+                children: [
+                  Text(
+                    _userName.isNotEmpty ? _userName : 'User',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.email_outlined,
+                        size: 16,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withOpacity(0.7),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _userEmail,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withOpacity(0.7),
+                        ),
                       ),
                     ],
                   ),
-                )
-                : Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          _isEditingProfile = true;
-                          _currentPasswordController.clear();
-                          _newPasswordController.clear();
-                          _confirmPasswordController.clear();
-                        });
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                      ),
-                      child: const Text('Edit Profile'),
-                    ),
-                    ElevatedButton(
-                      onPressed: _deleteAccount,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                      ),
-                      child: const Text('Delete Account'),
-                    ),
-                  ],
-                ),
-          ],
+                ],
+              ),
+
+              const SizedBox(height: 24),
+
+              // Edit Profile Form or Action Buttons
+              _isEditingProfile
+                  ? _buildEditProfileForm()
+                  : _buildProfileActionButtons(),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildEditProfileForm() {
+    return Form(
+      key: _formKey,
+      child: Column(
+        children: [
+          TextFormField(
+            controller: _nameController,
+            decoration: InputDecoration(
+              labelText: 'Full Name',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              prefixIcon: const Icon(Icons.person_outline),
+              filled: true,
+              fillColor: Theme.of(context).colorScheme.surface,
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please enter your name';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _isEditingProfile = false;
+                    });
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.surface,
+                    foregroundColor: Theme.of(context).colorScheme.onSurface,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _updateProfile,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: const Text('Save Profile'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileActionButtons() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _isEditingProfile = true;
+                    _currentPasswordController.clear();
+                    _newPasswordController.clear();
+                    _confirmPasswordController.clear();
+                  });
+                },
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Edit Profile'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: _deleteAccount,
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Delete Account'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (_userPhotoUrl.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _removeProfilePicture,
+              icon: const Icon(Icons.remove_circle_outline),
+              label: const Text('Remove Photo'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
   Widget _buildProfileImage() {
     return GestureDetector(
       onTap: _isEditingProfile ? _pickAndUploadImage : null,
-      child:
-          _isUploadingImage
-              ? const CircularProgressIndicator()
-              : FutureBuilder<LottieComposition>(
-                future: _animationComposition,
-                builder: (context, snapshot) {
-                  if (snapshot.hasData) {
-                    return Container(
+      child: Container(
+        width: 120,
+        height: 120,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              spreadRadius: 2,
+              blurRadius: 15,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child:
+            _isUploadingImage
+                ? Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Theme.of(context).colorScheme.surface,
+                  ),
+                  child: const Center(child: CircularProgressIndicator()),
+                )
+                : _userPhotoUrl.isNotEmpty
+                ? ClipOval(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primary.withOpacity(0.3),
+                        width: 3,
+                      ),
+                    ),
+                    child: Image.network(
+                      _userPhotoUrl,
                       width: 120,
                       height: 120,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            spreadRadius: 2,
-                            blurRadius: 10,
-                            offset: const Offset(0, 5),
+                      fit: BoxFit.cover,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          width: 120,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Theme.of(context).colorScheme.surface,
                           ),
-                        ],
-                      ),
-                      child: Lottie(
-                        composition: snapshot.data!,
-                        fit: BoxFit.contain,
-                        repeat: true,
-                        animate: true,
-                      ),
-                    );
-                  } else if (snapshot.hasError) {
-                    return const Icon(
-                      Icons.person,
-                      size: 60,
-                      color: Colors.blue,
-                    );
-                  } else {
-                    return const CircularProgressIndicator();
-                  }
-                },
-              ),
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              value:
+                                  loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                      : null,
+                            ),
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return _buildDefaultProfileIcon();
+                      },
+                    ),
+                  ),
+                )
+                : _buildDefaultProfileIcon(),
+      ),
+    );
+  }
+
+  Widget _buildDefaultProfileIcon() {
+    return Container(
+      width: 120,
+      height: 120,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+          width: 3,
+        ),
+      ),
+      child: FutureBuilder<LottieComposition>(
+        future: _animationComposition,
+        builder: (context, snapshot) {
+          if (snapshot.hasData) {
+            return Lottie(
+              composition: snapshot.data!,
+              fit: BoxFit.contain,
+              repeat: true,
+              animate: true,
+            );
+          } else if (snapshot.hasError) {
+            return Icon(
+              Icons.person,
+              size: 60,
+              color: Theme.of(context).colorScheme.primary,
+            );
+          } else {
+            return const Center(child: CircularProgressIndicator());
+          }
+        },
+      ),
     );
   }
 
@@ -2510,14 +2864,16 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: ElevatedButton(
                   onPressed: _isUpdatingPassword ? null : _updatePassword,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
                     ),
                   ),
                   child:
                       _isUpdatingPassword
-                          ? const CircularProgressIndicator(color: Colors.white)
+                          ? CircularProgressIndicator(
+                            color: Theme.of(context).colorScheme.onPrimary,
+                          )
                           : const Text('Update Password'),
                 ),
               ),
@@ -2533,10 +2889,10 @@ class _SettingsPageState extends State<SettingsPage> {
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.bold,
-          color: Colors.blue,
+          color: Theme.of(context).colorScheme.primary,
         ),
       ),
     );
@@ -2545,41 +2901,343 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildAppearanceSettings() {
     return Column(
       children: [
-        _buildToggleSetting('Dark mode', _darkMode, (value) {
-          setState(() => _darkMode = value);
-          _saveSetting('darkMode', value);
-          widget.onThemeChanged(value);
-          Provider.of<AppSettings>(context, listen: false).setDarkMode(value);
-        }),
-        const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text('Appearance mode'),
-            DropdownButton<String>(
-              value: _selectedAppearance,
-              items:
-                  _appearanceOptions.map((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value),
-                    );
-                  }).toList(),
-              onChanged: (newValue) {
-                if (newValue != null) {
-                  setState(() => _selectedAppearance = newValue);
-                  _saveSetting('selectedAppearance', newValue);
-                  widget.onThemeChanged(newValue == 'Dark');
-                  Provider.of<AppSettings>(
+        // Remove the old dark mode toggle since we now use appearance mode
+        // _buildToggleSetting('Dark mode', _darkMode, (value) {
+        //   setState(() => _darkMode = value);
+        //   _saveSetting('darkMode', value);
+        //   widget.onThemeChanged(value);
+        //   Provider.of<AppSettings>(context, listen: false).setDarkMode(value);
+        // }),
+        // const SizedBox(height: 10),
+
+        // New appearance mode selector with better mobile support
+        Card(
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.palette,
+                      color: Theme.of(context).colorScheme.primary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Appearance Mode',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Appearance options as cards instead of dropdown
+                ..._appearanceOptions.map((String value) {
+                  final isSelected = _selectedAppearance == value;
+                  final isSystemMode = value == 'System';
+                  final systemBrightness =
+                      MediaQuery.of(context).platformBrightness;
+                  final appSettings = Provider.of<AppSettings>(
                     context,
                     listen: false,
-                  ).setSelectedAppearance(newValue);
-                }
-              },
+                  );
+                  final currentBrightness = appSettings.getCurrentBrightness(
+                    context,
+                  );
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: InkWell(
+                      onTap: () => _updateAppearanceMode(value),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color:
+                              isSelected
+                                  ? Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withOpacity(0.1)
+                                  : Theme.of(context).cardColor,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color:
+                                isSelected
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Colors.grey.shade300,
+                            width: isSelected ? 2 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            // Icon based on mode with better visual feedback
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color:
+                                    isSelected
+                                        ? Theme.of(
+                                          context,
+                                        ).colorScheme.primary.withOpacity(0.2)
+                                        : Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                value == 'Light'
+                                    ? Icons.light_mode
+                                    : value == 'Dark'
+                                    ? Icons.dark_mode
+                                    : (systemBrightness == Brightness.dark
+                                        ? Icons.dark_mode
+                                        : Icons.light_mode),
+                                color:
+                                    isSelected
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Theme.of(
+                                          context,
+                                        ).colorScheme.onSurface,
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+
+                            // Text content
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        value,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                          color:
+                                              isSelected
+                                                  ? Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary
+                                                  : Theme.of(
+                                                    context,
+                                                  ).colorScheme.onSurface,
+                                        ),
+                                      ),
+                                      if (isSelected) ...[
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color:
+                                                Theme.of(
+                                                  context,
+                                                ).colorScheme.primary,
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            'ACTIVE',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  if (isSystemMode) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Follows your device settings',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Theme.of(context).hintColor,
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            currentBrightness
+                                                ? Colors.blue.shade100
+                                                : Colors.orange.shade100,
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(
+                                          color:
+                                              currentBrightness
+                                                  ? Colors.blue.shade300
+                                                  : Colors.orange.shade300,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            currentBrightness
+                                                ? Icons.dark_mode
+                                                : Icons.light_mode,
+                                            size: 12,
+                                            color:
+                                                currentBrightness
+                                                    ? Colors.blue
+                                                    : Colors.orange,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            'Currently: ${currentBrightness ? 'Dark' : 'Light'} mode',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color:
+                                                  currentBrightness
+                                                      ? Colors.blue
+                                                      : Colors.orange,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ] else ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      value == 'Light'
+                                          ? 'Always use light theme'
+                                          : 'Always use dark theme',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Theme.of(context).hintColor,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+
+                            // Selection indicator
+                            if (isSelected)
+                              Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.check,
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+
+                const SizedBox(height: 12),
+
+                // Info text
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withOpacity(0.2),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'System mode automatically follows your device\'s dark/light mode setting',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ],
+    );
+  }
+
+  void _updateAppearanceMode(String newValue) {
+    setState(() => _selectedAppearance = newValue);
+    _saveSetting('selectedAppearance', newValue);
+
+    // Update the AppSettings provider
+    final appSettings = Provider.of<AppSettings>(context, listen: false);
+    appSettings.setSelectedAppearance(newValue);
+
+    // For backward compatibility, also update darkMode
+    bool isDarkMode = newValue == 'Dark';
+    if (newValue == 'System') {
+      // For system mode, we'll let the system decide
+      isDarkMode = MediaQuery.of(context).platformBrightness == Brightness.dark;
+    }
+
+    // Update darkMode setting for backward compatibility
+    setState(() => _darkMode = isDarkMode);
+    _saveSetting('darkMode', isDarkMode);
+    widget.onThemeChanged(isDarkMode);
+
+    // Show feedback to user
+    String message = '';
+    switch (newValue) {
+      case 'System':
+        final brightness = MediaQuery.of(context).platformBrightness;
+        message =
+            'Appearance set to follow system (${brightness == Brightness.dark ? 'Dark' : 'Light'} mode)';
+        break;
+      case 'Light':
+        message = 'Appearance set to Light mode';
+        break;
+      case 'Dark':
+        message = 'Appearance set to Dark mode';
+        break;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        duration: const Duration(seconds: 2),
+      ),
     );
   }
 
@@ -2768,6 +3426,757 @@ class _SettingsPageState extends State<SettingsPage> {
       value: value,
       onChanged: onChanged,
       contentPadding: EdgeInsets.zero,
+    );
+  }
+
+  // Data Management Dialog Methods
+  void _showClearHistoryDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.history, color: Colors.orange),
+              SizedBox(width: 8),
+              Text('Clear History'),
+            ],
+          ),
+          content: const Text(
+            'Are you sure you want to clear all conversion history and cached data? This action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _clearHistory();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Clear History'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showClearAlertsDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.notifications_off, color: Colors.red),
+              SizedBox(width: 8),
+              Text('Clear Alerts'),
+            ],
+          ),
+          content: const Text(
+            'Are you sure you want to clear all currency alerts and notifications? This action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _clearAlerts();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Clear Alerts'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showClearNotificationsDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.clear_all, color: Colors.purple),
+              SizedBox(width: 8),
+              Text('Clear Notifications'),
+            ],
+          ),
+          content: const Text(
+            'Are you sure you want to clear all notification history? This will remove:\n\n'
+            '• Alert notifications history\n'
+            '• App update notifications history\n'
+            '• All notification records\n\n'
+            'This action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _clearNotifications();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.purple,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Clear Notifications'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showResetAppDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.refresh, color: Colors.blue),
+              SizedBox(width: 8),
+              Text('Reset App'),
+            ],
+          ),
+          content: const Text(
+            'Are you sure you want to reset all app data and settings to default? This will:\n\n'
+            '• Clear all conversion history\n'
+            '• Remove all currency alerts\n'
+            '• Clear all notifications\n'
+            '• Reset all settings to default\n'
+            '• Clear cached data\n\n'
+            'This action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _resetApp();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Reset App'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showTaskHistoryDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.task_alt, color: Colors.green),
+              SizedBox(width: 8),
+              Text('Task History'),
+            ],
+          ),
+          content: const Text(
+            'View and manage your currency monitoring task history. You can see completed tasks and clear the history.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _showTaskHistoryPage();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('View History'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showTaskHistoryPage() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const TaskHistoryPage()),
+    );
+  }
+
+  // Data Management Action Methods
+  Future<void> _clearHistory() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 20),
+                Text('Clearing history...'),
+              ],
+            ),
+          );
+        },
+      );
+
+      // Get user data before clearing
+      final userDoc =
+          await FirebaseFirestore.instance
+              .collection('currentUser')
+              .doc(user.uid)
+              .get();
+      final userData = userDoc.data() ?? {};
+
+      // Save to deleted_data collection
+      await FirebaseFirestore.instance.collection('deleted_data').add({
+        'userId': user.uid,
+        'userEmail': user.email ?? '',
+        'userDisplayName': user.displayName ?? userData['displayName'] ?? '',
+        'action': 'clear_history',
+        'timestamp': FieldValue.serverTimestamp(),
+        'description': 'User cleared conversion history and cached data',
+        'dataType': 'history',
+      });
+
+      // Clear local SharedPreferences data
+      final prefs = await SharedPreferences.getInstance();
+
+      // Clear conversion history related data
+      await prefs.remove('conversion_history');
+      await prefs.remove('cached_rates');
+      await prefs.remove('last_update_time');
+      await prefs.remove('rate_cache');
+
+      // Clear widget data
+      await prefs.remove('watchlist_pairs');
+      await prefs.remove('flutter.watchlist_pairs');
+      await prefs.remove('converter_pairs');
+      await prefs.remove('flutter.converter_pairs');
+
+      // Close loading dialog
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('History cleared successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      // Close loading dialog
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error clearing history: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _clearAlerts() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 20),
+                Text('Clearing alerts...'),
+              ],
+            ),
+          );
+        },
+      );
+
+      // Get user data before clearing
+      final userDoc =
+          await FirebaseFirestore.instance
+              .collection('currentUser')
+              .doc(user.uid)
+              .get();
+      final userData = userDoc.data() ?? {};
+
+      // Get all alerts for this user
+      final alertsSnapshot =
+          await FirebaseFirestore.instance
+              .collection('alerts')
+              .where('userId', isEqualTo: user.uid)
+              .get();
+
+      // Save alerts to deleted_data collection before deletion
+      for (var doc in alertsSnapshot.docs) {
+        final alertData = doc.data();
+        await FirebaseFirestore.instance.collection('deleted_data').add({
+          'userId': user.uid,
+          'userEmail': user.email ?? '',
+          'userDisplayName': user.displayName ?? userData['displayName'] ?? '',
+          'action': 'clear_alerts',
+          'timestamp': FieldValue.serverTimestamp(),
+          'description': 'User cleared all currency alerts',
+          'dataType': 'alerts',
+          'deletedAlert': alertData,
+        });
+      }
+
+      // Delete all alerts from database
+      for (var doc in alertsSnapshot.docs) {
+        await doc.reference.delete();
+      }
+
+      // Clear local notification history
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('notification_history');
+
+      // Update local state
+      setState(() {
+        _notificationHistory.clear();
+      });
+
+      // Close loading dialog
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${alertsSnapshot.docs.length} alerts cleared successfully!',
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      // Close loading dialog
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error clearing alerts: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _clearNotifications() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 20),
+                Text('Clearing notifications...'),
+              ],
+            ),
+          );
+        },
+      );
+
+      // Get user data before clearing
+      final userDoc =
+          await FirebaseFirestore.instance
+              .collection('currentUser')
+              .doc(user.uid)
+              .get();
+      final userData = userDoc.data() ?? {};
+
+      // Get all notification history for this user
+      final notificationSnapshot =
+          await FirebaseFirestore.instance
+              .collection('notification_history')
+              .where('userId', isEqualTo: user.uid)
+              .get();
+
+      // Save notifications to deleted_data collection before deletion
+      for (var doc in notificationSnapshot.docs) {
+        final notificationData = doc.data();
+        await FirebaseFirestore.instance.collection('deleted_data').add({
+          'userId': user.uid,
+          'userEmail': user.email ?? '',
+          'userDisplayName': user.displayName ?? userData['displayName'] ?? '',
+          'action': 'clear_notifications',
+          'timestamp': FieldValue.serverTimestamp(),
+          'description': 'User cleared all notification history',
+          'dataType': 'notifications',
+          'deletedNotification': notificationData,
+        });
+      }
+
+      // Delete all notifications from database
+      for (var doc in notificationSnapshot.docs) {
+        await doc.reference.delete();
+      }
+
+      // Clear local notification history
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('notification_history');
+
+      // Update local state
+      setState(() {
+        _notificationHistory.clear();
+      });
+
+      // Close loading dialog
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${notificationSnapshot.docs.length} notifications cleared successfully!',
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      // Close loading dialog
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error clearing notifications: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _resetApp() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 20),
+                Text('Resetting app...'),
+              ],
+            ),
+          );
+        },
+      );
+
+      // Get user data before reset
+      final userDoc =
+          await FirebaseFirestore.instance
+              .collection('currentUser')
+              .doc(user.uid)
+              .get();
+      final userData = userDoc.data() ?? {};
+
+      // Save to deleted_data collection
+      await FirebaseFirestore.instance.collection('deleted_data').add({
+        'userId': user.uid,
+        'userEmail': user.email ?? '',
+        'userDisplayName': user.displayName ?? userData['displayName'] ?? '',
+        'action': 'reset_app',
+        'timestamp': FieldValue.serverTimestamp(),
+        'description': 'User reset all app data and settings to default',
+        'dataType': 'full_reset',
+        'originalSettings': {
+          'darkMode': _darkMode,
+          'decimalPlaces': _decimalPlaces,
+          'baseCurrency': _baseCurrency,
+          'autoUpdateRates': _autoUpdateRates,
+          'biometricAuth': _biometricAuth,
+          'hapticFeedback': _hapticFeedback,
+          'showCalculator': _showCalculator,
+          'historicalData': _historicalData,
+          'offlineMode': _offlineMode,
+          'selectedLanguage': _selectedLanguage,
+          'selectedAppearance': _selectedAppearance,
+          'notificationSound': _notificationSound,
+        },
+      });
+
+      // Get all alerts for this user and save them before deletion
+      final alertsSnapshot =
+          await FirebaseFirestore.instance
+              .collection('alerts')
+              .where('userId', isEqualTo: user.uid)
+              .get();
+
+      for (var doc in alertsSnapshot.docs) {
+        final alertData = doc.data();
+        await FirebaseFirestore.instance.collection('deleted_data').add({
+          'userId': user.uid,
+          'userEmail': user.email ?? '',
+          'userDisplayName': user.displayName ?? userData['displayName'] ?? '',
+          'action': 'reset_app_alerts',
+          'timestamp': FieldValue.serverTimestamp(),
+          'description': 'Alert deleted during app reset',
+          'dataType': 'alerts',
+          'deletedAlert': alertData,
+        });
+      }
+
+      // Delete all alerts
+      for (var doc in alertsSnapshot.docs) {
+        await doc.reference.delete();
+      }
+
+      // Get all notification history for this user and save them before deletion
+      final notificationSnapshot =
+          await FirebaseFirestore.instance
+              .collection('notification_history')
+              .where('userId', isEqualTo: user.uid)
+              .get();
+
+      for (var doc in notificationSnapshot.docs) {
+        final notificationData = doc.data();
+        await FirebaseFirestore.instance.collection('deleted_data').add({
+          'userId': user.uid,
+          'userEmail': user.email ?? '',
+          'userDisplayName': user.displayName ?? userData['displayName'] ?? '',
+          'action': 'reset_app_notifications',
+          'timestamp': FieldValue.serverTimestamp(),
+          'description': 'Notification deleted during app reset',
+          'dataType': 'notifications',
+          'deletedNotification': notificationData,
+        });
+      }
+
+      // Delete all notifications
+      for (var doc in notificationSnapshot.docs) {
+        await doc.reference.delete();
+      }
+
+      // Clear all local SharedPreferences data
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      // Reset all settings to default values
+      setState(() {
+        _darkMode = false;
+        _decimalPlaces = 2;
+        _baseCurrency = 'USD';
+        _autoUpdateRates = true;
+        _biometricAuth = false;
+        _hapticFeedback = true;
+        _showCalculator = true;
+        _historicalData = false;
+        _offlineMode = false;
+        _selectedLanguage = 'English';
+        _selectedAppearance = 'System';
+        _notificationSound = 'notification.mp3';
+        _notificationHistory.clear();
+      });
+
+      // Update Provider settings
+      final appSettings = Provider.of<AppSettings>(context, listen: false);
+      appSettings.setDarkMode(false);
+      appSettings.setDecimalPlaces(2);
+      appSettings.setBaseCurrency('USD');
+      appSettings.setAutoUpdateRates(true);
+      appSettings.setBiometricAuth(false);
+      appSettings.setHapticFeedback(true);
+      appSettings.setShowCalculator(true);
+      appSettings.setHistoricalData(false);
+      appSettings.setOfflineMode(false);
+      appSettings.setSelectedLanguage('English');
+      appSettings.setSelectedAppearance('System');
+
+      // Close loading dialog
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('App reset successfully! All data has been cleared.'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 3),
+        ),
+      );
+
+      // Navigate back to main screen after a short delay
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            '/home',
+            (Route<dynamic> route) => false,
+          );
+        }
+      });
+    } catch (e) {
+      // Close loading dialog
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error resetting app: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Widget _buildDataManagementSection() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.storage,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Data Management',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Clear History Button
+            ListTile(
+              leading: const Icon(Icons.history, color: Colors.orange),
+              title: const Text('Clear History'),
+              subtitle: const Text(
+                'Remove all conversion history and cached data',
+              ),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: _showClearHistoryDialog,
+            ),
+
+            const Divider(),
+
+            // Clear Alerts Button
+            ListTile(
+              leading: const Icon(Icons.notifications_off, color: Colors.red),
+              title: const Text('Clear Alerts'),
+              subtitle: const Text(
+                'Remove all currency alerts and notifications',
+              ),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: _showClearAlertsDialog,
+            ),
+
+            const Divider(),
+
+            // Clear Notifications Button
+            ListTile(
+              leading: const Icon(Icons.clear_all, color: Colors.purple),
+              title: const Text('Clear Notifications'),
+              subtitle: const Text('Clear all notification history'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: _showClearNotificationsDialog,
+            ),
+
+            const Divider(),
+
+            // Task History Button
+            ListTile(
+              leading: const Icon(Icons.task_alt, color: Colors.green),
+              title: const Text('Task History'),
+              subtitle: const Text('View and manage currency monitoring tasks'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: _showTaskHistoryDialog,
+            ),
+
+            const Divider(),
+
+            // Reset App Button
+            ListTile(
+              leading: const Icon(Icons.refresh, color: Colors.blue),
+              title: const Text('Reset App'),
+              subtitle: const Text(
+                'Reset all app data and settings to default',
+              ),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: _showResetAppDialog,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -4306,6 +5715,265 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             );
           },
+        );
+      },
+    );
+  }
+
+  Widget _buildFavoriteCurrenciesSection() {
+    final appSettings = Provider.of<AppSettings>(context, listen: false);
+    final favoriteCurrencies = appSettings.favoriteCurrencies;
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.star, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                const Text(
+                  'Favorite Currencies',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const Spacer(),
+                Text(
+                  '${favoriteCurrencies.length}/4',
+                  style: TextStyle(
+                    color: Theme.of(context).hintColor,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (favoriteCurrencies.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.star_outline,
+                      color: Theme.of(context).hintColor,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'No favorite currencies selected',
+                      style: TextStyle(
+                        color: Theme.of(context).hintColor,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children:
+                    favoriteCurrencies.map((currencyCode) {
+                      return Chip(
+                        avatar: const Icon(
+                          Icons.star,
+                          color: Colors.amber,
+                          size: 16,
+                        ),
+                        label: Text(currencyCode),
+                        onDeleted: () {
+                          appSettings.removeFavoriteCurrency(currencyCode);
+                          setState(() {});
+                        },
+                        deleteIcon: const Icon(Icons.close, size: 16),
+                      );
+                    }).toList(),
+              ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed:
+                  favoriteCurrencies.length >= 4
+                      ? null
+                      : () => _showFavoriteCurrencySelector(context),
+              icon: const Icon(Icons.add),
+              label: Text(
+                favoriteCurrencies.length >= 4
+                    ? 'Maximum 4 favorites reached'
+                    : 'Add Favorite Currency',
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showFavoriteCurrencySelector(BuildContext context) {
+    final appSettings = Provider.of<AppSettings>(context, listen: false);
+    final favoriteCurrencies = appSettings.favoriteCurrencies;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.7,
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(top: 12, bottom: 16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).dividerColor,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    const Text(
+                      'Select Favorite Currency',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${favoriteCurrencies.length}/4',
+                      style: TextStyle(color: Theme.of(context).hintColor),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: FutureBuilder<List<Currency>>(
+                  future: CurrencyService.loadCurrencies(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text(
+                          'Error loading currencies: ${snapshot.error}',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      );
+                    }
+
+                    final currencies = snapshot.data ?? [];
+                    final availableCurrencies =
+                        currencies.where((currency) {
+                          return currency.status == 'active' &&
+                              !favoriteCurrencies.contains(currency.code);
+                        }).toList();
+
+                    if (availableCurrencies.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.star_outline,
+                              size: 64,
+                              color: Theme.of(context).hintColor,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No more currencies available',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).hintColor,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'All active currencies are already in your favorites',
+                              style: TextStyle(
+                                color: Theme.of(context).hintColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: availableCurrencies.length,
+                      itemBuilder: (context, index) {
+                        final currency = availableCurrencies[index];
+                        return ListTile(
+                          leading: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primary.withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Text(
+                                currency.flag,
+                                style: const TextStyle(fontSize: 20),
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            currency.code,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Text(currency.name),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.star_outline),
+                            onPressed: () {
+                              appSettings.addFavoriteCurrency(currency.code);
+                              setState(() {});
+                              Navigator.pop(context);
+                            },
+                          ),
+                          onTap: () {
+                            appSettings.addFavoriteCurrency(currency.code);
+                            setState(() {});
+                            Navigator.pop(context);
+                          },
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         );
       },
     );

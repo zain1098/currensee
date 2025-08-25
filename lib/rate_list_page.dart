@@ -9,6 +9,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'main.dart'; // For CustomAppBar
 import 'news_page.dart';
 import 'trend_chart.dart';
+import 'task_page.dart';
 import 'world_clock.dart';
 import 'package:provider/provider.dart';
 import 'calculator_page.dart';
@@ -343,15 +344,48 @@ class _RateListPageState extends State<RateListPage> {
   Future<void> _loadCurrenciesFromDatabase() async {
     try {
       print('DEBUG: Starting to load currencies from database...');
-      final currencies = await CurrencyService.loadCurrencies();
-      print('DEBUG: CurrencyService returned ${currencies.length} currencies');
+      final loadedCurrencies = await CurrencyService.loadCurrencies();
+      print(
+        'DEBUG: CurrencyService returned ${loadedCurrencies.length} currencies',
+      );
+
+      // Get favorite currencies from app settings
+      final appSettings = Provider.of<AppSettings>(context, listen: false);
+      final favoriteCurrencies = appSettings.favoriteCurrencies;
+
+      // Sort currencies: favorites first, then others
+      final sortedCurrencies = <Currency>[];
+
+      // Add favorite currencies first
+      for (final favoriteCode in favoriteCurrencies) {
+        try {
+          final favoriteCurrency = loadedCurrencies.firstWhere(
+            (c) => c.code == favoriteCode,
+          );
+          sortedCurrencies.add(favoriteCurrency);
+        } catch (e) {
+          // Currency not found, skip it
+          print(
+            'Favorite currency $favoriteCode not found in loaded currencies',
+          );
+        }
+      }
+
+      // Add remaining currencies
+      for (final currency in loadedCurrencies) {
+        if (!favoriteCurrencies.contains(currency.code)) {
+          sortedCurrencies.add(currency);
+        }
+      }
 
       setState(() {
-        _currencies = currencies;
+        _currencies = sortedCurrencies;
         // Update all currencies list with database currencies
-        _allCurrencies = currencies.map((c) => c.code).toList();
+        _allCurrencies = sortedCurrencies.map((c) => c.code).toList();
       });
-      print('DEBUG: Loaded ${currencies.length} currencies from database');
+      print(
+        'DEBUG: Loaded ${sortedCurrencies.length} currencies from database',
+      );
       print('DEBUG: Currency codes: ${_allCurrencies.take(5).toList()}...');
     } catch (e) {
       print('DEBUG: Error loading currencies from database: $e');
@@ -530,7 +564,7 @@ class _RateListPageState extends State<RateListPage> {
           content: Text(
             'Cannot set alerts for ${currency['name']} - Currency is temporarily blocked by team',
           ),
-          backgroundColor: Colors.orange,
+          backgroundColor: Theme.of(context).colorScheme.secondary,
           duration: const Duration(seconds: 3),
         ),
       );
@@ -673,7 +707,7 @@ class _RateListPageState extends State<RateListPage> {
               content: Text(
                 'Alert set for $targetCurrency when rate is $triggerType ${targetRate.toStringAsFixed(4)}',
               ),
-              backgroundColor: Colors.green,
+              backgroundColor: Theme.of(context).colorScheme.primary,
               duration: const Duration(seconds: 3),
             ),
           );
@@ -682,7 +716,7 @@ class _RateListPageState extends State<RateListPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Failed to set alert: $error'),
-              backgroundColor: Colors.red,
+              backgroundColor: Theme.of(context).colorScheme.error,
             ),
           );
         });
@@ -790,16 +824,16 @@ class _RateListPageState extends State<RateListPage> {
       await _loadAlerts();
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Alerts checked successfully'),
-          backgroundColor: Colors.green,
+        SnackBar(
+          content: const Text('Alerts checked successfully'),
+          backgroundColor: Theme.of(context).colorScheme.primary,
         ),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error checking alerts: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
     }
@@ -979,11 +1013,14 @@ class _RateListPageState extends State<RateListPage> {
       ),
       drawer: Drawer(
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+              colors:
+                  Theme.of(context).brightness == Brightness.dark
+                      ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+                      : [const Color(0xFF1E3A8A), const Color(0xFF3B82F6)],
             ),
           ),
           child: ListView(
@@ -993,15 +1030,21 @@ class _RateListPageState extends State<RateListPage> {
               Container(
                 height: 180,
                 padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(
-                  borderRadius: BorderRadius.only(
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.only(
                     bottomLeft: Radius.circular(20),
                     bottomRight: Radius.circular(20),
                   ),
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
+                    colors:
+                        Theme.of(context).brightness == Brightness.dark
+                            ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+                            : [
+                              const Color(0xFF1E3A8A),
+                              const Color(0xFF2563EB),
+                            ],
                   ),
                 ),
                 child: Column(
@@ -1108,8 +1151,14 @@ class _RateListPageState extends State<RateListPage> {
                 onTap:
                     () => _navigateAndClose(context, const CalculatorsScreen()),
               ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.task_alt,
+                title: 'Currency Tasks',
+                onTap: () => _navigateAndClose(context, const TaskPage()),
+              ),
               const SizedBox(height: 16),
-              const Divider(color: Colors.white24, height: 1),
+              Divider(color: Theme.of(context).dividerColor, height: 1),
               const SizedBox(height: 16),
               // Settings Section
               _buildDrawerItem(
@@ -1173,7 +1222,7 @@ class _RateListPageState extends State<RateListPage> {
                     () => _navigateAndClose(context, const SupportHelpScreen()),
               ),
               const SizedBox(height: 16),
-              const Divider(color: Colors.white24, height: 1),
+              Divider(color: Theme.of(context).dividerColor, height: 1),
               const SizedBox(height: 16),
               _buildDrawerItem(
                 context,
@@ -1429,7 +1478,10 @@ class _RateListPageState extends State<RateListPage> {
                             ],
                           ),
                           trailing: IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
+                            icon: Icon(
+                              Icons.delete,
+                              color: Theme.of(context).colorScheme.error,
+                            ),
                             onPressed: () => _removeAlert(alert.id!),
                           ),
                         ),
@@ -1622,7 +1674,10 @@ class _RateListPageState extends State<RateListPage> {
                                       content: Text(
                                         '${currency['name']} is temporarily blocked by the team',
                                       ),
-                                      backgroundColor: Colors.orange,
+                                      backgroundColor:
+                                          Theme.of(
+                                            context,
+                                          ).colorScheme.secondary,
                                       duration: const Duration(seconds: 2),
                                     ),
                                   );
@@ -1861,6 +1916,11 @@ Widget _buildDrawerItem(
   required String title,
   required VoidCallback onTap,
 }) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  final textColor = isDark ? Colors.white : Colors.white;
+  final iconColor = isDark ? Colors.white : Colors.white;
+  final chevronColor = isDark ? Colors.white70 : Colors.white70;
+
   return Padding(
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     child: Material(
@@ -1869,25 +1929,31 @@ Widget _buildDrawerItem(
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        splashColor: Colors.white.withOpacity(0.1),
-        highlightColor: Colors.white.withOpacity(0.05),
+        splashColor:
+            isDark
+                ? Colors.white.withOpacity(0.1)
+                : Colors.black.withOpacity(0.1),
+        highlightColor:
+            isDark
+                ? Colors.white.withOpacity(0.05)
+                : Colors.black.withOpacity(0.05),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
           child: Row(
             children: [
-              Icon(icon, color: Colors.white, size: 24),
+              Icon(icon, color: iconColor, size: 24),
               const SizedBox(width: 16),
               Text(
                 title,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: textColor,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),
               ),
               const Spacer(),
-              const Icon(Icons.chevron_right, color: Colors.white70, size: 20),
+              Icon(Icons.chevron_right, color: chevronColor, size: 20),
             ],
           ),
         ),

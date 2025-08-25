@@ -7,6 +7,7 @@ import 'main.dart'; // For CustomAppBar
 import 'news_page.dart';
 import 'trend_chart.dart';
 import 'rate_list_page.dart';
+import 'task_page.dart';
 import 'package:provider/provider.dart';
 import 'calculator_page.dart';
 import 'setting_page.dart';
@@ -393,7 +394,7 @@ class _WorldClockPageState extends State<WorldClockPage>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${location.city} is temporarily unavailable'),
-          backgroundColor: Colors.orange,
+          backgroundColor: Theme.of(context).colorScheme.secondary,
           duration: const Duration(seconds: 3),
         ),
       );
@@ -486,7 +487,7 @@ class _WorldClockPageState extends State<WorldClockPage>
                 const SizedBox(height: 16),
                 Text(
                   _errorMessage!,
-                  style: const TextStyle(color: Colors.red),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
@@ -513,11 +514,15 @@ class _WorldClockPageState extends State<WorldClockPage>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 64, color: Colors.red),
+              Icon(Icons.error_outline, size: 64, color: Theme.of(context).colorScheme.error),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'No locations available',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).textTheme.titleLarge?.color,
+                ),
               ),
               const SizedBox(height: 8),
               const Text('Please check your internet connection'),
@@ -558,11 +563,13 @@ class _WorldClockPageState extends State<WorldClockPage>
       ),
       drawer: Drawer(
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+              colors: Theme.of(context).brightness == Brightness.dark
+                  ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+                  : [const Color(0xFF1E3A8A), const Color(0xFF3B82F6)],
             ),
           ),
           child: ListView(
@@ -572,15 +579,17 @@ class _WorldClockPageState extends State<WorldClockPage>
               Container(
                 height: 180,
                 padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(
-                  borderRadius: BorderRadius.only(
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.only(
                     bottomLeft: Radius.circular(20),
                     bottomRight: Radius.circular(20),
                   ),
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
+                    colors: Theme.of(context).brightness == Brightness.dark
+                        ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+                        : [const Color(0xFF1E3A8A), const Color(0xFF2563EB)],
                   ),
                 ),
                 child: Column(
@@ -687,8 +696,14 @@ class _WorldClockPageState extends State<WorldClockPage>
                 onTap:
                     () => _navigateAndClose(context, const CalculatorsScreen()),
               ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.task_alt,
+                title: 'Currency Tasks',
+                onTap: () => _navigateAndClose(context, const TaskPage()),
+              ),
               const SizedBox(height: 16),
-              const Divider(color: Colors.white24, height: 1),
+              Divider(color: Theme.of(context).dividerColor, height: 1),
               const SizedBox(height: 16),
               // Settings Section
               _buildDrawerItem(
@@ -752,7 +767,7 @@ class _WorldClockPageState extends State<WorldClockPage>
                     () => _navigateAndClose(context, const SupportHelpScreen()),
               ),
               const SizedBox(height: 16),
-              const Divider(color: Colors.white24, height: 1),
+              Divider(color: Theme.of(context).dividerColor, height: 1),
               const SizedBox(height: 16),
               _buildDrawerItem(
                 context,
@@ -803,7 +818,7 @@ class _WorldClockPageState extends State<WorldClockPage>
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Theme.of(context).shadowColor.withOpacity(0.1),
                       blurRadius: 15,
                       offset: const Offset(0, -5),
                     ),
@@ -956,16 +971,19 @@ class _WorldClockPageState extends State<WorldClockPage>
                                                     return FlagService.getFlagWidget(
                                                       location.countryCode!,
                                                       size: FlagSize.small,
+                                                      errorWidget: Text(
+                                                        location.flag,
+                                                        style: TextStyle(
+                                                          fontSize: isSelected ? 24 : 20,
+                                                        ),
+                                                      ),
                                                     );
                                                   } catch (e) {
                                                     // Fallback to emoji flag if FlagService fails
                                                     return Text(
                                                       location.flag,
                                                       style: TextStyle(
-                                                        fontSize:
-                                                            isSelected
-                                                                ? 24
-                                                                : 20,
+                                                        fontSize: isSelected ? 24 : 20,
                                                       ),
                                                     );
                                                   }
@@ -978,20 +996,15 @@ class _WorldClockPageState extends State<WorldClockPage>
                                             location.flag,
                                             style: TextStyle(
                                               fontSize: isSelected ? 26 : 22,
-                                              shadows:
-                                                  isSelected
-                                                      ? [
-                                                        Shadow(
-                                                          color: Colors.black
-                                                              .withOpacity(0.2),
-                                                          blurRadius: 2,
-                                                          offset: const Offset(
-                                                            0,
-                                                            1,
-                                                          ),
-                                                        ),
-                                                      ]
-                                                      : null,
+                                              shadows: isSelected
+                                                  ? [
+                                                    Shadow(
+                                                      color: Colors.black.withOpacity(0.2),
+                                                      blurRadius: 2,
+                                                      offset: const Offset(0, 1),
+                                                    ),
+                                                  ]
+                                                  : null,
                                             ),
                                           ),
                                         const SizedBox(height: 6),
@@ -1074,7 +1087,7 @@ class _WorldClockPageState extends State<WorldClockPage>
                 child: GestureDetector(
                   onTap: _toggleAddLocation,
                   child: Container(
-                    color: Colors.black54,
+                    color: Theme.of(context).shadowColor.withOpacity(0.5),
                     child: Center(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -1167,12 +1180,8 @@ class _WorldClockPageState extends State<WorldClockPage>
                                                               content: Text(
                                                                 '${location.city} is temporarily unavailable',
                                                               ),
-                                                              backgroundColor:
-                                                                  Colors.orange,
-                                                              duration:
-                                                                  const Duration(
-                                                                    seconds: 3,
-                                                                  ),
+                                                              backgroundColor: Theme.of(context).colorScheme.secondary,
+                                                              duration: const Duration(seconds: 3),
                                                             ),
                                                           );
                                                         },
@@ -1510,18 +1519,17 @@ class _ClockCard extends StatelessWidget {
                               try {
                                 return FlagService.getFlagWidget(
                                   location.countryCode!,
-                                  size:
-                                      isMainClock
-                                          ? FlagSize.medium
-                                          : FlagSize.small,
+                                  size: isMainClock ? FlagSize.medium : FlagSize.small,
+                                  errorWidget: Text(
+                                    location.flag,
+                                    style: TextStyle(fontSize: isMainClock ? 32 : 28),
+                                  ),
                                 );
                               } catch (e) {
                                 // Fallback to emoji flag if FlagService fails
                                 return Text(
                                   location.flag,
-                                  style: TextStyle(
-                                    fontSize: isMainClock ? 32 : 28,
-                                  ),
+                                  style: TextStyle(fontSize: isMainClock ? 32 : 28),
                                 );
                               }
                             },
@@ -1767,39 +1775,42 @@ class _SearchResultItem extends StatelessWidget {
     final isInactive = location.status != 'active';
 
     return ListTile(
-      leading:
-          location.countryCode != null
-              ? Container(
-                width: 24,
-                height: 18,
-                constraints: const BoxConstraints(maxWidth: 24, maxHeight: 18),
-                child: ClipRect(
-                  child: Builder(
-                    builder: (context) {
-                      try {
-                        return FlagService.getFlagWidget(
-                          location.countryCode!,
-                          size: FlagSize.small,
-                        );
-                      } catch (e) {
-                        // Fallback to emoji flag if FlagService fails
-                        return Text(
+      leading: location.countryCode != null
+          ? Container(
+              width: 24,
+              height: 18,
+              constraints: const BoxConstraints(maxWidth: 24, maxHeight: 18),
+              child: ClipRect(
+                child: Builder(
+                  builder: (context) {
+                    try {
+                      return FlagService.getFlagWidget(
+                        location.countryCode!,
+                        size: FlagSize.small,
+                        errorWidget: Text(
                           location.flag,
                           style: const TextStyle(fontSize: 18),
-                        );
-                      }
-                    },
-                  ),
+                        ),
+                      );
+                    } catch (e) {
+                      // Fallback to emoji flag if FlagService fails
+                      return Text(
+                        location.flag,
+                        style: const TextStyle(fontSize: 18),
+                      );
+                    }
+                  },
                 ),
-              )
-              : Text(location.flag, style: const TextStyle(fontSize: 20)),
+              ),
+            )
+          : Text(location.flag, style: const TextStyle(fontSize: 20)),
       title: Row(
         children: [
           Expanded(
             child: Text(
               location.city,
               style: TextStyle(
-                color: isInactive ? Colors.grey : null,
+                color: isInactive ? Theme.of(context).disabledColor : null,
                 decoration: isInactive ? TextDecoration.lineThrough : null,
               ),
             ),
@@ -1808,15 +1819,15 @@ class _SearchResultItem extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.2),
+                color: Theme.of(context).colorScheme.secondary.withOpacity(0.2),
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: Colors.orange.withOpacity(0.5)),
+                border: Border.all(color: Theme.of(context).colorScheme.secondary.withOpacity(0.5)),
               ),
               child: Text(
                 'BLOCKED',
                 style: TextStyle(
                   fontSize: 10,
-                  color: Colors.orange[700],
+                  color: Theme.of(context).colorScheme.secondary,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -1825,18 +1836,17 @@ class _SearchResultItem extends StatelessWidget {
       ),
       subtitle: Text(
         'UTC${location.utcOffset}',
-        style: TextStyle(color: isInactive ? Colors.grey : null),
+        style: TextStyle(color: isInactive ? Theme.of(context).disabledColor : null),
       ),
-      trailing:
-          isInactive
-              ? const Icon(Icons.block, color: Colors.orange)
-              : isAdded
-              ? const Icon(Icons.check, color: Colors.green)
-              : const Icon(Icons.add),
+      trailing: isInactive
+          ? Icon(Icons.block, color: Theme.of(context).colorScheme.secondary)
+          : isAdded
+              ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
+              : Icon(Icons.add, color: Theme.of(context).iconTheme.color),
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      tileColor: isInactive ? Colors.grey.withOpacity(0.1) : null,
+      tileColor: isInactive ? Theme.of(context).disabledColor.withOpacity(0.1) : null,
     );
   }
 }
@@ -1847,6 +1857,11 @@ Widget _buildDrawerItem(
   required String title,
   required VoidCallback onTap,
 }) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  final textColor = isDark ? Colors.white : Colors.white;
+  final iconColor = isDark ? Colors.white : Colors.white;
+  final chevronColor = isDark ? Colors.white70 : Colors.white70;
+  
   return Padding(
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     child: Material(
@@ -1855,25 +1870,29 @@ Widget _buildDrawerItem(
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        splashColor: Colors.white.withOpacity(0.1),
-        highlightColor: Colors.white.withOpacity(0.05),
+        splashColor: isDark 
+            ? Colors.white.withOpacity(0.1) 
+            : Colors.black.withOpacity(0.1),
+        highlightColor: isDark 
+            ? Colors.white.withOpacity(0.05) 
+            : Colors.black.withOpacity(0.05),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
           child: Row(
             children: [
-              Icon(icon, color: Colors.white, size: 24),
+              Icon(icon, color: iconColor, size: 24),
               const SizedBox(width: 16),
               Text(
                 title,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: textColor,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),
               ),
               const Spacer(),
-              const Icon(Icons.chevron_right, color: Colors.white70, size: 20),
+              Icon(Icons.chevron_right, color: chevronColor, size: 20),
             ],
           ),
         ),

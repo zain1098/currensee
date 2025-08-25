@@ -34,6 +34,90 @@ const transporter = nodemailer.createTransport({
 // this will be the maximum concurrent request count.
 functions.setGlobalOptions({maxInstances: 10});
 
+// Background function to check for app updates every 30 minutes
+exports.checkAppUpdates = functions.pubsub
+    .schedule("every 30 minutes")
+    .onRun(async (context) => {
+      try {
+        console.log("Starting app update check...");
+
+        // Get latest version from app_versions collection
+        const versionDoc = await admin.firestore()
+            .collection("app_versions")
+            .doc("current")
+            .get();
+
+        if (!versionDoc.exists) {
+          console.log("No version document found");
+          return null;
+        }
+
+        const latestVersion = versionDoc.data();
+        console.log(`Latest version: ${latestVersion.version}`);
+
+        // Get all users who should be notified
+        const usersSnapshot = await admin.firestore()
+            .collection("currentUser")
+            .get();
+
+        if (usersSnapshot.empty) {
+          console.log("No users found");
+          return null;
+        }
+
+        // Send notifications to all users
+        const notificationPromises = usersSnapshot.docs.map(async (userDoc) => {
+          const userData = userDoc.data();
+          const fcmToken = userData.fcmToken;
+
+          if (fcmToken) {
+            try {
+              const message = {
+                token: fcmToken,
+                notification: {
+                  title: latestVersion.title || "App Update Available",
+                  body: `Version ${latestVersion.version} is available. Open app to download!`,
+                },
+                data: {
+                  type: "app_update",
+                  version: latestVersion.version,
+                  downloadUrl: latestVersion.downloadUrl || "",
+                },
+                android: {
+                  priority: "high",
+                  notification: {
+                    channelId: "app_updates",
+                    priority: "high",
+                    defaultSound: true,
+                  },
+                },
+                apns: {
+                  payload: {
+                    aps: {
+                      sound: "default",
+                      badge: 1,
+                    },
+                  },
+                },
+              };
+
+              await admin.messaging().send(message);
+              console.log(`Notification sent to user: ${userData.email}`);
+            } catch (error) {
+              console.error(`Error sending notification to user ${userData.email}:`, error);
+            }
+          }
+        });
+
+        await Promise.all(notificationPromises);
+        console.log("App update check completed");
+        return null;
+      } catch (error) {
+        console.error("Error in app update check:", error);
+        return null;
+      }
+    });
+
 // Background function to check currency alerts every 5 minutes
 exports.checkCurrencyAlerts = functions.pubsub
     .schedule("every 5 minutes")

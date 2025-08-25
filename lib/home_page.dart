@@ -282,8 +282,37 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
       final loadedCurrencies = await CurrencyService.loadActiveCurrencies();
       print('Loaded ${loadedCurrencies.length} currencies from Firebase');
 
+      // Get favorite currencies from app settings
+      final appSettings = Provider.of<AppSettings>(context, listen: false);
+      final favoriteCurrencies = appSettings.favoriteCurrencies;
+
+      // Sort currencies: favorites first, then others
+      final sortedCurrencies = <Currency>[];
+
+      // Add favorite currencies first
+      for (final favoriteCode in favoriteCurrencies) {
+        try {
+          final favoriteCurrency = loadedCurrencies.firstWhere(
+            (c) => c.code == favoriteCode,
+          );
+          sortedCurrencies.add(favoriteCurrency);
+        } catch (e) {
+          // Currency not found, skip it
+          print(
+            'Favorite currency $favoriteCode not found in loaded currencies',
+          );
+        }
+      }
+
+      // Add remaining currencies
+      for (final currency in loadedCurrencies) {
+        if (!favoriteCurrencies.contains(currency.code)) {
+          sortedCurrencies.add(currency);
+        }
+      }
+
       setState(() {
-        currencies = loadedCurrencies;
+        currencies = sortedCurrencies;
       });
 
       // Set default currencies with robust fallback logic
@@ -597,7 +626,7 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
               ? Center(
                 child: Text(
                   'Error: $errorMessage',
-                  style: const TextStyle(color: Colors.red),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               )
               : SingleChildScrollView(
@@ -629,7 +658,9 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.blue.withOpacity(0.3),
+                                color: Theme.of(
+                                  context,
+                                ).shadowColor.withOpacity(0.3),
                                 blurRadius: 20,
                                 spreadRadius: 2,
                                 offset: const Offset(0, 10),
@@ -645,7 +676,9 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                                   Text(
                                     'AMOUNT TO CONVERT',
                                     style: TextStyle(
-                                      color: Colors.white.withOpacity(0.8),
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onPrimary.withOpacity(0.8),
                                       fontSize: 12,
                                       fontWeight: FontWeight.w500,
                                     ),
@@ -672,9 +705,12 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                                         enablePulsingAnimation: true,
                                         child: IconButton(
                                           key: _calculatorKey,
-                                          icon: const Icon(
+                                          icon: Icon(
                                             Icons.calculate,
-                                            color: Colors.white,
+                                            color:
+                                                Theme.of(
+                                                  context,
+                                                ).colorScheme.onPrimary,
                                             size: 24,
                                           ),
                                           onPressed: () {
@@ -711,9 +747,13 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                                   children: [
                                     Text(
                                       fromCurrency?.symbol ?? '\$',
-                                      style: const TextStyle(
-                                        color: Colors.black,
-                                        fontSize: 28, // Reduced font size
+                                      style: TextStyle(
+                                        color:
+                                            Theme.of(context).brightness ==
+                                                    Brightness.dark
+                                                ? Colors.white
+                                                : Colors.black,
+                                        fontSize: 28,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
@@ -722,18 +762,26 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                                       child: TextField(
                                         controller: amountController,
                                         keyboardType: TextInputType.number,
-                                        style: const TextStyle(
-                                          color: Colors.black,
-                                          fontSize: 28, // Reduced font size
+                                        style: TextStyle(
+                                          color:
+                                              Theme.of(context).brightness ==
+                                                      Brightness.dark
+                                                  ? Colors.white
+                                                  : Colors.black,
+                                          fontSize: 28,
                                           fontWeight: FontWeight.bold,
                                           height: 1.2,
                                         ),
-                                        decoration: const InputDecoration(
+                                        decoration: InputDecoration(
                                           border: InputBorder.none,
                                           hintText: '0.00',
                                           hintStyle: TextStyle(
-                                            color: Colors.black54,
-                                            fontSize: 28, // Reduced font size
+                                            color:
+                                                Theme.of(context).brightness ==
+                                                        Brightness.dark
+                                                    ? Colors.white54
+                                                    : Colors.black54,
+                                            fontSize: 28,
                                           ),
                                         ),
                                         onTap: () {
@@ -757,7 +805,9 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                               const SizedBox(height: 8), // Reduced spacing
                               Container(
                                 height: 1,
-                                color: Colors.white.withOpacity(0.2),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onPrimary.withOpacity(0.2),
                               ),
                               const SizedBox(height: 8), // Reduced spacing
                               Row(
@@ -767,7 +817,9 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                                   Text(
                                     'CONVERTED AMOUNT',
                                     style: TextStyle(
-                                      color: Colors.white.withOpacity(0.8),
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onPrimary.withOpacity(0.8),
                                       fontSize: 12,
                                       fontWeight: FontWeight.w500,
                                     ),
@@ -780,9 +832,12 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                                       children: [
                                         Text(
                                           '${convertedAmount.toStringAsFixed(2)} ${toCurrency?.code ?? ''}',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 18, // Reduced font size
+                                          style: TextStyle(
+                                            color:
+                                                Theme.of(
+                                                  context,
+                                                ).colorScheme.onPrimary,
+                                            fontSize: 18,
                                             fontWeight: FontWeight.bold,
                                           ),
                                           overflow: TextOverflow.ellipsis,
@@ -793,10 +848,11 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                                         Text(
                                           '${_numberToWords(convertedAmount.toInt())} ${toCurrency?.symbol ?? ''}',
                                           style: TextStyle(
-                                            color: Colors.white.withOpacity(
-                                              0.8,
-                                            ),
-                                            fontSize: 10, // Reduced font size
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onPrimary
+                                                .withOpacity(0.8),
+                                            fontSize: 10,
                                             fontWeight: FontWeight.w500,
                                           ),
                                           overflow: TextOverflow.ellipsis,
@@ -867,7 +923,9 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.blue.withOpacity(0.3),
+                                    color: Theme.of(
+                                      context,
+                                    ).shadowColor.withOpacity(0.3),
                                     blurRadius: 8,
                                     spreadRadius: 2,
                                     offset: const Offset(0, 4),
@@ -875,10 +933,11 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                                 ],
                               ),
                               child: IconButton(
-                                icon: const Icon(
+                                icon: Icon(
                                   Icons.swap_vert,
                                   size: 32,
-                                  color: Colors.white,
+                                  color:
+                                      Theme.of(context).colorScheme.onPrimary,
                                 ),
                                 onPressed: swapCurrencies,
                               ),
@@ -928,7 +987,7 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
           if (_showSuccess)
             Positioned.fill(
               child: Container(
-                color: Colors.black.withOpacity(0.3),
+                color: Theme.of(context).shadowColor.withOpacity(0.3),
                 child: Center(
                   child: Lottie.asset(
                     'assets/Login Success.json',
@@ -940,12 +999,12 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                         width: 200,
                         height: 200,
                         decoration: BoxDecoration(
-                          color: Colors.green,
+                          color: Theme.of(context).colorScheme.primary,
                           borderRadius: BorderRadius.circular(100),
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.check_circle,
-                          color: Colors.white,
+                          color: Theme.of(context).colorScheme.onPrimary,
                           size: 100,
                         ),
                       );
@@ -960,9 +1019,9 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
             left: 20,
             child: FeatureDiscovery(
               child: IconButton(
-                icon: const Icon(
+                icon: Icon(
                   Icons.help_outline,
-                  color: Colors.blue,
+                  color: Theme.of(context).colorScheme.primary,
                   size: 28,
                 ),
                 onPressed: () async {
@@ -999,8 +1058,10 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
               decoration: BoxDecoration(
                 color:
                     ConnectivityService().isConnected
-                        ? Colors.green.withOpacity(0.9)
-                        : Colors.orange.withOpacity(0.9),
+                        ? Theme.of(context).colorScheme.primary.withOpacity(0.9)
+                        : Theme.of(
+                          context,
+                        ).colorScheme.secondary.withOpacity(0.9),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -1010,14 +1071,14 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                     ConnectivityService().isConnected
                         ? Icons.wifi
                         : Icons.wifi_off,
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.onPrimary,
                     size: 16,
                   ),
                   const SizedBox(width: 4),
                   Text(
                     ConnectivityService().getConnectivityStatus(),
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimary,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1093,11 +1154,11 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                                 end: Alignment.bottomRight,
                               )
                               : null,
-                      color: isSelected ? null : Colors.white,
+                      color: isSelected ? null : Theme.of(context).cardColor,
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.grey.withOpacity(0.2),
+                          color: Theme.of(context).shadowColor.withOpacity(0.2),
                           blurRadius: 8,
                           spreadRadius: 2,
                           offset: const Offset(0, 4),
@@ -1117,27 +1178,50 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
-                              color: isSelected ? Colors.white : Colors.black,
+                              color:
+                                  isSelected
+                                      ? Theme.of(context).colorScheme.onPrimary
+                                      : Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? Colors.white
+                                      : Colors.black,
                             ),
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 4),
                           Flexible(
-                            child: Text(
-                              '1 ${fromCurrency?.code} = ${rate.toStringAsFixed(4)}',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color:
-                                    isSelected
-                                        ? Colors.white70
-                                        : (Theme.of(context).brightness ==
+                            child: Column(
+                              children: [
+                                Text(
+                                  '1 ${fromCurrency?.code} = ${rate.toStringAsFixed(4)}',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color:
+                                        isSelected
+                                            ? Theme.of(context)
+                                                .colorScheme
+                                                .onPrimary
+                                                .withOpacity(0.7)
+                                            : Theme.of(context).brightness ==
                                                 Brightness.dark
                                             ? Colors.grey[300]
-                                            : Colors.grey[700]),
-                              ),
-                              textAlign: TextAlign.center,
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 2,
+                                            : Colors.grey[700],
+                                  ),
+                                  textAlign: TextAlign.center,
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 2,
+                                ),
+                                // Show star icon for favorite currencies
+                                if (Provider.of<AppSettings>(
+                                  context,
+                                  listen: false,
+                                ).isFavoriteCurrency(curr.code))
+                                  Icon(
+                                    Icons.star,
+                                    color: Colors.amber,
+                                    size: 12,
+                                  ),
+                              ],
                             ),
                           ),
                         ],
@@ -1208,9 +1292,9 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
               const SizedBox(height: 12), // Reduced spacing
               Text(
                 'Rates updated: $lastUpdated',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey,
+                  color: Theme.of(context).hintColor,
                   fontStyle: FontStyle.italic,
                 ),
               ),
@@ -1258,7 +1342,7 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                       const SizedBox(height: 4), // Reduced spacing
                       Text(
                         'Code: ${fromCurrency!.code} | Symbol: ${fromCurrency!.symbol}',
-                        style: const TextStyle(color: Colors.grey),
+                        style: TextStyle(color: Theme.of(context).hintColor),
                       ),
                     ],
                   ),
@@ -1287,7 +1371,7 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                       const SizedBox(height: 4), // Reduced spacing
                       Text(
                         'Code: ${toCurrency!.code} | Symbol: ${toCurrency!.symbol}',
-                        style: const TextStyle(color: Colors.grey),
+                        style: TextStyle(color: Theme.of(context).hintColor),
                       ),
                     ],
                   ),
@@ -1326,13 +1410,21 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
             final rate = (1 / fromRate) * toRate;
 
             return Chip(
-              backgroundColor: Colors.blue[50],
+              backgroundColor:
+                  Theme.of(context).brightness == Brightness.dark
+                      ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
+                      : Colors.blue[50],
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
               label: Text(
                 '1 ${pair['from']} = ${rate.toStringAsFixed(2)} ${pair['to']}',
-                style: TextStyle(color: Colors.blue[800]),
+                style: TextStyle(
+                  color:
+                      Theme.of(context).brightness == Brightness.dark
+                          ? Theme.of(context).colorScheme.primary
+                          : Colors.blue[800],
+                ),
               ),
             );
           }).toList(),
@@ -1512,7 +1604,10 @@ class _CalculatorDialogState extends State<CalculatorDialog> {
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: _result == 'Error' ? Colors.red : Colors.green,
+                    color:
+                        _result == 'Error'
+                            ? Theme.of(context).colorScheme.error
+                            : Theme.of(context).colorScheme.primary,
                   ),
                 ),
               ),
@@ -1531,18 +1626,30 @@ class _CalculatorDialogState extends State<CalculatorDialog> {
                     double fontSize = 24;
 
                     if (key == 'C' || key == '⌫') {
-                      bgColor = Colors.red.shade100;
-                      txtColor = Colors.red;
+                      bgColor = Theme.of(
+                        context,
+                      ).colorScheme.error.withOpacity(0.1);
+                      txtColor = Theme.of(context).colorScheme.error;
                     } else if (key == '=') {
-                      bgColor = Colors.green.shade100;
-                      txtColor = Colors.green.shade800;
+                      bgColor = Theme.of(
+                        context,
+                      ).colorScheme.primary.withOpacity(0.1);
+                      txtColor = Theme.of(context).colorScheme.primary;
                       fontSize = 28;
                     } else if (['+', '-', '*', '/', '%'].contains(key)) {
-                      bgColor = Colors.blue.shade50;
-                      txtColor = Colors.blue.shade800;
+                      bgColor = Theme.of(
+                        context,
+                      ).colorScheme.secondary.withOpacity(0.1);
+                      txtColor = Theme.of(context).colorScheme.secondary;
                     } else {
-                      bgColor = Colors.grey.shade100;
-                      txtColor = Colors.black;
+                      bgColor =
+                          Theme.of(context).brightness == Brightness.dark
+                              ? Colors.grey[800]!
+                              : Colors.grey[100]!;
+                      txtColor =
+                          Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white
+                              : Colors.black;
                     }
 
                     return ElevatedButton(
@@ -1578,15 +1685,18 @@ class _CalculatorDialogState extends State<CalculatorDialog> {
                         }
                         : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4A6CD1),
+                  backgroundColor: Theme.of(context).colorScheme.primary,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text(
+                child: Text(
                   'Apply to Amount',
-                  style: TextStyle(fontSize: 18, color: Colors.white),
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Theme.of(context).colorScheme.onPrimary,
+                  ),
                 ),
               ),
             ),

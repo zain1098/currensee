@@ -1,5 +1,6 @@
 // currency_chat_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'chat_service.dart';
 import 'voice_service.dart';
@@ -38,33 +39,30 @@ class _CurrencyChatScreenState extends State<CurrencyChatScreen> {
       _messages.add({
         'text': """🎉 **Welcome to CurrencyPro Ultra AI!**
 
-I'm your advanced financial intelligence assistant. Here's what I can help you with:
+Hi there! I'm your friendly financial assistant. Let's make finance fun and easy! 😊
 
-💱 **Currency Operations:**
-• Real-time exchange rates
-• Multi-currency conversions
-• Historical rate analysis
-• Conversion fee calculations
-
-📊 **Market Intelligence:**
-• Live crypto prices (BTC, ETH)
+💱 **What I can help you with:**
+• Real-time currency rates and conversions
+• Live crypto prices (Bitcoin, Ethereum)
 • Gold and commodity rates
-• Market trend analysis
-• Economic indicators
+• Market trends and insights
+• Investment advice and analysis
 
 💡 **Smart Features:**
-• Voice input support
-• Conversation memory
+• Voice conversations (just tap the mic!)
+• Remembers our chats
 • Personalized insights
-• Investment guidance
+• Casual conversation too!
 
-Try asking me anything like:
+🎯 **Try asking me:**
 • "Convert 1000 USD to PKR"
-• "Show me current Bitcoin price"
-• "What's the EUR/USD trend?"
-• "Give me market insights"
+• "How's Bitcoin doing today?"
+• "Tell me a financial joke"
+• "What's the weather like?" (I'll redirect to financial weather! 😄)
 
-I remember our conversations and adapt to your preferences! 🚀""",
+I'm here to chat about anything, but I'm especially good with money stuff! 💰
+
+What would you like to know? 🚀""",
         'isUser': false,
         'isWelcome': true,
       });
@@ -79,64 +77,56 @@ I remember our conversations and adapt to your preferences! 🚀""",
     return Scaffold(
       appBar: AppBar(
         title: const Text('CurrencyPro Ultra'),
-        backgroundColor: const Color(0xFF1E3A8A),
-        foregroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
         elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.insights),
-            onPressed: () => _toggleInsights(chatService),
-            tooltip: 'Quick Insights',
-          ),
-          IconButton(
-            icon: const Icon(Icons.analytics),
-            onPressed: () => _showConversationStats(chatService),
-            tooltip: 'Conversation Stats',
-          ),
-          PopupMenuButton<String>(
-            itemBuilder:
-                (context) => [
-                  const PopupMenuItem(
-                    value: 'history',
-                    child: Row(
-                      children: [
-                        Icon(Icons.history, color: Color(0xFF1E3A8A)),
-                        SizedBox(width: 8),
-                        Text('Clear History'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'settings',
-                    child: Row(
-                      children: [
-                        Icon(Icons.settings, color: Color(0xFF1E3A8A)),
-                        SizedBox(width: 8),
-                        Text('AI Settings'),
-                      ],
-                    ),
-                  ),
-                ],
-            onSelected: (value) {
-              switch (value) {
-                case 'history':
-                  _clearChat(chatService);
-                  break;
-                case 'settings':
-                  _showAISettings();
-                  break;
-              }
-            },
-          ),
-          IconButton(
-            icon:
-                _isListening
-                    ? const Icon(Icons.mic, color: Colors.red, size: 30)
-                    : const Icon(Icons.mic_none),
-            onPressed: () => _toggleListening(voiceService, chatService),
-            tooltip: 'Voice input',
-          ),
-        ],
+                 actions: [
+           IconButton(
+             icon: const Icon(Icons.insights),
+             onPressed: () => _toggleInsights(chatService),
+             tooltip: 'Quick Insights',
+           ),
+           IconButton(
+             icon: const Icon(Icons.analytics),
+             onPressed: () => _showConversationStats(chatService),
+             tooltip: 'Conversation Stats',
+           ),
+           PopupMenuButton<String>(
+             itemBuilder:
+                 (context) => [
+                   const PopupMenuItem(
+                     value: 'history',
+                     child: Row(
+                       children: [
+                         Icon(Icons.history),
+                         SizedBox(width: 8),
+                         Text('Clear History'),
+                       ],
+                     ),
+                   ),
+                   const PopupMenuItem(
+                     value: 'settings',
+                     child: Row(
+                       children: [
+                         Icon(Icons.settings),
+                         SizedBox(width: 8),
+                         Text('AI Settings'),
+                       ],
+                     ),
+                   ),
+                 ],
+             onSelected: (value) {
+               switch (value) {
+                 case 'history':
+                   _clearChat(chatService);
+                   break;
+                 case 'settings':
+                   _showAISettings();
+                   break;
+               }
+             },
+           ),
+         ],
       ),
       body: Column(
         children: [
@@ -144,18 +134,21 @@ I remember our conversations and adapt to your preferences! 🚀""",
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+                  colors: [
+                    Theme.of(context).colorScheme.primary,
+                    Theme.of(context).colorScheme.secondary,
+                  ],
                 ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     '💡 Quick Insights',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.onPrimary,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
@@ -165,13 +158,18 @@ I remember our conversations and adapt to your preferences! 🚀""",
                     future: chatService.getQuickInsights(),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(
-                          child: CircularProgressIndicator(color: Colors.white),
+                        return Center(
+                          child: CircularProgressIndicator(
+                            color: Theme.of(context).colorScheme.onPrimary,
+                          ),
                         );
                       }
                       return Text(
                         snapshot.data ?? 'Loading insights...',
-                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onPrimary,
+                          fontSize: 14,
+                        ),
                       );
                     },
                   ),
@@ -199,6 +197,7 @@ I remember our conversations and adapt to your preferences! 🚀""",
   Widget _buildMessage(Map<String, dynamic> message) {
     final isUser = message['isUser'] ?? false;
     final isWelcome = message['isWelcome'] ?? false;
+    final voiceService = Provider.of<VoiceService>(context);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -209,35 +208,279 @@ I remember our conversations and adapt to your preferences! 🚀""",
             Container(
               width: 32,
               height: 32,
-              decoration: const BoxDecoration(
-                color: Color(0xFF1E3A8A),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.smart_toy,
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.onPrimary,
                 size: 20,
               ),
             ),
           if (!isUser) const SizedBox(width: 8),
           Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isUser
-                    ? const Color(0xFF1E3A8A)
-                    : isWelcome
-                        ? const Color(0xFF3B82F6)
-                        : Colors.grey[100],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                message['text'],
-                style: TextStyle(
-                  color: isUser || isWelcome ? Colors.white : Colors.black87,
-                  fontSize: 14,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color:
+                        isUser
+                            ? Theme.of(context).colorScheme.primary
+                            : isWelcome
+                            ? Theme.of(context).colorScheme.secondary
+                            : Theme.of(context).brightness == Brightness.dark
+                            ? Colors.grey[800]
+                            : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    message['text'],
+                    style: TextStyle(
+                      color:
+                          isUser || isWelcome
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white
+                              : Colors.black87,
+                      fontSize: 14,
+                    ),
+                  ),
                 ),
-              ),
+                // Action buttons for messages
+                Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // User message actions (Edit & Copy)
+                      if (isUser)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Edit button for user messages
+                            InkWell(
+                              onTap: () => _editUserMessage(message),
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.tertiary.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: Theme.of(context).colorScheme.tertiary,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.edit,
+                                      size: 16,
+                                      color: Theme.of(context).colorScheme.tertiary,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Edit',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Theme.of(context).colorScheme.tertiary,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // Copy button for user messages
+                            InkWell(
+                              onTap: () {
+                                Clipboard.setData(
+                                  ClipboardData(text: message['text']),
+                                );
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Message copied to clipboard'),
+                                    duration: Duration(seconds: 1),
+                                  ),
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.secondary.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: Theme.of(context).colorScheme.secondary,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.copy,
+                                      size: 16,
+                                      color: Theme.of(context).colorScheme.secondary,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Copy',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Theme.of(context).colorScheme.secondary,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      // AI response actions (Speak & Copy)
+                      if (!isUser && !isWelcome)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Speak button
+                            InkWell(
+                              onTap: () {
+                                if (voiceService.isSpeaking) {
+                                  voiceService.stopSpeaking();
+                                } else {
+                                  voiceService.speakResponse(message['text']);
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color:
+                                      voiceService.isSpeaking
+                                          ? Theme.of(
+                                            context,
+                                          ).colorScheme.error.withOpacity(0.1)
+                                          : Theme.of(
+                                            context,
+                                          ).colorScheme.primary.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color:
+                                        voiceService.isSpeaking
+                                            ? Theme.of(context).colorScheme.error
+                                            : Theme.of(context).colorScheme.primary,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      voiceService.isSpeaking
+                                          ? Icons.stop
+                                          : Icons.volume_up,
+                                      size: 16,
+                                      color:
+                                          voiceService.isSpeaking
+                                              ? Theme.of(context).colorScheme.error
+                                              : Theme.of(
+                                                context,
+                                              ).colorScheme.primary,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      voiceService.isSpeaking ? 'Stop' : 'Speak',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color:
+                                            voiceService.isSpeaking
+                                                ? Theme.of(
+                                                  context,
+                                                ).colorScheme.error
+                                                : Theme.of(
+                                                  context,
+                                                ).colorScheme.primary,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // Copy button for AI responses
+                            InkWell(
+                              onTap: () {
+                                Clipboard.setData(
+                                  ClipboardData(text: message['text']),
+                                );
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Response copied to clipboard'),
+                                    duration: Duration(seconds: 1),
+                                  ),
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.secondary.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: Theme.of(context).colorScheme.secondary,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.copy,
+                                      size: 16,
+                                      color:
+                                          Theme.of(context).colorScheme.secondary,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Copy',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color:
+                                            Theme.of(context).colorScheme.secondary,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
           if (isUser) const SizedBox(width: 8),
@@ -245,13 +488,13 @@ I remember our conversations and adapt to your preferences! 🚀""",
             Container(
               width: 32,
               height: 32,
-              decoration: const BoxDecoration(
-                color: Color(0xFF3B82F6),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.secondary,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.person,
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.onSecondary,
                 size: 20,
               ),
             ),
@@ -271,16 +514,16 @@ I remember our conversations and adapt to your preferences! 🚀""",
             child: CircularProgressIndicator(strokeWidth: 2),
           ),
           const SizedBox(width: 12),
-          Text(
-            'CurrencyPro is thinking...',
-            style: TextStyle(
-              color:
-                  Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white70
-                      : Colors.grey[600],
-              fontStyle: FontStyle.italic,
-            ),
-          ),
+                     Text(
+             'CurrencyPro is thinking... 🤔',
+             style: TextStyle(
+               color:
+                   Theme.of(context).brightness == Brightness.dark
+                       ? Colors.white70
+                       : Colors.grey[600],
+               fontStyle: FontStyle.italic,
+             ),
+           ),
         ],
       ),
     );
@@ -342,14 +585,14 @@ I remember our conversations and adapt to your preferences! 🚀""",
         children: [
           Expanded(
             child: Text(
-              label, 
+              label,
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
           ),
           const SizedBox(width: 8),
           Text(
-            value, 
-            style: const TextStyle(color: Color(0xFF1E3A8A)),
+            value,
+            style: TextStyle(color: Theme.of(context).colorScheme.primary),
           ),
         ],
       ),
@@ -363,35 +606,150 @@ I remember our conversations and adapt to your preferences! 🚀""",
         color: Theme.of(context).cardColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Theme.of(context).shadowColor.withOpacity(0.1),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
         ],
       ),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: TextField(
-              controller: _textController,
-              decoration: InputDecoration(
-                hintText: 'Ask me about currencies, rates, or markets...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(25),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+                     // Voice preview indicator with language detection
+           if (_isListening || _voicePreview.isNotEmpty)
+             Container(
+               width: double.infinity,
+               padding: const EdgeInsets.all(12),
+               margin: const EdgeInsets.only(bottom: 8),
+               decoration: BoxDecoration(
+                 color:
+                     _isListening
+                         ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
+                         : Colors.green.withOpacity(0.1),
+                 borderRadius: BorderRadius.circular(12),
+                 border: Border.all(
+                   color:
+                       _isListening
+                           ? Theme.of(context).colorScheme.primary
+                           : Colors.green,
+                   width: 1,
+                 ),
+               ),
+               child: Column(
+                 crossAxisAlignment: CrossAxisAlignment.start,
+                 children: [
+                   Row(
+                     children: [
+                       Icon(
+                         _isListening ? Icons.mic : Icons.check_circle,
+                         color:
+                             _isListening
+                                 ? Theme.of(context).colorScheme.primary
+                                 : Colors.green,
+                         size: 20,
+                       ),
+                       const SizedBox(width: 8),
+                       Expanded(
+                         child: Text(
+                           _isListening ? 'Listening...' : _voicePreview,
+                           style: TextStyle(
+                             color:
+                                 _isListening
+                                     ? Theme.of(context).colorScheme.primary
+                                     : Colors.green,
+                             fontWeight: FontWeight.w500,
+                           ),
+                         ),
+                       ),
+                       if (_isListening)
+                         SizedBox(
+                           width: 16,
+                           height: 16,
+                           child: CircularProgressIndicator(
+                             strokeWidth: 2,
+                             valueColor: AlwaysStoppedAnimation<Color>(
+                               Theme.of(context).colorScheme.primary,
+                             ),
+                           ),
+                         ),
+                     ],
+                   ),
+                   // Language indicator
+                   if (!_isListening && voiceService.languageDisplayName != 'English')
+                     Container(
+                       margin: const EdgeInsets.only(top: 8),
+                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                       decoration: BoxDecoration(
+                         color: Colors.blue.withOpacity(0.1),
+                         borderRadius: BorderRadius.circular(8),
+                         border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                       ),
+                       child: Row(
+                         mainAxisSize: MainAxisSize.min,
+                         children: [
+                           Icon(
+                             Icons.language,
+                             size: 14,
+                             color: Colors.blue,
+                           ),
+                           const SizedBox(width: 4),
+                           Text(
+                             'Detected: ${voiceService.languageDisplayName}',
+                             style: TextStyle(
+                               fontSize: 12,
+                               color: Colors.blue,
+                               fontWeight: FontWeight.w500,
+                             ),
+                           ),
+                         ],
+                       ),
+                     ),
+                 ],
+               ),
+             ),
+
+          // Input field with voice button
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _textController,
+                                     decoration: InputDecoration(
+                     hintText: 'Ask me anything! Currencies, markets, or just chat... 😊',
+                     border: OutlineInputBorder(
+                       borderRadius: BorderRadius.circular(25),
+                     ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    // Add voice icon inside the text field
+                    suffixIcon: IconButton(
+                      onPressed:
+                          () => _toggleVoiceInput(voiceService, chatService),
+                      icon: Icon(
+                        _isListening ? Icons.mic : Icons.mic_none,
+                        color:
+                            _isListening
+                                ? Theme.of(context).colorScheme.error
+                                : Theme.of(context).colorScheme.primary,
+                        size: 24,
+                      ),
+                      tooltip: 'Voice Input',
+                    ),
+                  ),
+                  onSubmitted: (text) => _sendMessage(text, chatService),
                 ),
               ),
-              onSubmitted: (text) => _sendMessage(text, chatService),
-            ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            onPressed: () => _sendMessage(_textController.text, chatService),
-            icon: const Icon(Icons.send),
-            color: const Color(0xFF1E3A8A),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed:
+                    () => _sendMessage(_textController.text, chatService),
+                icon: Icon(
+                  Icons.send,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -402,10 +760,7 @@ I remember our conversations and adapt to your preferences! 🚀""",
     if (text.trim().isEmpty) return;
 
     setState(() {
-      _messages.add({
-        'text': text,
-        'isUser': true,
-      });
+      _messages.add({'text': text, 'isUser': true});
       _isLoading = true;
     });
 
@@ -415,13 +770,17 @@ I remember our conversations and adapt to your preferences! 🚀""",
     try {
       final response = await chatService.getCurrencyResponse(text);
       setState(() {
-        _messages.add({
-          'text': response,
-          'isUser': false,
-        });
+        _messages.add({'text': response, 'isUser': false});
         _isLoading = false;
       });
       _scrollToBottom();
+
+      // Auto-speak the response if voice input was used
+      if (_lastVoiceInput.isNotEmpty && text == _lastVoiceInput) {
+        final voiceService = Provider.of<VoiceService>(context, listen: false);
+        await voiceService.speakResponse(response);
+        _lastVoiceInput = ''; // Reset after speaking
+      }
     } catch (e) {
       setState(() {
         _messages.add({
@@ -449,9 +808,56 @@ I remember our conversations and adapt to your preferences! 🚀""",
   void _clearChat(ChatService chatService) {
     showDialog(
       context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Clear Chat History'),
+            content: const Text(
+              'Are you sure you want to clear all chat history?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  chatService.clearHistory();
+                  setState(() {
+                    _messages.clear();
+                  });
+                  _addWelcomeMessage();
+                  Navigator.pop(context);
+                },
+                child: const Text('Clear'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  void _editUserMessage(Map<String, dynamic> message) {
+    final TextEditingController editController = TextEditingController(text: message['text']);
+    
+    showDialog(
+      context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear Chat History'),
-        content: const Text('Are you sure you want to clear all chat history?'),
+        title: const Text('Edit Message'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Edit your message:'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: editController,
+              decoration: const InputDecoration(
+                hintText: 'Type your edited message...',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+              autofocus: true,
+            ),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -459,14 +865,30 @@ I remember our conversations and adapt to your preferences! 🚀""",
           ),
           TextButton(
             onPressed: () {
-              chatService.clearHistory();
-              setState(() {
-                _messages.clear();
-              });
-              _addWelcomeMessage();
+              final editedText = editController.text.trim();
+              if (editedText.isNotEmpty) {
+                // Update the message in the list
+                final messageIndex = _messages.indexOf(message);
+                if (messageIndex != -1) {
+                  setState(() {
+                    _messages[messageIndex]['text'] = editedText;
+                  });
+                  
+                  // Remove the AI response that followed this message
+                  if (messageIndex + 1 < _messages.length && !_messages[messageIndex + 1]['isUser']) {
+                    setState(() {
+                      _messages.removeAt(messageIndex + 1);
+                    });
+                  }
+                  
+                  // Send the edited message again
+                  final chatService = Provider.of<ChatService>(context, listen: false);
+                  _sendMessage(editedText, chatService);
+                }
+              }
               Navigator.pop(context);
             },
-            child: const Text('Clear'),
+            child: const Text('Send'),
           ),
         ],
       ),
@@ -479,14 +901,17 @@ I remember our conversations and adapt to your preferences! 🚀""",
       builder:
           (context) => AlertDialog(
             title: const Text('AI Assistant Settings'),
-            content: const Column(
+            content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Advanced settings coming soon!'),
-                SizedBox(height: 16),
+                const Text('Advanced settings coming soon!'),
+                const SizedBox(height: 16),
                 Text(
                   'Features in development:\n• Response style customization\n• Language preferences\n• Detail level control\n• Specialized knowledge areas',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).hintColor,
+                  ),
                 ),
               ],
             ),
@@ -500,7 +925,7 @@ I remember our conversations and adapt to your preferences! 🚀""",
     );
   }
 
-  Future<void> _toggleListening(
+  Future<void> _toggleVoiceInput(
     VoiceService voiceService,
     ChatService chatService,
   ) async {
@@ -524,7 +949,7 @@ I remember our conversations and adapt to your preferences! 🚀""",
             _voicePreview = "Heard: $finalResult";
             _isListening = false;
           });
-          
+
           // Send the voice input as a message
           _sendMessage(finalResult, chatService);
         },
@@ -537,4 +962,6 @@ I remember our conversations and adapt to your preferences! 🚀""",
       );
     }
   }
+
+
 }

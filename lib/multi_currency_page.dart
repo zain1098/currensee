@@ -7,6 +7,7 @@ import 'main.dart'; // For CustomAppBar
 import 'news_page.dart';
 import 'trend_chart.dart';
 import 'rate_list_page.dart';
+import 'task_page.dart';
 import 'package:provider/provider.dart';
 import 'calculator_page.dart';
 import 'setting_page.dart';
@@ -663,7 +664,7 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
           content: Text(
             '${currencyInfo['name']} is temporarily blocked by the team',
           ),
-          backgroundColor: Colors.orange,
+          backgroundColor: Theme.of(context).colorScheme.secondary,
           duration: const Duration(seconds: 2),
         ),
       );
@@ -743,11 +744,14 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
       ),
       drawer: Drawer(
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+              colors:
+                  Theme.of(context).brightness == Brightness.dark
+                      ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+                      : [const Color(0xFF1E3A8A), const Color(0xFF3B82F6)],
             ),
           ),
           child: ListView(
@@ -757,15 +761,21 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
               Container(
                 height: 180,
                 padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(
-                  borderRadius: BorderRadius.only(
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.only(
                     bottomLeft: Radius.circular(20),
                     bottomRight: Radius.circular(20),
                   ),
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
+                    colors:
+                        Theme.of(context).brightness == Brightness.dark
+                            ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+                            : [
+                              const Color(0xFF1E3A8A),
+                              const Color(0xFF2563EB),
+                            ],
                   ),
                 ),
                 child: Column(
@@ -872,8 +882,14 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                 onTap:
                     () => _navigateAndClose(context, const CalculatorsScreen()),
               ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.task_alt,
+                title: 'Currency Tasks',
+                onTap: () => _navigateAndClose(context, const TaskPage()),
+              ),
               const SizedBox(height: 16),
-              const Divider(color: Colors.white24, height: 1),
+              Divider(color: Theme.of(context).dividerColor, height: 1),
               const SizedBox(height: 16),
               // Settings Section
               _buildDrawerItem(
@@ -937,7 +953,7 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                     () => _navigateAndClose(context, const SupportHelpScreen()),
               ),
               const SizedBox(height: 16),
-              const Divider(color: Colors.white24, height: 1),
+              Divider(color: Theme.of(context).dividerColor, height: 1),
               const SizedBox(height: 16),
               _buildDrawerItem(
                 context,
@@ -956,7 +972,7 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
               ? Center(
                 child: Text(
                   'Error: $errorMessage',
-                  style: const TextStyle(color: Colors.red),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               )
               : SingleChildScrollView(
@@ -981,12 +997,16 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                             child: Container(
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: Theme.of(context).cardColor,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.grey.shade200),
+                                border: Border.all(
+                                  color: Theme.of(context).dividerColor,
+                                ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.grey.withOpacity(0.2),
+                                    color: Theme.of(
+                                      context,
+                                    ).shadowColor.withOpacity(0.2),
                                     blurRadius: 5,
                                     offset: const Offset(0, 2),
                                   ),
@@ -1004,24 +1024,32 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        const Text(
+                                        Text(
                                           'Base Currency',
                                           style: TextStyle(
                                             fontSize: 12,
-                                            color: Colors.grey,
+                                            color: Theme.of(context).hintColor,
                                           ),
                                         ),
                                         Text(
                                           baseCurrency?.name ?? '',
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.bold,
+                                            color:
+                                                Theme.of(
+                                                  context,
+                                                ).textTheme.titleMedium?.color,
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
-                                  const Icon(Icons.arrow_drop_down, size: 24),
+                                  Icon(
+                                    Icons.arrow_drop_down,
+                                    size: 24,
+                                    color: Theme.of(context).iconTheme.color,
+                                  ),
                                 ],
                               ),
                             ),
@@ -1035,21 +1063,23 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                             keyboardType: TextInputType.numberWithOptions(
                               decimal: true,
                             ),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
+                              color:
+                                  Theme.of(context).textTheme.titleLarge?.color,
                             ),
                             textAlign: TextAlign.center,
                             decoration: InputDecoration(
-                              prefixIcon: const Icon(
+                              prefixIcon: Icon(
                                 Icons.attach_money,
                                 size: 28,
-                                color: Color(0xFF4A6CD1),
+                                color: Theme.of(context).primaryColor,
                               ),
                               suffixIcon: IconButton(
-                                icon: const Icon(
+                                icon: Icon(
                                   Icons.refresh,
-                                  color: Color(0xFF4A6CD1),
+                                  color: Theme.of(context).primaryColor,
                                 ),
                                 onPressed: () {
                                   amountController.text = '1.0';
@@ -1062,11 +1092,14 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                                 borderSide: BorderSide.none,
                               ),
                               filled: true,
-                              fillColor: Colors.grey.shade50,
+                              fillColor: Theme.of(context).cardColor,
                               contentPadding: const EdgeInsets.symmetric(
                                 vertical: 16,
                               ),
                               hintText: 'Enter amount',
+                              hintStyle: TextStyle(
+                                color: Theme.of(context).hintColor,
+                              ),
                             ),
                             onChanged: (value) {
                               amount = double.tryParse(value) ?? 0.0;
@@ -1106,10 +1139,12 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                       height: 60,
                       child:
                           selectedCurrencies.isEmpty
-                              ? const Center(
+                              ? Center(
                                 child: Text(
                                   'Tap on currencies below to add them',
-                                  style: TextStyle(color: Colors.grey),
+                                  style: TextStyle(
+                                    color: Theme.of(context).hintColor,
+                                  ),
                                 ),
                               )
                               : ListView.builder(
@@ -1133,17 +1168,27 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                                     child: Chip(
                                       backgroundColor:
                                           isInactive
-                                              ? Colors.grey.withOpacity(0.2)
-                                              : const Color(
-                                                0xFF4A6CD1,
-                                              ).withOpacity(0.1),
+                                              ? Theme.of(
+                                                context,
+                                              ).disabledColor.withOpacity(0.2)
+                                              : Theme.of(
+                                                context,
+                                              ).primaryColor.withOpacity(0.1),
                                       label: Text(
                                         '${currencyInfo['flag']} ${formatter.format(value)}',
+                                        style: TextStyle(
+                                          color:
+                                              Theme.of(
+                                                context,
+                                              ).textTheme.bodyMedium?.color,
+                                        ),
                                       ),
                                       onDeleted: () => toggleCurrency(code),
-                                      deleteIcon: const Icon(
+                                      deleteIcon: Icon(
                                         Icons.close,
                                         size: 16,
+                                        color:
+                                            Theme.of(context).iconTheme.color,
                                       ),
                                     ),
                                   );
@@ -1160,9 +1205,13 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                             searchQuery.isEmpty
                                 ? 'All Currencies (${availableCurrencies.length})'
                                 : 'Search Results (${filteredCurrencies.length})',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium?.color,
                             ),
                           ),
                           const Spacer(),
@@ -1177,11 +1226,20 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                               },
                               decoration: InputDecoration(
                                 hintText: 'Search currencies...',
-                                prefixIcon: const Icon(Icons.search),
+                                prefixIcon: Icon(
+                                  Icons.search,
+                                  color: Theme.of(context).iconTheme.color,
+                                ),
                                 suffixIcon:
                                     searchQuery.isNotEmpty
                                         ? IconButton(
-                                          icon: const Icon(Icons.clear),
+                                          icon: Icon(
+                                            Icons.clear,
+                                            color:
+                                                Theme.of(
+                                                  context,
+                                                ).iconTheme.color,
+                                          ),
                                           onPressed: () {
                                             _searchController.clear();
                                             setState(() {
@@ -1199,7 +1257,7 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                                   borderSide: BorderSide.none,
                                 ),
                                 filled: true,
-                                fillColor: Colors.grey.shade100,
+                                fillColor: Theme.of(context).cardColor,
                               ),
                             ),
                           ),
@@ -1219,7 +1277,7 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                                     Icon(
                                       Icons.search_off,
                                       size: 64,
-                                      color: Colors.grey[400],
+                                      color: Theme.of(context).disabledColor,
                                     ),
                                     const SizedBox(height: 16),
                                     Text(
@@ -1227,7 +1285,10 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                                       style: TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
-                                        color: Colors.grey[600],
+                                        color:
+                                            Theme.of(
+                                              context,
+                                            ).textTheme.titleMedium?.color,
                                       ),
                                     ),
                                     const SizedBox(height: 8),
@@ -1235,7 +1296,7 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                                       'Try searching with different keywords',
                                       style: TextStyle(
                                         fontSize: 14,
-                                        color: Colors.grey[500],
+                                        color: Theme.of(context).hintColor,
                                       ),
                                     ),
                                   ],
@@ -1268,14 +1329,16 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: Theme.of(context).cardColor,
                         borderRadius: const BorderRadius.only(
                           topLeft: Radius.circular(20),
                           topRight: Radius.circular(20),
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.grey.withOpacity(0.2),
+                            color: Theme.of(
+                              context,
+                            ).shadowColor.withOpacity(0.2),
                             spreadRadius: 2,
                             blurRadius: 10,
                             offset: const Offset(0, -5),
@@ -1287,11 +1350,15 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                         children: [
                           Row(
                             children: [
-                              const Text(
+                              Text(
                                 'Conversion Results',
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
+                                  color:
+                                      Theme.of(
+                                        context,
+                                      ).textTheme.titleLarge?.color,
                                 ),
                               ),
                               const Spacer(),
@@ -1415,7 +1482,8 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                         content: Text(
                           '${currency.name} is temporarily blocked by the team',
                         ),
-                        backgroundColor: Colors.orange,
+                        backgroundColor:
+                            Theme.of(context).colorScheme.secondary,
                         duration: const Duration(seconds: 2),
                       ),
                     );
@@ -1494,9 +1562,11 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
           builder: (context, setState) {
             return Container(
               height: MediaQuery.of(context).size.height * 0.85,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
               ),
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -1506,7 +1576,7 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                     height: 4,
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
+                      color: Theme.of(context).dividerColor,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -1514,9 +1584,10 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                     baseCurrencySearchQuery.isEmpty
                         ? 'Select Base Currency (${availableCurrencies.length})'
                         : 'Search Results (${getFilteredBaseCurrencies().length})',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
+                      color: Theme.of(context).textTheme.titleLarge?.color,
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -1528,11 +1599,17 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                             setState(() => baseCurrencySearchQuery = value),
                     decoration: InputDecoration(
                       hintText: 'Search currencies...',
-                      prefixIcon: const Icon(Icons.search),
+                      prefixIcon: Icon(
+                        Icons.search,
+                        color: Theme.of(context).iconTheme.color,
+                      ),
                       suffixIcon:
                           baseCurrencySearchQuery.isNotEmpty
                               ? IconButton(
-                                icon: const Icon(Icons.clear),
+                                icon: Icon(
+                                  Icons.clear,
+                                  color: Theme.of(context).iconTheme.color,
+                                ),
                                 onPressed: () {
                                   _baseCurrencySearchController.clear();
                                   setState(() {
@@ -1542,11 +1619,12 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                               )
                               : null,
                       filled: true,
-                      fillColor: Colors.grey.shade100,
+                      fillColor: Theme.of(context).cardColor,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
                       ),
+                      hintStyle: TextStyle(color: Theme.of(context).hintColor),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -1561,7 +1639,7 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                                   Icon(
                                     Icons.search_off,
                                     size: 64,
-                                    color: Colors.grey[400],
+                                    color: Theme.of(context).disabledColor,
                                   ),
                                   const SizedBox(height: 16),
                                   Text(
@@ -1569,7 +1647,10 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                                     style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
-                                      color: Colors.grey[600],
+                                      color:
+                                          Theme.of(
+                                            context,
+                                          ).textTheme.titleMedium?.color,
                                     ),
                                   ),
                                   const SizedBox(height: 8),
@@ -1577,7 +1658,7 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                                     'Try searching with different keywords',
                                     style: TextStyle(
                                       fontSize: 14,
-                                      color: Colors.grey[500],
+                                      color: Theme.of(context).hintColor,
                                     ),
                                   ),
                                 ],
@@ -1684,9 +1765,12 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                                     ),
                                     trailing:
                                         isSelected
-                                            ? const Icon(
+                                            ? Icon(
                                               Icons.check,
-                                              color: Colors.green,
+                                              color:
+                                                  Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary,
                                             )
                                             : null,
                                     onTap:
@@ -1701,7 +1785,9 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                                                     '${currency.name} is temporarily blocked by the team',
                                                   ),
                                                   backgroundColor:
-                                                      Colors.orange,
+                                                      Theme.of(
+                                                        context,
+                                                      ).colorScheme.secondary,
                                                   duration: const Duration(
                                                     seconds: 2,
                                                   ),
@@ -1749,6 +1835,11 @@ Widget _buildDrawerItem(
   required String title,
   required VoidCallback onTap,
 }) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  final textColor = isDark ? Colors.white : Colors.white;
+  final iconColor = isDark ? Colors.white : Colors.white;
+  final chevronColor = isDark ? Colors.white70 : Colors.white70;
+
   return Padding(
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     child: Material(
@@ -1757,25 +1848,31 @@ Widget _buildDrawerItem(
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        splashColor: Colors.white.withOpacity(0.1),
-        highlightColor: Colors.white.withOpacity(0.05),
+        splashColor:
+            isDark
+                ? Colors.white.withOpacity(0.1)
+                : Colors.black.withOpacity(0.1),
+        highlightColor:
+            isDark
+                ? Colors.white.withOpacity(0.05)
+                : Colors.black.withOpacity(0.05),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
           child: Row(
             children: [
-              Icon(icon, color: Colors.white, size: 24),
+              Icon(icon, color: iconColor, size: 24),
               const SizedBox(width: 16),
               Text(
                 title,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: textColor,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),
               ),
               const Spacer(),
-              const Icon(Icons.chevron_right, color: Colors.white70, size: 20),
+              Icon(Icons.chevron_right, color: chevronColor, size: 20),
             ],
           ),
         ),

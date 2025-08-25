@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CurrenSee Pro</string>
+    
+    <!-- Facebook Configuration -->
+    <!-- 
+    IMPORTANT: To fix Facebook login issues, you need to:
+    1. Go to https://developers.facebook.com/
+    2. Create a new app or use existing app
+    3. Add Android platform to your Facebook app
+    4. Set package name: Curren.See
+    5. Set key hashes (get from debug.keystore and release.keystore)
+    6. Enable Facebook Login product
+    7. Set Valid OAuth Redirect URIs
+    8. Update these values with your actual Facebook app credentials
+    -->
+    <string name="facebook_app_id">988733049971825</string>
+    <string name="fb_login_protocol_scheme">fb988733049971825</string>
+    <string name="facebook_client_token">6d612069fb4839eb997b720127adb63d</string>
+    
+    <!-- Widget Labels -->
+    <string name="widget_currency_rates_label">💱 Currency Rates</string>
+    <string name="widget_quick_converter_label">💱 Quick Converter</string>
+    <string name="widget_converter_label">🔄 Currency Converter</string>
+    <string name="widget_watchlist_label">⭐ Watchlist</string>
+</resources>

@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
-import 'package:money_tracker/world_clock.dart';
+import 'world_clock.dart';
 import 'home_page.dart';
 import 'news_page.dart';
 import 'multi_currency_page.dart';
 import 'trend_chart.dart';
 import 'rate_list_page.dart';
+import 'task_page.dart';
 import 'voice_service.dart';
 import 'package:provider/provider.dart';
 import 'calculator_page.dart';
@@ -34,15 +35,13 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'currency_widget.dart';
 import 'watchlist_widget.dart';
 import 'converter_widget.dart';
-import 'mini_chart_widget.dart';
-import 'redlist_widget.dart';
 import 'alert_service.dart';
 import 'messaging_service.dart';
 import 'services/user_status_service.dart';
 import 'services/maintenance_service.dart';
 import 'services/connectivity_service.dart';
-import 'services/lottie_manager.dart';
-import 'services/performance_monitor.dart';
+import 'services/task_service.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -105,6 +104,14 @@ void main() async {
     print('Error initializing ConnectivityService: $e');
   }
 
+  // Initialize TaskService for currency monitoring tasks
+  try {
+    await TaskService.initializeNotifications();
+    print('TaskService initialized successfully');
+  } catch (e) {
+    print('Error initializing TaskService: $e');
+  }
+
   // Setup platform channel for widget communication
   const platform = MethodChannel('currensee_widget_channel');
   platform.setMethodCallHandler((call) async {
@@ -143,6 +150,7 @@ class AppSettings extends ChangeNotifier {
   bool _offlineMode = false;
   String _selectedLanguage = 'English';
   String _selectedAppearance = 'System';
+  List<String> _favoriteCurrencies = [];
 
   // Getters
   bool get darkMode => _darkMode;
@@ -156,6 +164,7 @@ class AppSettings extends ChangeNotifier {
   bool get offlineMode => _offlineMode;
   String get selectedLanguage => _selectedLanguage;
   String get selectedAppearance => _selectedAppearance;
+  List<String> get favoriteCurrencies => _favoriteCurrencies;
 
   // Load settings from SharedPreferences
   Future<void> loadSettings() async {
@@ -171,6 +180,7 @@ class AppSettings extends ChangeNotifier {
     _offlineMode = prefs.getBool('offlineMode') ?? false;
     _selectedLanguage = prefs.getString('selectedLanguage') ?? 'English';
     _selectedAppearance = prefs.getString('selectedAppearance') ?? 'System';
+    _favoriteCurrencies = prefs.getStringList('favoriteCurrencies') ?? [];
     notifyListeners();
   }
 
@@ -241,6 +251,69 @@ class AppSettings extends ChangeNotifier {
   void setSelectedAppearance(String value) {
     _selectedAppearance = value;
     _saveSetting('selectedAppearance', value);
+
+    // Update darkMode for backward compatibility
+    if (value == 'Dark') {
+      _darkMode = true;
+      _saveSetting('darkMode', true);
+    } else if (value == 'Light') {
+      _darkMode = false;
+      _saveSetting('darkMode', false);
+    }
+    // For 'System', we don't update darkMode as it will be determined by system
+  }
+
+  // Get current theme mode based on appearance setting and system brightness
+  ThemeMode getCurrentThemeMode(BuildContext context) {
+    switch (_selectedAppearance) {
+      case 'System':
+        // For system mode, let Flutter handle it automatically
+        return ThemeMode.system;
+      case 'Dark':
+        return ThemeMode.dark;
+      case 'Light':
+        return ThemeMode.light;
+      default:
+        // Default to system mode for better mobile experience
+        return ThemeMode.system;
+    }
+  }
+
+  // Get current brightness for UI updates (used in settings page)
+  bool getCurrentBrightness(BuildContext context) {
+    switch (_selectedAppearance) {
+      case 'System':
+        // Use system brightness
+        return MediaQuery.of(context).platformBrightness == Brightness.dark;
+      case 'Dark':
+        return true;
+      case 'Light':
+        return false;
+      default:
+        return MediaQuery.of(context).platformBrightness == Brightness.dark;
+    }
+  }
+
+  void setFavoriteCurrencies(List<String> currencies) {
+    _favoriteCurrencies = currencies;
+    _saveSetting('favoriteCurrencies', currencies);
+  }
+
+  void addFavoriteCurrency(String currencyCode) {
+    if (!_favoriteCurrencies.contains(currencyCode) &&
+        _favoriteCurrencies.length < 4) {
+      _favoriteCurrencies.add(currencyCode);
+      _saveSetting('favoriteCurrencies', _favoriteCurrencies);
+    }
+  }
+
+  void removeFavoriteCurrency(String currencyCode) {
+    _favoriteCurrencies.remove(currencyCode);
+    _saveSetting('favoriteCurrencies', _favoriteCurrencies);
+  }
+
+  bool isFavoriteCurrency(String currencyCode) {
+    return _favoriteCurrencies.contains(currencyCode);
   }
 }
 
@@ -291,7 +364,7 @@ class _AuthGateState extends State<AuthGate> {
       return const MainScreen();
     }
 
-    return const SignInScreen();
+    return Theme(data: ThemeData.light(), child: const SignInScreen());
   }
 } // CHANGES START HERE: Convert MyApp to StatefulWidget
 
@@ -362,6 +435,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
         // Start periodic maintenance check
         _startPeriodicMaintenanceCheck();
+
+        // Start periodic version check for app updates
+        _startPeriodicVersionCheck();
+
+        // Initialize stored app version for auto-refresh
+        _initializeStoredAppVersion();
       }
     });
   }
@@ -516,6 +595,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           }
         });
       }
+
+      // Auto-refresh app version when app resumes (for after app updates)
+      print('App resumed, refreshing app version...');
+      Future.delayed(const Duration(milliseconds: 1500), () {
+        if (mounted) {
+          _refreshAppVersionOnResume();
+        }
+      });
     } else if (state == AppLifecycleState.paused) {
       // When app goes to background, reset the lock screen state but keep authentication flag
       print('App paused, resetting lock screen state');
@@ -613,6 +700,226 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         print('Error in periodic maintenance check: $e');
       }
     });
+  }
+
+  // Start periodic version check for app updates
+  void _startPeriodicVersionCheck() {
+    Timer.periodic(const Duration(minutes: 2), (timer) async {
+      if (mounted) {
+        await _checkForAppUpdateInBackground();
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
+  // Background version check (without UI updates)
+  Future<void> _checkForAppUpdateInBackground() async {
+    try {
+      // Check if user is authenticated
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // Check internet connectivity
+      final isConnected = await ConnectivityService().checkConnectivity();
+      if (!isConnected) return;
+
+      // Get latest version from Firestore
+      final versionDoc =
+          await FirebaseFirestore.instance
+              .collection('app_versions')
+              .doc('current')
+              .get();
+
+      if (versionDoc.exists) {
+        final latestVersion = versionDoc.data()!;
+
+        // Get current app version
+        PackageInfo packageInfo = await PackageInfo.fromPlatform();
+        final currentVersion = packageInfo.version;
+        final latestVersionStr = latestVersion['version'];
+
+        // Compare versions
+        if (_compareVersions(latestVersionStr, currentVersion) > 0) {
+          // Show notification for update
+          await _showAppUpdateNotification(latestVersion);
+
+          // Show in-app message only if app is in foreground
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.system_update, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'New version ${latestVersion['version']} available!',
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      print('Background version check error: $e');
+    }
+  }
+
+  // Compare version strings
+  int _compareVersions(String version1, String version2) {
+    final cleanVersion1 = version1.replaceAll(RegExp(r'^v'), '');
+    final cleanVersion2 = version2.replaceAll(RegExp(r'^v'), '');
+
+    final v1Parts = cleanVersion1.split('.').map(int.parse).toList();
+    final v2Parts = cleanVersion2.split('.').map(int.parse).toList();
+
+    for (int i = 0; i < 3; i++) {
+      final v1 = i < v1Parts.length ? v1Parts[i] : 0;
+      final v2 = i < v2Parts.length ? v2Parts[i] : 0;
+
+      if (v1 > v2) return 1;
+      if (v1 < v2) return -1;
+    }
+    return 0;
+  }
+
+  // Show app update notification
+  Future<void> _showAppUpdateNotification(
+    Map<String, dynamic> versionData,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String selectedSound =
+          prefs.getString('notificationSound') ?? 'notification.mp3';
+      String soundName = selectedSound.replaceAll('.mp3', '');
+      String channelId = 'app_updates_$soundName';
+
+      final AndroidNotificationDetails androidDetails =
+          AndroidNotificationDetails(
+            channelId,
+            'App Updates',
+            importance: Importance.high,
+            priority: Priority.high,
+            ticker: 'ticker',
+            sound: RawResourceAndroidNotificationSound(soundName),
+            icon: '@mipmap/ic_launcher',
+          );
+
+      final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+        presentSound: true,
+        sound: selectedSound,
+      );
+
+      final NotificationDetails platformDetails = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      final title = versionData['title'] ?? 'App Update Available';
+      final body =
+          'Version ${versionData['version']} is available. Open app to download!';
+
+      await FlutterLocalNotificationsPlugin().show(
+        DateTime.now().millisecondsSinceEpoch.remainder(100000),
+        title,
+        body,
+        platformDetails,
+      );
+    } catch (e) {
+      print('Error showing app update notification: $e');
+    }
+  }
+
+  // Initialize stored app version for auto-refresh
+  Future<void> _initializeStoredAppVersion() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final storedVersion = prefs.getString('last_known_app_version');
+
+      if (storedVersion == null) {
+        // First time app launch, store current version
+        PackageInfo packageInfo = await PackageInfo.fromPlatform();
+        await prefs.setString('last_known_app_version', packageInfo.version);
+        await prefs.setString(
+          'last_known_build_number',
+          packageInfo.buildNumber,
+        );
+        print('📱 Initialized stored app version: ${packageInfo.version}');
+      }
+    } catch (e) {
+      print('❌ Error initializing stored app version: $e');
+    }
+  }
+
+  // Auto-refresh app version when app resumes (for after app updates)
+  Future<void> _refreshAppVersionOnResume() async {
+    try {
+      print('🔄 Auto-refreshing app version on resume...');
+
+      // Get current app version from package info
+      PackageInfo packageInfo = await PackageInfo.fromPlatform();
+      final currentVersion = packageInfo.version;
+      final currentBuildNumber = packageInfo.buildNumber;
+
+      print(
+        '📱 Current app version on resume: $currentVersion ($currentBuildNumber)',
+      );
+
+      // Check if version has changed by comparing with stored version
+      final prefs = await SharedPreferences.getInstance();
+      final storedVersion = prefs.getString('last_known_app_version');
+      final storedBuildNumber = prefs.getString('last_known_build_number');
+
+      if (storedVersion != currentVersion ||
+          storedBuildNumber != currentBuildNumber) {
+        print(
+          '🔄 App version changed! Old: $storedVersion, New: $currentVersion',
+        );
+
+        // Update stored version
+        await prefs.setString('last_known_app_version', currentVersion);
+        await prefs.setString('last_known_build_number', currentBuildNumber);
+
+        // Clear any cached update notifications since app was updated
+        await prefs.remove('last_update_check_time');
+
+        // Show success message to user
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'App updated to version $currentVersion!',
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+
+        // Force check for updates to clear any false "update available" messages
+        await _checkForAppUpdateInBackground();
+      } else {
+        print('📱 App version unchanged on resume: $currentVersion');
+      }
+    } catch (e) {
+      print('❌ Error refreshing app version on resume: $e');
+    }
   }
 
   Future<void> _checkBiometricLock() async {
@@ -842,12 +1149,21 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       routes: {
         '/auth': (context) => const AuthGate(),
         '/splash': (context) => const SplashScreen(),
-        '/signin': (context) => const SignInScreen(),
-        '/signup': (context) => const SignUpScreen(),
-        '/forgot': (context) => const ForgotPasswordScreen(),
+        '/signin':
+            (context) =>
+                Theme(data: ThemeData.light(), child: const SignInScreen()),
+        '/signup':
+            (context) =>
+                Theme(data: ThemeData.light(), child: const SignUpScreen()),
+        '/forgot':
+            (context) => Theme(
+              data: ThemeData.light(),
+              child: const ForgotPasswordScreen(),
+            ),
         '/home': (context) => const MainScreen(),
 
         '/rate-list': (context) => const RateListPage(),
+        '/tasks': (context) => const TaskPage(),
       },
 
       title: 'CurrenSee Pro',
@@ -982,7 +1298,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           ),
         ),
       ),
-      themeMode: settings.darkMode ? ThemeMode.dark : ThemeMode.light,
+      themeMode: settings.getCurrentThemeMode(context),
     );
   }
 
@@ -1329,6 +1645,12 @@ class _MainScreenState extends State<MainScreen> {
                 title: 'Calculator',
                 onTap:
                     () => _navigateAndClose(context, const CalculatorsScreen()),
+              ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.task_alt,
+                title: 'Currency Tasks',
+                onTap: () => _navigateAndClose(context, const TaskPage()),
               ),
               const SizedBox(height: 16),
               const Divider(color: Colors.white24, height: 1),

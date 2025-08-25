@@ -3,6 +3,7 @@ import 'package:lottie/lottie.dart';
 import 'main.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -232,6 +233,115 @@ class _SignUpScreenState extends State<SignUpScreen> {
     }
   }
 
+  Future<void> _signUpWithFacebook() async {
+    setState(() => _isLoading = true);
+    try {
+      print('Starting Facebook Sign-up process...');
+      print('Facebook App ID: 988733049971825');
+
+      // Trigger the sign-in flow
+      final LoginResult result = await FacebookAuth.instance.login(
+        permissions: ['email', 'public_profile'],
+      );
+
+      print('Facebook login result status: ${result.status}');
+      print('Facebook login result message: ${result.message}');
+
+      if (result.status == LoginStatus.success) {
+        print('Facebook login successful');
+
+        // Create a credential from the access token
+        final OAuthCredential credential = FacebookAuthProvider.credential(
+          result.accessToken!.toString(),
+        );
+
+        // Sign in to Firebase with the credential
+        final UserCredential userCredential = await FirebaseAuth.instance
+            .signInWithCredential(credential);
+
+        print(
+          'Firebase authentication completed. User: ${userCredential.user?.email}',
+        );
+
+        if (userCredential.additionalUserInfo!.isNewUser) {
+          // Get user data from Facebook
+          final userData = await FacebookAuth.instance.getUserData(
+            fields: "name,email,picture.width(200)",
+          );
+
+          // Update display name for new user
+          if (userData['name'] != null) {
+            await userCredential.user!.updateDisplayName(userData['name']);
+            print(
+              'Updated display name for new Facebook user: ${userData['name']}',
+            );
+          }
+
+          // Send welcome email for new Facebook users
+          bool welcomeEmailSent = false;
+          try {
+            await EmailService.sendWelcomeEmail(
+              recipientEmail: userCredential.user!.email!,
+            );
+            print(
+              'Welcome email sent successfully to ${userCredential.user!.email}',
+            );
+            welcomeEmailSent = true;
+          } catch (e) {
+            print('Failed to send welcome email: $e');
+            welcomeEmailSent = false;
+          }
+        }
+
+        await addUserToFirestore(userCredential.user!);
+
+        if (!mounted) {
+          print('Widget not mounted, cannot navigate');
+          return;
+        }
+
+        print('Navigating to MainScreen...');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const MainScreen(showSuccess: true),
+          ),
+        );
+        print('Navigation completed');
+      } else if (result.status == LoginStatus.cancelled) {
+        print('Facebook login was cancelled by user');
+        setState(() => _isLoading = false);
+      } else {
+        print('Facebook login failed: ${result.status}');
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Facebook sign-up failed: ${result.status}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      print('FirebaseAuthException: ${e.message}');
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Authentication failed: ${e.message}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } catch (e) {
+      print('Unexpected error: $e');
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unexpected error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -299,7 +409,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.95),
+                      color: Colors.white.withOpacity(0.98),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
@@ -511,30 +621,62 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             ],
                           ),
                           const SizedBox(height: 30),
-                          Center(
-                            child: IconButton(
-                              onPressed: _isLoading ? null : _signUpWithGoogle,
-                              icon: Container(
-                                height: 50,
-                                width: 50,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.1),
-                                      blurRadius: 5,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Lottie.asset(
-                                  'assets/google.json',
-                                  height: 30,
-                                  width: 30,
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              // Google Sign-up Button
+                              IconButton(
+                                onPressed:
+                                    _isLoading ? null : _signUpWithGoogle,
+                                icon: Container(
+                                  height: 50,
+                                  width: 50,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.1),
+                                        blurRadius: 5,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Lottie.asset(
+                                    'assets/google.json',
+                                    height: 30,
+                                    width: 30,
+                                  ),
                                 ),
                               ),
-                            ),
+                              // Facebook Sign-up Button
+                              IconButton(
+                                onPressed:
+                                    _isLoading ? null : _signUpWithFacebook,
+                                icon: Container(
+                                  height: 50,
+                                  width: 50,
+                                  decoration: BoxDecoration(
+                                    color: const Color(
+                                      0xFF1877F2,
+                                    ), // Facebook blue color
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.1),
+                                        blurRadius: 5,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(
+                                    Icons.facebook,
+                                    color: Colors.white,
+                                    size: 30,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 30),
                           Row(
