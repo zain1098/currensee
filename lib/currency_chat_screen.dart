@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'chat_service.dart';
 import 'voice_service.dart';
+import 'app_theme.dart';
 
 class CurrencyChatScreen extends StatefulWidget {
   const CurrencyChatScreen({super.key});
@@ -73,14 +74,15 @@ I remember our conversations and adapt to your preferences! 🚀""",
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final voiceService = Provider.of<VoiceService>(context);
     final chatService = Provider.of<ChatService>(context);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('CurrencyPro Ultra'),
-        backgroundColor: const Color(0xFF1E3A8A),
-        foregroundColor: Colors.white,
+        backgroundColor: theme.colorScheme.primary,
+        foregroundColor: theme.colorScheme.onPrimary,
         elevation: 0,
         actions: [
           IconButton(
@@ -171,7 +173,10 @@ I remember our conversations and adapt to your preferences! 🚀""",
                       }
                       return Text(
                         snapshot.data ?? 'Loading insights...',
-                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                        ),
                       );
                     },
                   ),
@@ -197,6 +202,7 @@ I remember our conversations and adapt to your preferences! 🚀""",
   }
 
   Widget _buildMessage(Map<String, dynamic> message) {
+    final theme = Theme.of(context);
     final isUser = message['isUser'] ?? false;
     final isWelcome = message['isWelcome'] ?? false;
 
@@ -209,13 +215,13 @@ I remember our conversations and adapt to your preferences! 🚀""",
             Container(
               width: 32,
               height: 32,
-              decoration: const BoxDecoration(
-                color: Color(0xFF1E3A8A),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.smart_toy,
-                color: Colors.white,
+                color: theme.colorScheme.onPrimary,
                 size: 20,
               ),
             ),
@@ -224,17 +230,21 @@ I remember our conversations and adapt to your preferences! 🚀""",
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isUser
-                    ? const Color(0xFF1E3A8A)
-                    : isWelcome
-                        ? const Color(0xFF3B82F6)
-                        : Colors.grey[100],
+                color:
+                    isUser
+                        ? theme.colorScheme.primary
+                        : isWelcome
+                        ? theme.colorScheme.secondary
+                        : theme.cardColor,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 message['text'],
                 style: TextStyle(
-                  color: isUser || isWelcome ? Colors.white : Colors.black87,
+                  color:
+                      isUser || isWelcome
+                          ? theme.colorScheme.onPrimary
+                          : theme.textTheme.bodyLarge?.color,
                   fontSize: 14,
                 ),
               ),
@@ -245,13 +255,13 @@ I remember our conversations and adapt to your preferences! 🚀""",
             Container(
               width: 32,
               height: 32,
-              decoration: const BoxDecoration(
-                color: Color(0xFF3B82F6),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.secondary,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.person,
-                color: Colors.white,
+                color: theme.colorScheme.onSecondary,
                 size: 20,
               ),
             ),
@@ -261,23 +271,24 @@ I remember our conversations and adapt to your preferences! 🚀""",
   }
 
   Widget _buildLoadingIndicator() {
+    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
-          const SizedBox(
+          SizedBox(
             width: 20,
             height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: theme.colorScheme.primary,
+            ),
           ),
           const SizedBox(width: 12),
           Text(
             'CurrencyPro is thinking...',
             style: TextStyle(
-              color:
-                  Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white70
-                      : Colors.grey[600],
+              color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
               fontStyle: FontStyle.italic,
             ),
           ),
@@ -335,6 +346,7 @@ I remember our conversations and adapt to your preferences! 🚀""",
   }
 
   Widget _buildStatItem(String label, String value) {
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -342,28 +354,29 @@ I remember our conversations and adapt to your preferences! 🚀""",
         children: [
           Expanded(
             child: Text(
-              label, 
-              style: const TextStyle(fontWeight: FontWeight.w500),
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                color: theme.textTheme.bodyLarge?.color,
+              ),
             ),
           ),
           const SizedBox(width: 8),
-          Text(
-            value, 
-            style: const TextStyle(color: Color(0xFF1E3A8A)),
-          ),
+          Text(value, style: TextStyle(color: theme.colorScheme.primary)),
         ],
       ),
     );
   }
 
   Widget _buildInputArea(VoiceService voiceService, ChatService chatService) {
+    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
+        color: theme.cardColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: theme.shadowColor.withOpacity(0.1),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
@@ -390,8 +403,8 @@ I remember our conversations and adapt to your preferences! 🚀""",
           const SizedBox(width: 8),
           IconButton(
             onPressed: () => _sendMessage(_textController.text, chatService),
-            icon: const Icon(Icons.send),
-            color: const Color(0xFF1E3A8A),
+            icon: Icon(Icons.send),
+            color: theme.colorScheme.primary,
           ),
         ],
       ),
@@ -402,10 +415,7 @@ I remember our conversations and adapt to your preferences! 🚀""",
     if (text.trim().isEmpty) return;
 
     setState(() {
-      _messages.add({
-        'text': text,
-        'isUser': true,
-      });
+      _messages.add({'text': text, 'isUser': true});
       _isLoading = true;
     });
 
@@ -415,10 +425,7 @@ I remember our conversations and adapt to your preferences! 🚀""",
     try {
       final response = await chatService.getCurrencyResponse(text);
       setState(() {
-        _messages.add({
-          'text': response,
-          'isUser': false,
-        });
+        _messages.add({'text': response, 'isUser': false});
         _isLoading = false;
       });
       _scrollToBottom();
@@ -449,27 +456,30 @@ I remember our conversations and adapt to your preferences! 🚀""",
   void _clearChat(ChatService chatService) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Clear Chat History'),
-        content: const Text('Are you sure you want to clear all chat history?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Clear Chat History'),
+            content: const Text(
+              'Are you sure you want to clear all chat history?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  chatService.clearHistory();
+                  setState(() {
+                    _messages.clear();
+                  });
+                  _addWelcomeMessage();
+                  Navigator.pop(context);
+                },
+                child: const Text('Clear'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () {
-              chatService.clearHistory();
-              setState(() {
-                _messages.clear();
-              });
-              _addWelcomeMessage();
-              Navigator.pop(context);
-            },
-            child: const Text('Clear'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -524,7 +534,7 @@ I remember our conversations and adapt to your preferences! 🚀""",
             _voicePreview = "Heard: $finalResult";
             _isListening = false;
           });
-          
+
           // Send the voice input as a message
           _sendMessage(finalResult, chatService);
         },

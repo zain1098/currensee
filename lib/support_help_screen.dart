@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'currency_chat_screen.dart';
 import 'login.dart'; // For EmailService
+import 'app_theme.dart';
 
 // Add ShineText widget for animated gradient text
 class ShineText extends StatefulWidget {
@@ -156,6 +157,7 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
   }
 
   Widget _buildHeaderSection() {
+    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.all(25),
       decoration: BoxDecoration(
@@ -163,15 +165,15 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            const Color(0xFF1E3A8A).withOpacity(0.1),
-            const Color(0xFF3B82F6).withOpacity(0.1),
+            theme.colorScheme.primary.withOpacity(0.1),
+            theme.colorScheme.secondary.withOpacity(0.1),
           ],
         ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF1E3A8A).withOpacity(0.2)),
+        border: Border.all(color: theme.colorScheme.primary.withOpacity(0.2)),
         boxShadow: [
           BoxShadow(
-            color: Colors.blueGrey.withOpacity(0.1),
+            color: theme.shadowColor.withOpacity(0.1),
             blurRadius: 10,
             spreadRadius: 2,
           ),
@@ -179,14 +181,14 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
       ),
       child: Column(
         children: [
-          Icon(Icons.support_agent, size: 60, color: const Color(0xFF1E3A8A)),
+          Icon(Icons.support_agent, size: 60, color: theme.colorScheme.primary),
           const SizedBox(height: 20),
           Text(
             'We\'re Here to Help',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: const Color(0xFF1E3A8A),
+              color: theme.colorScheme.primary,
             ),
             textAlign: TextAlign.center,
           ),
@@ -407,21 +409,14 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
   }
 
   Widget _buildContactForm() {
+    final theme = Theme.of(context);
     return Container(
       key: _contactFormKey,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color:
-            Theme.of(context).brightness == Brightness.dark
-                ? const Color(0xFF1E293B)
-                : Colors.grey[50],
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color:
-              Theme.of(context).brightness == Brightness.dark
-                  ? Colors.grey.shade700
-                  : Colors.grey.shade200,
-        ),
+        border: Border.all(color: theme.dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -431,7 +426,7 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Colors.grey[800],
+              color: theme.textTheme.titleLarge?.color,
             ),
           ),
           const SizedBox(height: 15),
@@ -440,7 +435,7 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
             style: TextStyle(
               fontSize: 16,
               height: 1.5,
-              color: Colors.grey[700],
+              color: theme.textTheme.bodyMedium?.color,
             ),
           ),
           const SizedBox(height: 20),
@@ -457,7 +452,7 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: theme.cardColor,
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -476,7 +471,7 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: theme.cardColor,
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -499,7 +494,7 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: theme.cardColor,
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -518,7 +513,8 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
                   child: ElevatedButton(
                     onPressed: _isSubmitting ? null : _submitForm,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1E3A8A),
+                      backgroundColor: theme.colorScheme.primary,
+                      foregroundColor: theme.colorScheme.onPrimary,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -533,11 +529,11 @@ class _SupportHelpScreenState extends State<SupportHelpScreen> {
                                 color: Colors.white,
                               ),
                             )
-                            : const Text(
+                            : Text(
                               'Submit Request',
                               style: TextStyle(
                                 fontSize: 18,
-                                color: Colors.white,
+                                color: theme.colorScheme.onPrimary,
                               ),
                             ),
                   ),

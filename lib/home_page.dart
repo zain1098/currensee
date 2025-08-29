@@ -11,6 +11,7 @@ import 'main.dart';
 import 'currency_widget.dart';
 import 'services/currency_service.dart';
 import 'services/connectivity_service.dart';
+import 'app_theme.dart';
 
 class CurrencyConverterScreen extends StatefulWidget {
   final bool showSuccess;
@@ -276,14 +277,40 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
     }
   }
 
+  List<Currency> _sortCurrenciesWithFavorites(List<Currency> currencies) {
+    final settings = Provider.of<AppSettings>(context, listen: false);
+    final favoriteCurrencies = settings.favoriteCurrencies;
+
+    // Separate favorite and non-favorite currencies
+    final favorites =
+        currencies
+            .where((currency) => favoriteCurrencies.contains(currency.code))
+            .toList();
+    final nonFavorites =
+        currencies
+            .where((currency) => !favoriteCurrencies.contains(currency.code))
+            .toList();
+
+    // Return favorites first, then non-favorites
+    return [...favorites, ...nonFavorites];
+  }
+
+  bool _isFavoriteCurrency(String currencyCode) {
+    final settings = Provider.of<AppSettings>(context, listen: false);
+    return settings.isFavoriteCurrency(currencyCode);
+  }
+
   Future<void> initializeCurrencies() async {
     try {
       // Load currencies from Firebase
       final loadedCurrencies = await CurrencyService.loadActiveCurrencies();
       print('Loaded ${loadedCurrencies.length} currencies from Firebase');
 
+      // Sort currencies with favorites first
+      final sortedCurrencies = _sortCurrenciesWithFavorites(loadedCurrencies);
+
       setState(() {
-        currencies = loadedCurrencies;
+        currencies = sortedCurrencies;
       });
 
       // Set default currencies with robust fallback logic
@@ -588,6 +615,7 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
       body: Stack(
         children: [
@@ -597,7 +625,7 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
               ? Center(
                 child: Text(
                   'Error: $errorMessage',
-                  style: const TextStyle(color: Colors.red),
+                  style: TextStyle(color: theme.colorScheme.error),
                 ),
               )
               : SingleChildScrollView(
@@ -1111,7 +1139,15 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                         children: [
                           // Display flag emoji
                           Text(curr.flag, style: const TextStyle(fontSize: 24)),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 4),
+                          // Star icon for favorite currencies
+                          if (_isFavoriteCurrency(curr.code))
+                            Icon(
+                              Icons.star,
+                              size: 12,
+                              color: isSelected ? Colors.white : Colors.amber,
+                            ),
+                          const SizedBox(height: 4),
                           Text(
                             curr.code,
                             style: TextStyle(
@@ -1222,6 +1258,7 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
   }
 
   Widget _buildInfoSection() {
+    final theme = Theme.of(context);
     if (fromCurrency == null || toCurrency == null) return const SizedBox();
 
     return Card(
@@ -1258,7 +1295,9 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                       const SizedBox(height: 4), // Reduced spacing
                       Text(
                         'Code: ${fromCurrency!.code} | Symbol: ${fromCurrency!.symbol}',
-                        style: const TextStyle(color: Colors.grey),
+                        style: TextStyle(
+                          color: theme.textTheme.bodySmall?.color,
+                        ),
                       ),
                     ],
                   ),
@@ -1287,7 +1326,9 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                       const SizedBox(height: 4), // Reduced spacing
                       Text(
                         'Code: ${toCurrency!.code} | Symbol: ${toCurrency!.symbol}',
-                        style: const TextStyle(color: Colors.grey),
+                        style: TextStyle(
+                          color: theme.textTheme.bodySmall?.color,
+                        ),
                       ),
                     ],
                   ),

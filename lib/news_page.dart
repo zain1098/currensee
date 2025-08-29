@@ -16,6 +16,7 @@ import 'package:lottie/lottie.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'contact_form_screen.dart';
 import 'services/news_service.dart';
+import 'app_theme.dart';
 
 // ... (Keep the existing MyApp, MainNavigationScreen and CurrencyConverterScreen code)
 
@@ -200,6 +201,7 @@ class _NewsScreenState extends State<NewsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
       key: _scaffoldKey,
       appBar: CustomAppBar(
@@ -475,8 +477,8 @@ class _NewsScreenState extends State<NewsScreen> {
                                       isSelected
                                           ? Colors.white
                                           : isInactive
-                                          ? Colors.grey[500]
-                                          : Colors.black,
+                                          ? theme.colorScheme.error
+                                          : theme.textTheme.bodyLarge?.color,
                                   fontWeight: FontWeight.bold,
                                   decoration:
                                       isInactive
@@ -488,17 +490,15 @@ class _NewsScreenState extends State<NewsScreen> {
                               selectedColor: const Color(0xFF4A6CD1),
                               backgroundColor:
                                   isInactive
-                                      ? Colors.grey[300]
-                                      : Theme.of(context).brightness ==
-                                          Brightness.dark
-                                      ? Colors.grey[700]
-                                      : Colors.grey[200],
+                                      ? theme.colorScheme.error.withOpacity(0.1)
+                                      : theme.cardColor,
                               onSelected:
                                   isInactive
                                       ? null
                                       : (selected) =>
                                           changeCategory(category.id),
-                              disabledColor: Colors.grey[300],
+                              disabledColor: theme.colorScheme.error
+                                  .withOpacity(0.1),
                             ),
                             if (isInactive)
                               Positioned(
@@ -541,7 +541,10 @@ class _NewsScreenState extends State<NewsScreen> {
                     ? Center(
                       child: Text(
                         errorMessage!,
-                        style: const TextStyle(color: Colors.red, fontSize: 16),
+                        style: TextStyle(
+                          color: theme.colorScheme.error,
+                          fontSize: 16,
+                        ),
                       ),
                     )
                     : filteredArticles.isEmpty

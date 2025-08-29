@@ -24,6 +24,8 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'services/connectivity_service.dart';
+import 'services/currency_service.dart';
+import 'app_theme.dart';
 
 // Add ShineText widget for animated gradient text
 class ShineText extends StatefulWidget {
@@ -156,6 +158,11 @@ class _SettingsPageState extends State<SettingsPage> {
   List<Map<String, dynamic>> _updateNotifications = [];
   DateTime? _lastCheckTime;
 
+  // Favorite currencies variables
+  List<Currency> _allCurrencies = [];
+  List<Currency> _favoriteCurrencies = [];
+  bool _isLoadingCurrencies = false;
+
   final List<String> _languages = [
     'English',
     'Spanish',
@@ -191,6 +198,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _clearOldDefaultPairsOnLoad();
     _loadCurrentAppVersion();
     _loadUpdateNotifications();
+    _loadCurrencies();
 
     // Auto-check for updates after a short delay to ensure UI is ready
     Future.delayed(const Duration(seconds: 2), () {
@@ -1956,7 +1964,11 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
 
             _buildSectionHeader('Appearance'),
-            _buildAppearanceSettings(),
+            _buildAppearanceSection(),
+            const SizedBox(height: 20),
+
+            _buildSectionHeader('Favorite Currencies'),
+            _buildFavoriteCurrenciesSection(),
             const SizedBox(height: 20),
 
             _buildSectionHeader('Features'),
@@ -2542,44 +2554,216 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _buildAppearanceSettings() {
-    return Column(
-      children: [
-        _buildToggleSetting('Dark mode', _darkMode, (value) {
-          setState(() => _darkMode = value);
-          _saveSetting('darkMode', value);
-          widget.onThemeChanged(value);
-          Provider.of<AppSettings>(context, listen: false).setDarkMode(value);
-        }),
-        const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text('Appearance mode'),
-            DropdownButton<String>(
-              value: _selectedAppearance,
-              items:
-                  _appearanceOptions.map((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value),
-                    );
-                  }).toList(),
-              onChanged: (newValue) {
-                if (newValue != null) {
-                  setState(() => _selectedAppearance = newValue);
-                  _saveSetting('selectedAppearance', newValue);
-                  widget.onThemeChanged(newValue == 'Dark');
-                  Provider.of<AppSettings>(
-                    context,
-                    listen: false,
-                  ).setSelectedAppearance(newValue);
-                }
-              },
-            ),
-          ],
+  Widget _buildAppearanceSection() {
+    final theme = Theme.of(context);
+    final settings = Provider.of<AppSettings>(context);
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Container(
+        decoration: AppTheme.getGradientDecoration(context),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header with current theme indicator
+              Row(
+                children: [
+                  Icon(
+                    Icons.palette_outlined,
+                    color: theme.colorScheme.primary,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Appearance',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      settings.effectiveDarkMode ? 'Dark' : 'Light',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+
+              // Theme Options with improved design
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildThemeOption(
+                      'System',
+                      Icons.brightness_auto,
+                      settings.selectedAppearance == 'System',
+                      () => settings.setSelectedAppearance('System'),
+                      theme,
+                      const LinearGradient(
+                        colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildThemeOption(
+                      'Light',
+                      Icons.light_mode,
+                      settings.selectedAppearance == 'Light',
+                      () => settings.setSelectedAppearance('Light'),
+                      theme,
+                      const LinearGradient(
+                        colors: [Color(0xFFF59E0B), Color(0xFFF97316)],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildThemeOption(
+                      'Dark',
+                      Icons.dark_mode,
+                      settings.selectedAppearance == 'Dark',
+                      () => settings.setSelectedAppearance('Dark'),
+                      theme,
+                      const LinearGradient(
+                        colors: [Color(0xFF1F2937), Color(0xFF374151)],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+
+              // Theme description
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: theme.colorScheme.outline.withOpacity(0.2),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      color: theme.colorScheme.primary,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _getThemeDescription(settings.selectedAppearance),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withOpacity(0.7),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
-      ],
+      ),
+    );
+  }
+
+  String _getThemeDescription(String appearance) {
+    switch (appearance) {
+      case 'System':
+        return 'Follows your device\'s system theme setting';
+      case 'Light':
+        return 'Always uses light theme regardless of system setting';
+      case 'Dark':
+        return 'Always uses dark theme regardless of system setting';
+      default:
+        return 'Follows your device\'s system theme setting';
+    }
+  }
+
+  Widget _buildThemeOption(
+    String title,
+    IconData icon,
+    bool isSelected,
+    VoidCallback onTap,
+    ThemeData theme,
+    LinearGradient gradient,
+  ) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeInOut,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color:
+                    isSelected ? theme.colorScheme.primary : theme.dividerColor,
+                width: isSelected ? 2 : 1,
+              ),
+              gradient: isSelected ? gradient : null,
+              color: isSelected ? null : theme.cardColor,
+              boxShadow:
+                  isSelected
+                      ? [
+                        BoxShadow(
+                          color: theme.colorScheme.primary.withOpacity(0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                      : null,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  color: isSelected ? Colors.white : theme.colorScheme.primary,
+                  size: 20,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  title,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color:
+                        isSelected
+                            ? Colors.white
+                            : theme.textTheme.bodySmall?.color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -2662,8 +2846,9 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildToggleSetting(
     String title,
     bool value,
-    Function(bool) onChanged,
-  ) {
+    Function(bool) onChanged, {
+    IconData? icon,
+  }) {
     // Special handling for biometric authentication
     if (title == 'Biometric authentication') {
       bool isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
@@ -2763,11 +2948,310 @@ class _SettingsPageState extends State<SettingsPage> {
       );
     }
     // Default toggle
-    return SwitchListTile(
-      title: Text(title),
-      value: value,
-      onChanged: onChanged,
+    return ListTile(
+      leading:
+          icon != null
+              ? Icon(icon, color: Theme.of(context).colorScheme.primary)
+              : null,
+      title: Text(
+        title,
+        style: TextStyle(
+          color: Theme.of(context).textTheme.bodyLarge?.color,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      trailing: Switch(
+        value: value,
+        onChanged: onChanged,
+        activeColor: Theme.of(context).colorScheme.primary,
+      ),
       contentPadding: EdgeInsets.zero,
+    );
+  }
+
+  Future<void> _loadCurrencies() async {
+    setState(() {
+      _isLoadingCurrencies = true;
+    });
+
+    try {
+      final currencies = await CurrencyService.loadCurrencies();
+      final settings = Provider.of<AppSettings>(context, listen: false);
+      final favoriteCodes = settings.favoriteCurrencies;
+
+      setState(() {
+        _allCurrencies = currencies;
+        _favoriteCurrencies =
+            currencies
+                .where((currency) => favoriteCodes.contains(currency.code))
+                .toList();
+        _isLoadingCurrencies = false;
+      });
+    } catch (e) {
+      print('Error loading currencies: $e');
+      setState(() {
+        _isLoadingCurrencies = false;
+      });
+    }
+  }
+
+  Widget _buildFavoriteCurrenciesSection() {
+    final theme = Theme.of(context);
+    final settings = Provider.of<AppSettings>(context);
+
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              theme.colorScheme.primary.withOpacity(0.1),
+              theme.colorScheme.secondary.withOpacity(0.05),
+            ],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.star, color: theme.colorScheme.primary, size: 24),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Favorite Currencies',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Select up to 3 currencies to appear at the top of all dropdowns',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurface.withOpacity(0.7),
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (_isLoadingCurrencies)
+                const Center(child: CircularProgressIndicator())
+              else if (_allCurrencies.isEmpty)
+                Center(
+                  child: Text(
+                    'No currencies available',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurface.withOpacity(0.7),
+                    ),
+                  ),
+                )
+              else
+                Column(
+                  children: [
+                    // Show current favorites
+                    if (_favoriteCurrencies.isNotEmpty) ...[
+                      Text(
+                        'Current Favorites:',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children:
+                            _favoriteCurrencies.map((currency) {
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primary.withOpacity(
+                                    0.1,
+                                  ),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: theme.colorScheme.primary,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      currency.flag,
+                                      style: const TextStyle(fontSize: 16),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      currency.code,
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            color: theme.colorScheme.primary,
+                                          ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    GestureDetector(
+                                      onTap: () {
+                                        settings.removeFavoriteCurrency(
+                                          currency.code,
+                                        );
+                                        setState(() {
+                                          _favoriteCurrencies.remove(currency);
+                                        });
+                                      },
+                                      child: Icon(
+                                        Icons.close,
+                                        size: 16,
+                                        color: theme.colorScheme.primary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    // Show available currencies
+                    Text(
+                      'Available Currencies:',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 200,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: theme.dividerColor),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: ListView.builder(
+                        itemCount: _allCurrencies.length,
+                        itemBuilder: (context, index) {
+                          final currency = _allCurrencies[index];
+                          final isFavorite = _favoriteCurrencies.contains(
+                            currency,
+                          );
+                          final isInactive = currency.status != 'active';
+                          final canSelect =
+                              !isInactive &&
+                              (_favoriteCurrencies.length < 3 || isFavorite);
+
+                          return ListTile(
+                            leading: Text(
+                              currency.flag,
+                              style: const TextStyle(fontSize: 20),
+                            ),
+                            title: Text(
+                              currency.code,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color:
+                                    isInactive
+                                        ? theme.colorScheme.error
+                                        : theme.colorScheme.onSurface,
+                              ),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  currency.name,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color:
+                                        isInactive
+                                            ? theme.colorScheme.error
+                                                .withOpacity(0.7)
+                                            : theme.colorScheme.onSurface
+                                                .withOpacity(0.7),
+                                  ),
+                                ),
+                                if (isInactive)
+                                  Container(
+                                    margin: const EdgeInsets.only(top: 4),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: theme.colorScheme.error
+                                          .withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      'Temporarily blocked by team',
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: theme.colorScheme.error,
+                                            fontSize: 10,
+                                          ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            trailing:
+                                isFavorite
+                                    ? Icon(
+                                      Icons.star,
+                                      color: theme.colorScheme.primary,
+                                      size: 20,
+                                    )
+                                    : canSelect
+                                    ? IconButton(
+                                      icon: const Icon(Icons.star_border),
+                                      onPressed: () {
+                                        settings.addFavoriteCurrency(
+                                          currency.code,
+                                        );
+                                        setState(() {
+                                          _favoriteCurrencies.add(currency);
+                                        });
+                                      },
+                                    )
+                                    : null,
+                            onTap:
+                                canSelect
+                                    ? () {
+                                      if (isFavorite) {
+                                        settings.removeFavoriteCurrency(
+                                          currency.code,
+                                        );
+                                        setState(() {
+                                          _favoriteCurrencies.remove(currency);
+                                        });
+                                      } else {
+                                        settings.addFavoriteCurrency(
+                                          currency.code,
+                                        );
+                                        setState(() {
+                                          _favoriteCurrencies.add(currency);
+                                        });
+                                      }
+                                    }
+                                    : null,
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

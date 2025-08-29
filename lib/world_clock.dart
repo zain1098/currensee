@@ -16,6 +16,7 @@ import 'package:lottie/lottie.dart';
 import 'support_help_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'services/flag_service.dart';
+import 'app_theme.dart';
 
 class WorldClockPage extends StatefulWidget {
   const WorldClockPage({super.key});
@@ -467,6 +468,8 @@ class _WorldClockPageState extends State<WorldClockPage>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     // Handle loading state
     if (_isLoading) {
       return Scaffold(
@@ -479,19 +482,32 @@ class _WorldClockPageState extends State<WorldClockPage>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const CircularProgressIndicator(),
+              CircularProgressIndicator(color: theme.colorScheme.primary),
               const SizedBox(height: 16),
-              const Text('Loading world clock data...'),
+              Text(
+                'Loading world clock data...',
+                style: TextStyle(
+                  color: theme.textTheme.bodyLarge?.color,
+                  fontSize: 16,
+                ),
+              ),
               if (_errorMessage != null) ...[
                 const SizedBox(height: 16),
                 Text(
                   _errorMessage!,
-                  style: const TextStyle(color: Colors.red),
+                  style: TextStyle(
+                    color: theme.colorScheme.error,
+                    fontSize: 14,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: _retryLoading,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.colorScheme.primary,
+                    foregroundColor: theme.colorScheme.onPrimary,
+                  ),
                   child: const Text('Retry'),
                 ),
               ],
@@ -513,17 +529,32 @@ class _WorldClockPageState extends State<WorldClockPage>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 64, color: Colors.red),
+              Icon(
+                Icons.error_outline,
+                size: 64,
+                color: theme.colorScheme.error,
+              ),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'No locations available',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: theme.textTheme.titleLarge?.color,
+                ),
               ),
               const SizedBox(height: 8),
-              const Text('Please check your internet connection'),
+              Text(
+                'Please check your internet connection',
+                style: TextStyle(color: theme.textTheme.bodyMedium?.color),
+              ),
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: _retryLoading,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.colorScheme.primary,
+                  foregroundColor: theme.colorScheme.onPrimary,
+                ),
                 child: const Text('Retry'),
               ),
             ],
@@ -796,14 +827,14 @@ class _WorldClockPageState extends State<WorldClockPage>
                 height: 200,
                 padding: const EdgeInsets.only(top: 12, bottom: 20),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).scaffoldBackgroundColor,
+                  color: theme.cardColor,
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(24),
                     topRight: Radius.circular(24),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: theme.shadowColor.withOpacity(0.1),
                       blurRadius: 15,
                       offset: const Offset(0, -5),
                     ),
@@ -1450,11 +1481,16 @@ class _ClockCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final progress = _calculateDayProgress();
-    final cardColor = isNight ? Colors.grey[800]! : Theme.of(context).cardColor;
+    final cardColor = isNight ? Colors.grey[800]! : theme.cardColor;
     final textColor =
-        isNight ? Colors.white : Theme.of(context).textTheme.bodyLarge!.color!;
-    final secondaryTextColor = isNight ? Colors.grey[300]! : Colors.grey[600]!;
+        isNight ? Colors.white : theme.textTheme.bodyLarge!.color!;
+    final secondaryTextColor =
+        isNight
+            ? Colors.grey[300]!
+            : theme.textTheme.bodyMedium?.color?.withOpacity(0.7) ??
+                Colors.grey[600]!;
 
     return Card(
       elevation: isMainClock ? 8 : 0,
@@ -1608,7 +1644,7 @@ class _ClockCard extends StatelessWidget {
                   value: progress,
                   minHeight: 4,
                   backgroundColor:
-                      isNight ? Colors.grey[700]! : Colors.grey[200]!,
+                      isNight ? Colors.grey[700]! : theme.dividerColor,
                   valueColor: AlwaysStoppedAnimation<Color>(
                     _getDayProgressColor(progress),
                   ),
@@ -1681,12 +1717,22 @@ class _AnalogClockPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width / 2;
-    canvas.drawCircle(center, radius, Paint()..color = Colors.white);
+
+    // Use theme-aware colors for analog clock
+    final isDark =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+        Brightness.dark;
+    final backgroundColor = isDark ? const Color(0xFF1F2937) : Colors.white;
+    final borderColor = isDark ? const Color(0xFF4B5563) : Colors.grey;
+    final textColor = isDark ? Colors.white : Colors.black;
+    final handColor = isDark ? Colors.white : Colors.black;
+
+    canvas.drawCircle(center, radius, Paint()..color = backgroundColor);
     canvas.drawCircle(
       center,
       radius,
       Paint()
-        ..color = Colors.grey
+        ..color = borderColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2,
     );
@@ -1705,7 +1751,7 @@ class _AnalogClockPainter extends CustomPainter {
         markerStart,
         markerEnd,
         Paint()
-          ..color = Colors.black
+          ..color = handColor
           ..strokeWidth = 2,
       );
     }
@@ -1718,7 +1764,7 @@ class _AnalogClockPainter extends CustomPainter {
         center.dy + radius * 0.4 * math.sin(hourAngle),
       ),
       Paint()
-        ..color = Colors.black
+        ..color = handColor
         ..strokeWidth = 4,
     );
     final minuteAngle = time.minute * math.pi / 30 - math.pi / 2;
@@ -1729,7 +1775,7 @@ class _AnalogClockPainter extends CustomPainter {
         center.dy + radius * 0.6 * math.sin(minuteAngle),
       ),
       Paint()
-        ..color = Colors.black
+        ..color = handColor
         ..strokeWidth = 3,
     );
     final secondAngle = time.second * math.pi / 30 - math.pi / 2;
@@ -1744,7 +1790,7 @@ class _AnalogClockPainter extends CustomPainter {
         ..strokeWidth = 1.5,
     );
     canvas.drawCircle(center, 5, Paint()..color = Colors.red);
-    canvas.drawCircle(center, 3, Paint()..color = Colors.white);
+    canvas.drawCircle(center, 3, Paint()..color = backgroundColor);
   }
 
   @override

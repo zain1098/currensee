@@ -15,6 +15,7 @@ import 'package:lottie/lottie.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'support_help_screen.dart';
 import 'services/currency_service.dart';
+import 'app_theme.dart';
 
 class MultiCurrencyConverter extends StatefulWidget {
   const MultiCurrencyConverter({super.key});
@@ -718,21 +719,53 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
   }
 
   List<Currency> getFilteredBaseCurrencies() {
-    if (baseCurrencySearchQuery.isEmpty) return availableCurrencies;
+    List<Currency> filteredCurrencies;
 
-    return availableCurrencies.where((currency) {
-      final codeMatch = currency.code.toLowerCase().contains(
-        baseCurrencySearchQuery.toLowerCase(),
-      );
-      final nameMatch = currency.name.toLowerCase().contains(
-        baseCurrencySearchQuery.toLowerCase(),
-      );
-      return codeMatch || nameMatch;
-    }).toList();
+    if (baseCurrencySearchQuery.isEmpty) {
+      filteredCurrencies = availableCurrencies;
+    } else {
+      filteredCurrencies =
+          availableCurrencies.where((currency) {
+            final codeMatch = currency.code.toLowerCase().contains(
+              baseCurrencySearchQuery.toLowerCase(),
+            );
+            final nameMatch = currency.name.toLowerCase().contains(
+              baseCurrencySearchQuery.toLowerCase(),
+            );
+            return codeMatch || nameMatch;
+          }).toList();
+    }
+
+    // Sort with favorites first
+    return _sortCurrenciesWithFavorites(filteredCurrencies);
+  }
+
+  List<Currency> _sortCurrenciesWithFavorites(List<Currency> currencies) {
+    final settings = Provider.of<AppSettings>(context, listen: false);
+    final favoriteCurrencies = settings.favoriteCurrencies;
+
+    // Separate favorite and non-favorite currencies
+    final favorites =
+        currencies
+            .where((currency) => favoriteCurrencies.contains(currency.code))
+            .toList();
+    final nonFavorites =
+        currencies
+            .where((currency) => !favoriteCurrencies.contains(currency.code))
+            .toList();
+
+    // Return favorites first, then non-favorites
+    return [...favorites, ...nonFavorites];
+  }
+
+  bool _isFavoriteCurrency(String currencyCode) {
+    final settings = Provider.of<AppSettings>(context, listen: false);
+    return settings.isFavoriteCurrency(currencyCode);
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final filteredCurrencies = getFilteredCurrencies();
 
     return Scaffold(
@@ -956,7 +989,7 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
               ? Center(
                 child: Text(
                   'Error: $errorMessage',
-                  style: const TextStyle(color: Colors.red),
+                  style: TextStyle(color: theme.colorScheme.error),
                 ),
               )
               : SingleChildScrollView(
@@ -981,12 +1014,12 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                             child: Container(
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: theme.cardColor,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.grey.shade200),
+                                border: Border.all(color: theme.dividerColor),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.grey.withOpacity(0.2),
+                                    color: theme.shadowColor.withOpacity(0.2),
                                     blurRadius: 5,
                                     offset: const Offset(0, 2),
                                   ),
@@ -1004,11 +1037,16 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        const Text(
+                                        Text(
                                           'Base Currency',
                                           style: TextStyle(
                                             fontSize: 12,
-                                            color: Colors.grey,
+                                            color:
+                                                theme
+                                                    .textTheme
+                                                    .bodySmall
+                                                    ?.color ??
+                                                Colors.grey,
                                           ),
                                         ),
                                         Text(
@@ -1622,6 +1660,16 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                                     ),
                                     title: Row(
                                       children: [
+                                        if (_isFavoriteCurrency(
+                                          currency.code,
+                                        )) ...[
+                                          Icon(
+                                            Icons.star,
+                                            size: 16,
+                                            color: Colors.amber,
+                                          ),
+                                          const SizedBox(width: 4),
+                                        ],
                                         Text(
                                           currency.code,
                                           style: TextStyle(

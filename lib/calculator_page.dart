@@ -11,6 +11,7 @@ import 'package:lottie/lottie.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'support_help_screen.dart';
+import 'app_theme.dart';
 
 // Unified currency management
 class CurrencyUtils {
@@ -534,6 +535,7 @@ class _CalculatorsScreenState extends State<CalculatorsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
       key: _scaffoldKey,
       appBar: CustomAppBar(
@@ -806,8 +808,26 @@ class _CurrencySearchDropdownState extends State<CurrencySearchDropdown> {
   @override
   void initState() {
     super.initState();
-    _filteredCurrencies = CurrencyUtils.allCurrencies;
+    _filteredCurrencies = _getSortedCurrencies();
     _searchController.addListener(_filterCurrencies);
+  }
+
+  List<String> _getSortedCurrencies() {
+    final settings = Provider.of<AppSettings>(context, listen: false);
+    final favoriteCurrencies = settings.favoriteCurrencies;
+
+    // Separate favorite and non-favorite currencies
+    final favorites =
+        CurrencyUtils.allCurrencies
+            .where((currency) => favoriteCurrencies.contains(currency))
+            .toList();
+    final nonFavorites =
+        CurrencyUtils.allCurrencies
+            .where((currency) => !favoriteCurrencies.contains(currency))
+            .toList();
+
+    // Return favorites first, then non-favorites
+    return [...favorites, ...nonFavorites];
   }
 
   @override
@@ -820,9 +840,9 @@ class _CurrencySearchDropdownState extends State<CurrencySearchDropdown> {
     final query = _searchController.text.toLowerCase();
     setState(() {
       if (query.isEmpty) {
-        _filteredCurrencies = CurrencyUtils.allCurrencies;
+        _filteredCurrencies = _getSortedCurrencies();
       } else {
-        _filteredCurrencies =
+        final allMatching =
             CurrencyUtils.allCurrencies
                 .where(
                   (currency) =>
@@ -832,12 +852,28 @@ class _CurrencySearchDropdownState extends State<CurrencySearchDropdown> {
                           .contains(query),
                 )
                 .toList();
+
+        // Maintain favorite order in search results
+        final settings = Provider.of<AppSettings>(context, listen: false);
+        final favoriteCurrencies = settings.favoriteCurrencies;
+
+        final favorites =
+            allMatching
+                .where((currency) => favoriteCurrencies.contains(currency))
+                .toList();
+        final nonFavorites =
+            allMatching
+                .where((currency) => !favoriteCurrencies.contains(currency))
+                .toList();
+
+        _filteredCurrencies = [...favorites, ...nonFavorites];
       }
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     // Ensure selected currency is in filtered list
     final validSelectedCurrency =
         _filteredCurrencies.contains(widget.selectedCurrency)
@@ -869,16 +905,32 @@ class _CurrencySearchDropdownState extends State<CurrencySearchDropdown> {
           ),
           items:
               _filteredCurrencies.map((String value) {
+                final settings = Provider.of<AppSettings>(
+                  context,
+                  listen: false,
+                );
+                final isFavorite = settings.isFavoriteCurrency(value);
+
                 return DropdownMenuItem<String>(
                   value: value,
                   child: Row(
                     children: [
+                      if (isFavorite) ...[
+                        Icon(
+                          Icons.star,
+                          size: 16,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 4),
+                      ],
                       Text(value),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           CurrencyUtils.currencyNames[value] ?? '',
-                          style: const TextStyle(color: Colors.grey),
+                          style: TextStyle(
+                            color: theme.textTheme.bodySmall?.color,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),

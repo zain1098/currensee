@@ -43,6 +43,7 @@ import 'services/maintenance_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/lottie_manager.dart';
 import 'services/performance_monitor.dart';
+import 'app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -143,6 +144,7 @@ class AppSettings extends ChangeNotifier {
   bool _offlineMode = false;
   String _selectedLanguage = 'English';
   String _selectedAppearance = 'System';
+  List<String> _favoriteCurrencies = [];
 
   // Getters
   bool get darkMode => _darkMode;
@@ -156,6 +158,21 @@ class AppSettings extends ChangeNotifier {
   bool get offlineMode => _offlineMode;
   String get selectedLanguage => _selectedLanguage;
   String get selectedAppearance => _selectedAppearance;
+  List<String> get favoriteCurrencies => _favoriteCurrencies;
+
+  // Get effective dark mode based on appearance setting
+  bool get effectiveDarkMode {
+    if (_selectedAppearance == 'System') {
+      // Use system theme
+      final brightness =
+          WidgetsBinding.instance.platformDispatcher.platformBrightness;
+      return brightness == Brightness.dark;
+    } else if (_selectedAppearance == 'Dark') {
+      return true;
+    } else {
+      return false;
+    }
+  }
 
   // Load settings from SharedPreferences
   Future<void> loadSettings() async {
@@ -171,7 +188,24 @@ class AppSettings extends ChangeNotifier {
     _offlineMode = prefs.getBool('offlineMode') ?? false;
     _selectedLanguage = prefs.getString('selectedLanguage') ?? 'English';
     _selectedAppearance = prefs.getString('selectedAppearance') ?? 'System';
+    _favoriteCurrencies = prefs.getStringList('favoriteCurrencies') ?? [];
+
+    // Update dark mode based on appearance setting
+    _updateDarkModeFromAppearance();
     notifyListeners();
+  }
+
+  // Update dark mode based on appearance setting
+  void _updateDarkModeFromAppearance() {
+    if (_selectedAppearance == 'System') {
+      final brightness =
+          WidgetsBinding.instance.platformDispatcher.platformBrightness;
+      _darkMode = brightness == Brightness.dark;
+    } else if (_selectedAppearance == 'Dark') {
+      _darkMode = true;
+    } else {
+      _darkMode = false;
+    }
   }
 
   // Save settings to SharedPreferences
@@ -183,6 +217,8 @@ class AppSettings extends ChangeNotifier {
       await prefs.setInt(key, value);
     } else if (value is String) {
       await prefs.setString(key, value);
+    } else if (value is List<String>) {
+      await prefs.setStringList(key, value);
     }
     notifyListeners();
   }
@@ -190,7 +226,14 @@ class AppSettings extends ChangeNotifier {
   // Setters with save functionality
   void setDarkMode(bool value) {
     _darkMode = value;
+    // Update appearance setting based on dark mode
+    if (value) {
+      _selectedAppearance = 'Dark';
+    } else {
+      _selectedAppearance = 'Light';
+    }
     _saveSetting('darkMode', value);
+    _saveSetting('selectedAppearance', _selectedAppearance);
   }
 
   void setDecimalPlaces(int value) {
@@ -240,7 +283,32 @@ class AppSettings extends ChangeNotifier {
 
   void setSelectedAppearance(String value) {
     _selectedAppearance = value;
+    _updateDarkModeFromAppearance();
     _saveSetting('selectedAppearance', value);
+    _saveSetting('darkMode', _darkMode);
+  }
+
+  // Favorite currencies methods
+  void setFavoriteCurrencies(List<String> currencies) {
+    _favoriteCurrencies = currencies;
+    _saveSetting('favoriteCurrencies', currencies);
+  }
+
+  void addFavoriteCurrency(String currencyCode) {
+    if (!_favoriteCurrencies.contains(currencyCode) &&
+        _favoriteCurrencies.length < 3) {
+      _favoriteCurrencies.add(currencyCode);
+      _saveSetting('favoriteCurrencies', _favoriteCurrencies);
+    }
+  }
+
+  void removeFavoriteCurrency(String currencyCode) {
+    _favoriteCurrencies.remove(currencyCode);
+    _saveSetting('favoriteCurrencies', _favoriteCurrencies);
+  }
+
+  bool isFavoriteCurrency(String currencyCode) {
+    return _favoriteCurrencies.contains(currencyCode);
   }
 }
 
@@ -768,244 +836,97 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final settings = Provider.of<AppSettings>(context);
+    return Consumer<AppSettings>(
+      builder: (context, settings, child) {
+        return MaterialApp(
+          key: _appKey, // Use the restart key here
+          // In main.dart, modify the MaterialApp routes:
+          home:
+              _isConnected && !settings.offlineMode
+                  ? FutureBuilder<Map<String, dynamic>?>(
+                    future: MaintenanceService.checkMaintenanceStatus(),
+                    builder: (context, snapshot) {
+                      // Show loading while checking maintenance
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Scaffold(
+                          body: Center(child: CircularProgressIndicator()),
+                        );
+                      }
 
-    return MaterialApp(
-      key: _appKey, // Use the restart key here
-      // In main.dart, modify the MaterialApp routes:
-      home:
-          _isConnected && !settings.offlineMode
-              ? FutureBuilder<Map<String, dynamic>?>(
-                future: MaintenanceService.checkMaintenanceStatus(),
-                builder: (context, snapshot) {
-                  // Show loading while checking maintenance
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Scaffold(
-                      body: Center(child: CircularProgressIndicator()),
-                    );
-                  }
+                      // Check if maintenance mode is active
+                      if (snapshot.hasData &&
+                          snapshot.data != null &&
+                          snapshot.data!['isEnabled'] == true) {
+                        // Show maintenance screen
+                        return Scaffold(
+                          body: Builder(
+                            builder: (context) {
+                              // Show maintenance modal
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                MaintenanceService.showMaintenanceModal(
+                                  context,
+                                  snapshot.data!,
+                                );
+                              });
+                              return const Center(
+                                child: Text('App is under maintenance'),
+                              );
+                            },
+                          ),
+                        );
+                      }
 
-                  // Check if maintenance mode is active
-                  if (snapshot.hasData &&
-                      snapshot.data != null &&
-                      snapshot.data!['isEnabled'] == true) {
-                    // Show maintenance screen
-                    return Scaffold(
-                      body: Builder(
-                        builder: (context) {
-                          // Show maintenance modal
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            MaintenanceService.showMaintenanceModal(
-                              context,
-                              snapshot.data!,
-                            );
-                          });
-                          return const Center(
-                            child: Text('App is under maintenance'),
-                          );
-                        },
-                      ),
-                    );
-                  }
+                      // Normal app flow
+                      return _showLockScreen
+                          ? BiometricLockScreen(
+                            onUnlock: _authenticate,
+                            error: _lockError,
+                            biometricAvailable: _biometricAvailable,
+                            isAuthenticating: _isAuthenticating,
+                          )
+                          : const AuthGate();
+                    },
+                  )
+                  : !_isConnected && !settings.offlineMode
+                  ? NetworkErrorScreen(
+                    onRetry: _retryConnection,
+                    isChecking: _isCheckingConnection,
+                  )
+                  : _showLockScreen
+                  ? BiometricLockScreen(
+                    onUnlock: _authenticate,
+                    error: _lockError,
+                    biometricAvailable: _biometricAvailable,
+                    isAuthenticating: _isAuthenticating,
+                  )
+                  : const AuthGate(),
 
-                  // Normal app flow
-                  return _showLockScreen
-                      ? BiometricLockScreen(
-                        onUnlock: _authenticate,
-                        error: _lockError,
-                        biometricAvailable: _biometricAvailable,
-                        isAuthenticating: _isAuthenticating,
-                      )
-                      : const AuthGate();
-                },
-              )
-              : !_isConnected && !settings.offlineMode
-              ? NetworkErrorScreen(
-                onRetry: _retryConnection,
-                isChecking: _isCheckingConnection,
-              )
-              : _showLockScreen
-              ? BiometricLockScreen(
-                onUnlock: _authenticate,
-                error: _lockError,
-                biometricAvailable: _biometricAvailable,
-                isAuthenticating: _isAuthenticating,
-              )
-              : const AuthGate(),
+          builder: (context, child) {
+            return ConnectivityWrapper(
+              onRestart: _restartApp,
+              child: child ?? const SizedBox(), // ADDED THIS LINE
+            );
+          },
+          routes: {
+            '/auth': (context) => const AuthGate(),
+            '/splash': (context) => const SplashScreen(),
+            '/signin': (context) => const SignInScreen(),
+            '/signup': (context) => const SignUpScreen(),
+            '/forgot': (context) => const ForgotPasswordScreen(),
+            '/home': (context) => const MainScreen(),
 
-      builder: (context, child) {
-        return ConnectivityWrapper(
-          onRestart: _restartApp,
-          child: child ?? const SizedBox(), // ADDED THIS LINE
+            '/rate-list': (context) => const RateListPage(),
+          },
+
+          title: 'CurrenSee Pro',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme(),
+          darkTheme: AppTheme.darkTheme(),
+          themeMode:
+              settings.effectiveDarkMode ? ThemeMode.dark : ThemeMode.light,
         );
       },
-      routes: {
-        '/auth': (context) => const AuthGate(),
-        '/splash': (context) => const SplashScreen(),
-        '/signin': (context) => const SignInScreen(),
-        '/signup': (context) => const SignUpScreen(),
-        '/forgot': (context) => const ForgotPasswordScreen(),
-        '/home': (context) => const MainScreen(),
-
-        '/rate-list': (context) => const RateListPage(),
-      },
-
-      title: 'CurrenSee Pro',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primarySwatch: _createMaterialColor(const Color(0xFF1E3A8A)),
-        colorScheme: ColorScheme.light(
-          primary: const Color(0xFF1E3A8A),
-          secondary: const Color(0xFFD4AF37),
-          surface: const Color(0xFFF8FAFC),
-          onPrimary: Colors.white,
-          onSecondary: Colors.black,
-        ),
-        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-        fontFamily: 'Poppins',
-        textTheme: const TextTheme(
-          headlineMedium: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 24,
-            color: Color(0xFF1E293B),
-          ),
-          bodyLarge: TextStyle(fontSize: 16, color: Color(0xFF334155)),
-          titleLarge: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF1E293B),
-          ),
-        ),
-        appBarTheme: const AppBarTheme(
-          elevation: 0,
-          centerTitle: true,
-          backgroundColor: Color(0xFF1E3A8A),
-          titleTextStyle: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-          iconTheme: IconThemeData(color: Colors.white),
-        ),
-        cardTheme: CardThemeData(
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          color: Colors.white,
-          margin: const EdgeInsets.all(8),
-        ),
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: Color(0xFFD4AF37),
-          foregroundColor: Colors.black,
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 12,
-          ),
-        ),
-      ),
-      darkTheme: ThemeData(
-        primarySwatch: _createMaterialColor(const Color(0xFF1E3A8A)),
-        colorScheme: ColorScheme.dark(
-          primary: const Color(0xFF1E3A8A),
-          secondary: const Color(0xFFD4AF37),
-          surface: const Color(0xFF1E293B),
-          onPrimary: Colors.white,
-          onSecondary: Colors.black,
-        ),
-        scaffoldBackgroundColor: const Color(0xFF0F172A),
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-        fontFamily: 'Poppins',
-        textTheme: const TextTheme(
-          headlineMedium: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 24,
-            color: Colors.white,
-          ),
-          bodyLarge: TextStyle(fontSize: 16, color: Colors.white70),
-          titleLarge: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        appBarTheme: const AppBarTheme(
-          elevation: 0,
-          centerTitle: true,
-          backgroundColor: Color(0xFF1E3A8A),
-          titleTextStyle: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-          iconTheme: IconThemeData(color: Colors.white),
-        ),
-        cardTheme: CardThemeData(
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          color: const Color(0xFF1E293B),
-          margin: const EdgeInsets.all(8),
-        ),
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: Color(0xFFD4AF37),
-          foregroundColor: Colors.black,
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: const Color(0xFF1E293B),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Color(0xFF334155)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Color(0xFF334155)),
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 12,
-          ),
-        ),
-      ),
-      themeMode: settings.darkMode ? ThemeMode.dark : ThemeMode.light,
     );
-  }
-
-  static MaterialColor _createMaterialColor(Color color) {
-    final strengths = <double>[.05];
-    final swatch = <int, Color>{};
-    final r = color.red, g = color.green, b = color.blue;
-
-    for (int i = 1; i < 10; i++) {
-      strengths.add(0.1 * i);
-    }
-
-    for (var strength in strengths) {
-      final ds = 0.5 - strength;
-      swatch[(strength * 1000).round()] = Color.fromRGBO(
-        r + ((ds < 0 ? r : (255 - r)) * ds).round(),
-        g + ((ds < 0 ? g : (255 - g)) * ds).round(),
-        b + ((ds < 0 ? b : (255 - b)) * ds).round(),
-        1,
-      );
-    }
-
-    return MaterialColor(color.value, swatch);
   }
 }
 
