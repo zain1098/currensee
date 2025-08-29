@@ -8,5 +8,5 @@
     android:initialLayout="@layout/watchlist_widget"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
-    android:previewImage="@mipmap/ic_launcher"
-    android:label="Watchlist Widget" />
+    android:previewImage="@drawable/widget_watchlist_icon"
+    android:label="@string/widget_watchlist_label" />

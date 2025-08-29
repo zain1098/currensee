@@ -17,6 +17,7 @@ import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.*
 import org.json.JSONObject
+import org.json.JSONArray
 
 class RedListWidgetProvider : AppWidgetProvider() {
 
@@ -25,8 +26,8 @@ class RedListWidgetProvider : AppWidgetProvider() {
         
         fun updateAllWidgets(context: Context) {
             val currentTime = System.currentTimeMillis()
-            if (currentTime - lastUpdateTime < 1000) {
-                println("Skipping redlist widget update - too soon since last update")
+            if (currentTime - lastUpdateTime < 500) { // Reduced to 500ms for faster updates
+                println("⏰ Skipping redlist widget update - too soon since last update")
                 return
             }
             lastUpdateTime = currentTime
@@ -35,11 +36,19 @@ class RedListWidgetProvider : AppWidgetProvider() {
             val appWidgetIds = appWidgetManager.getAppWidgetIds(
                 android.content.ComponentName(context, RedListWidgetProvider::class.java)
             )
-            println("Updating ${appWidgetIds.size} redlist widgets")
+            println("🔄 Updating ${appWidgetIds.size} redlist widgets")
+            
+            if (appWidgetIds.isEmpty()) {
+                println("⚠️ No redlist widgets found to update")
+                return
+            }
+            
             for (appWidgetId in appWidgetIds) {
                 val provider = RedListWidgetProvider()
                 provider.updateWidget(context, appWidgetManager, appWidgetId)
             }
+            
+            println("✅ Redlist widget update completed")
         }
     }
 
@@ -88,34 +97,56 @@ class RedListWidgetProvider : AppWidgetProvider() {
         val prefs = context.getSharedPreferences("RedListWidgetPrefs", Context.MODE_PRIVATE)
         val lastUpdated = prefs.getString("redlist_last_updated", "No data") ?: "No data"
         
+        // Use static currencies
+        val staticCurrencies = listOf("EUR", "JPY", "GBP", "PKR", "INR", "CNY")
+        
         // Show cached data
         for (i in 1..6) {
             val country = prefs.getString("country_$i", "") ?: ""
             val rate = prefs.getString("rate_$i", "0.0000") ?: "0.0000"
             
+            // If no cached data, show static currency codes
+            val displayCountry = if (country.isEmpty()) {
+                if (i <= staticCurrencies.size) {
+                    staticCurrencies[i - 1]
+                } else {
+                    when (i) {
+                        1 -> "EUR"
+                        2 -> "JPY"
+                        3 -> "GBP"
+                        4 -> "PKR"
+                        5 -> "INR"
+                        6 -> "CNY"
+                        else -> ""
+                    }
+                }
+            } else {
+                country
+            }
+            
             when (i) {
                 1 -> {
-                    views.setTextViewText(R.id.country_1, country)
+                    views.setTextViewText(R.id.country_1, displayCountry)
                     views.setTextViewText(R.id.rate_1, rate)
                 }
                 2 -> {
-                    views.setTextViewText(R.id.country_2, country)
+                    views.setTextViewText(R.id.country_2, displayCountry)
                     views.setTextViewText(R.id.rate_2, rate)
                 }
                 3 -> {
-                    views.setTextViewText(R.id.country_3, country)
+                    views.setTextViewText(R.id.country_3, displayCountry)
                     views.setTextViewText(R.id.rate_3, rate)
                 }
                 4 -> {
-                    views.setTextViewText(R.id.country_4, country)
+                    views.setTextViewText(R.id.country_4, displayCountry)
                     views.setTextViewText(R.id.rate_4, rate)
                 }
                 5 -> {
-                    views.setTextViewText(R.id.country_5, country)
+                    views.setTextViewText(R.id.country_5, displayCountry)
                     views.setTextViewText(R.id.rate_5, rate)
                 }
                 6 -> {
-                    views.setTextViewText(R.id.country_6, country)
+                    views.setTextViewText(R.id.country_6, displayCountry)
                     views.setTextViewText(R.id.rate_6, rate)
                 }
             }
@@ -132,41 +163,63 @@ class RedListWidgetProvider : AppWidgetProvider() {
         views.setTextViewText(R.id.internet_status, "ERROR")
         views.setInt(R.id.internet_status, "setVisibility", View.VISIBLE)
         
-        // Show default data
-        val defaultData = listOf(
-            "United States" to "1.0000",
-            "Eurozone" to "0.8500",
-            "Japan" to "150.25",
-            "United Kingdom" to "0.7500",
-            "Pakistan" to "280.50",
-            "India" to "83.25"
+        // Use static currencies
+        val staticCurrencies = listOf("EUR", "JPY", "GBP", "PKR", "INR", "CNY")
+        
+        // Show static currencies with default rates
+        val defaultData = staticCurrencies.take(6).map { currency: String ->
+            when (currency) {
+                "EUR" -> "EUR" to "0.8500"
+                "JPY" -> "JPY" to "150.25"
+                "GBP" -> "GBP" to "0.7500"
+                "PKR" -> "PKR" to "280.50"
+                "INR" -> "INR" to "83.25"
+                "CNY" -> "CNY" to "7.25"
+                else -> currency to "1.0000"
+            }
+        }
+        
+        // Fill remaining slots with defaults if needed
+        val defaultFallbacks = listOf(
+            "EUR" to "0.8500",
+            "JPY" to "150.25",
+            "GBP" to "0.7500",
+            "PKR" to "280.50",
+            "INR" to "83.25",
+            "CNY" to "7.25"
         )
         
-        for (i in defaultData.indices) {
-            val (country, rate) = defaultData[i]
+        val finalData = if (defaultData.size < 6) {
+            defaultData + defaultFallbacks.take(6 - defaultData.size)
+        } else {
+            defaultData
+        }
+        
+        for (i in finalData.indices) {
+            val (currency, rate) = finalData[i]
             when (i) {
                 0 -> {
-                    views.setTextViewText(R.id.country_1, country)
+                    views.setTextViewText(R.id.country_1, currency)
                     views.setTextViewText(R.id.rate_1, rate)
                 }
                 1 -> {
-                    views.setTextViewText(R.id.country_2, country)
+                    views.setTextViewText(R.id.country_2, currency)
                     views.setTextViewText(R.id.rate_2, rate)
                 }
                 2 -> {
-                    views.setTextViewText(R.id.country_3, country)
+                    views.setTextViewText(R.id.country_3, currency)
                     views.setTextViewText(R.id.rate_3, rate)
                 }
                 3 -> {
-                    views.setTextViewText(R.id.country_4, country)
+                    views.setTextViewText(R.id.country_4, currency)
                     views.setTextViewText(R.id.rate_4, rate)
                 }
                 4 -> {
-                    views.setTextViewText(R.id.country_5, country)
+                    views.setTextViewText(R.id.country_5, currency)
                     views.setTextViewText(R.id.rate_5, rate)
                 }
                 5 -> {
-                    views.setTextViewText(R.id.country_6, country)
+                    views.setTextViewText(R.id.country_6, currency)
                     views.setTextViewText(R.id.rate_6, rate)
                 }
             }
@@ -225,18 +278,16 @@ class RedListWidgetProvider : AppWidgetProvider() {
         override fun run() {
             try {
                 val views = RemoteViews(context.packageName, R.layout.redlist_widget)
-                val prefs = context.getSharedPreferences("RedListWidgetPrefs", Context.MODE_PRIVATE)
-                val editor = prefs.edit()
+                val widgetPrefs = context.getSharedPreferences("RedListWidgetPrefs", Context.MODE_PRIVATE)
+                val editor = widgetPrefs.edit()
                 
-                // Define currencies to fetch (base currency is USD)
-                val currencies = listOf(
-                    "EUR" to "Eurozone",
-                    "JPY" to "Japan", 
-                    "GBP" to "United Kingdom",
-                    "PKR" to "Pakistan",
-                    "INR" to "India",
-                    "CNY" to "China"
-                )
+                // Use static currencies for simplicity
+                val staticCurrencies = listOf("EUR", "JPY", "GBP", "PKR", "INR", "CNY")
+                println("📋 Using static currencies: $staticCurrencies")
+                
+                // Create currency pairs for API calls
+                val currencies = staticCurrencies.map { currency -> currency to currency }
+                println("🔗 Currency pairs for API: $currencies")
                 
                 val results = mutableListOf<Pair<String, Map<String, Any>>>()
                 
@@ -299,7 +350,6 @@ class RedListWidgetProvider : AppWidgetProvider() {
                     val reader = BufferedReader(InputStreamReader(connection.inputStream))
                     val response = StringBuilder()
                     var line: String?
-                    
                     while (reader.readLine().also { line = it } != null) {
                         response.append(line)
                     }

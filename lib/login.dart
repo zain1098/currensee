@@ -4,6 +4,7 @@ import 'package:lottie/lottie.dart';
 import 'main.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -851,6 +852,161 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
+  Future<void> _signInWithFacebook() async {
+    setState(() => _isLoading = true);
+    try {
+      print('Starting Facebook Sign-in process...');
+
+      print('Initiating Facebook login...');
+
+      // Trigger the sign-in flow with proper permissions
+      // Force web-based login to avoid native app issues
+      final LoginResult result = await FacebookAuth.instance.login(
+        permissions: ['email', 'public_profile'],
+        loginBehavior: LoginBehavior.webOnly, // Force web-based login
+      );
+
+      print('Facebook login result status: ${result.status}');
+      print('Facebook login result message: ${result.message}');
+      print('Facebook access token: ${result.accessToken}');
+
+      if (result.status == LoginStatus.success && result.accessToken != null) {
+        print('Facebook login successful, token obtained');
+
+        // Create a credential from the access token
+        final OAuthCredential credential = FacebookAuthProvider.credential(
+          result.accessToken!.toString(),
+        );
+
+        print('Created OAuth credential, signing in to Firebase...');
+
+        // Sign in to Firebase with the credential
+        final UserCredential userCredential = await FirebaseAuth.instance
+            .signInWithCredential(credential);
+
+        print('Firebase authentication completed successfully');
+        print('User email: ${userCredential.user?.email}');
+        print('User display name: ${userCredential.user?.displayName}');
+
+        final isNewUser = userCredential.additionalUserInfo?.isNewUser ?? false;
+        print('Is new user: $isNewUser');
+
+        if (isNewUser) {
+          print('Processing new user data...');
+
+          // Get user data from Facebook
+          final userData = await FacebookAuth.instance.getUserData(
+            fields: "name,email,picture.width(200)",
+          );
+
+          print('Facebook user data: $userData');
+
+          // Update display name for new user
+          if (userData['name'] != null) {
+            await userCredential.user!.updateDisplayName(userData['name']);
+            print('Updated display name: ${userData['name']}');
+          }
+
+          // Update photo URL if available
+          if (userData['picture'] != null &&
+              userData['picture']['data'] != null &&
+              userData['picture']['data']['url'] != null) {
+            await userCredential.user!.updatePhotoURL(
+              userData['picture']['data']['url'],
+            );
+            print('Updated photo URL');
+          }
+
+          // Send welcome email for new Facebook users
+          if (userCredential.user!.email != null) {
+            try {
+              await EmailService.sendWelcomeEmail(
+                recipientEmail: userCredential.user!.email!,
+              );
+              print('Welcome email sent successfully');
+            } catch (e) {
+              print('Failed to send welcome email: $e');
+            }
+          }
+        }
+
+        // Add user to Firestore
+        await addUserToFirestore(userCredential.user!);
+        print('User added to Firestore');
+
+        // Check user status after successful authentication
+        final isUserActive = await checkUserStatus(userCredential.user!.uid);
+        if (!isUserActive) {
+          setState(() => _isLoading = false);
+          return; // User is blocked, dialog already shown
+        }
+
+        if (!mounted) {
+          print('Widget not mounted, cannot navigate');
+          return;
+        }
+
+        print('Navigating to MainScreen...');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const MainScreen(showSuccess: true),
+          ),
+        );
+        print('Navigation completed successfully');
+      } else if (result.status == LoginStatus.cancelled) {
+        print('Facebook login was cancelled by user');
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Facebook login was cancelled'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      } else {
+        print('Facebook login failed');
+        print('Status: ${result.status}');
+        print('Message: ${result.message}');
+        setState(() => _isLoading = false);
+
+        String errorMessage = 'Facebook sign-in failed';
+        if (result.message != null && result.message!.isNotEmpty) {
+          errorMessage += ': ${result.message}';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      print('FirebaseAuthException: ${e.message}');
+      print('Error code: ${e.code}');
+      setState(() => _isLoading = false);
+
+      String errorMessage = 'Authentication failed';
+      if (e.message != null) {
+        errorMessage += ': ${e.message}';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
+      );
+    } catch (e) {
+      print('Unexpected error during Facebook login: $e');
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unexpected error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1080,30 +1236,62 @@ class _SignInScreenState extends State<SignInScreen> {
                             ],
                           ),
                           const SizedBox(height: 30),
-                          Center(
-                            child: IconButton(
-                              onPressed: _isLoading ? null : _signInWithGoogle,
-                              icon: Container(
-                                height: 50,
-                                width: 50,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.1),
-                                      blurRadius: 5,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Lottie.asset(
-                                  'assets/google.json',
-                                  height: 30,
-                                  width: 30,
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              // Google Sign-in Button
+                              IconButton(
+                                onPressed:
+                                    _isLoading ? null : _signInWithGoogle,
+                                icon: Container(
+                                  height: 50,
+                                  width: 50,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.1),
+                                        blurRadius: 5,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Lottie.asset(
+                                    'assets/google.json',
+                                    height: 30,
+                                    width: 30,
+                                  ),
                                 ),
                               ),
-                            ),
+                              // Facebook Sign-in Button
+                              IconButton(
+                                onPressed:
+                                    _isLoading ? null : _signInWithFacebook,
+                                icon: Container(
+                                  height: 50,
+                                  width: 50,
+                                  decoration: BoxDecoration(
+                                    color: const Color(
+                                      0xFF1877F2,
+                                    ), // Facebook blue color
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.1),
+                                        blurRadius: 5,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(
+                                    Icons.facebook,
+                                    color: Colors.white,
+                                    size: 30,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 20),
                           Row(

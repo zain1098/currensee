@@ -8,5 +8,5 @@
     android:initialLayout="@layout/converter_widget"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
-    android:previewImage="@mipmap/ic_launcher"
-    android:label="Currency Converter" />
+    android:previewImage="@drawable/widget_converter_preview"
+    android:label="@string/widget_converter_label" />
