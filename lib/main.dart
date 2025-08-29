@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
-import 'package:money_tracker/world_clock.dart';
 import 'home_page.dart';
 import 'news_page.dart';
 import 'multi_currency_page.dart';
 import 'trend_chart.dart';
+import 'world_clock.dart';
 import 'rate_list_page.dart';
 import 'voice_service.dart';
 import 'package:provider/provider.dart';
@@ -34,15 +34,11 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'currency_widget.dart';
 import 'watchlist_widget.dart';
 import 'converter_widget.dart';
-import 'mini_chart_widget.dart';
-import 'redlist_widget.dart';
 import 'alert_service.dart';
 import 'messaging_service.dart';
 import 'services/user_status_service.dart';
 import 'services/maintenance_service.dart';
 import 'services/connectivity_service.dart';
-import 'services/lottie_manager.dart';
-import 'services/performance_monitor.dart';
 import 'app_theme.dart';
 
 void main() async {

@@ -20,7 +20,6 @@ import 'support_help_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'alert_service.dart';
 import 'services/currency_service.dart'; // Add this import
-import 'app_theme.dart';
 
 // EmailJS Configuration (keeping user's existing service ID)
 // const String _serviceId = 'service_ih5ns2r';

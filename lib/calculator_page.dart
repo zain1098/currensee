@@ -11,7 +11,6 @@ import 'package:lottie/lottie.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'support_help_screen.dart';
-import 'app_theme.dart';
 
 // Unified currency management
 class CurrencyUtils {

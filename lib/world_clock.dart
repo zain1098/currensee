@@ -16,7 +16,6 @@ import 'package:lottie/lottie.dart';
 import 'support_help_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'services/flag_service.dart';
-import 'app_theme.dart';
 
 class WorldClockPage extends StatefulWidget {
   const WorldClockPage({super.key});

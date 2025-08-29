@@ -17,7 +17,6 @@ import 'package:lottie/lottie.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'contact_form_screen.dart';
 import 'services/news_service.dart';
-import 'app_theme.dart';
 
 // ... (Keep the existing MyApp, MainNavigationScreen and CurrencyConverterScreen code)
 

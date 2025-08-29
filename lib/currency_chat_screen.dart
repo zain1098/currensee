@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'chat_service.dart';
 import 'voice_service.dart';
-import 'app_theme.dart';
 
 class CurrencyChatScreen extends StatefulWidget {
   const CurrencyChatScreen({super.key});

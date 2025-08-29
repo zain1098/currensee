@@ -15,7 +15,6 @@ import 'package:lottie/lottie.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'support_help_screen.dart';
 import 'services/currency_service.dart';
-import 'app_theme.dart';
 
 class MultiCurrencyConverter extends StatefulWidget {
   const MultiCurrencyConverter({super.key});

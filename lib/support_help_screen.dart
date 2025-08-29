@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'currency_chat_screen.dart';
 import 'login.dart'; // For EmailService
-import 'app_theme.dart';
 
 // Add ShineText widget for animated gradient text
 class ShineText extends StatefulWidget {

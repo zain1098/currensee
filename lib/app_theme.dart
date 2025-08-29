@@ -53,12 +53,10 @@ class AppTheme {
         secondary: _secondaryGold,
         secondaryContainer: Color(0xFFFEF3C7),
         surface: _lightSurface,
-        background: _lightScaffold,
         error: _lightError,
         onPrimary: Colors.white,
         onSecondary: Colors.black,
         onSurface: _lightTextPrimary,
-        onBackground: _lightTextPrimary,
         onError: Colors.white,
         outline: _lightDivider,
         outlineVariant: Color(0xFFE2E8F0),
@@ -270,14 +268,14 @@ class AppTheme {
 
       // Switch Theme
       switchTheme: SwitchThemeData(
-        thumbColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
             return _primaryBlue;
           }
           return _lightTextTertiary;
         }),
-        trackColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
             return _primaryBlue.withOpacity(0.5);
           }
           return _lightDivider;
@@ -393,12 +391,10 @@ class AppTheme {
         secondary: _secondaryGoldLight,
         secondaryContainer: Color(0xFF92400E),
         surface: _darkSurface,
-        background: _darkScaffold,
         error: _darkError,
         onPrimary: Colors.white,
         onSecondary: Colors.black,
         onSurface: _darkTextPrimary,
-        onBackground: _darkTextPrimary,
         onError: Colors.white,
         outline: _darkDivider,
         outlineVariant: Color(0xFF374151),
@@ -610,14 +606,14 @@ class AppTheme {
 
       // Switch Theme
       switchTheme: SwitchThemeData(
-        thumbColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
             return _primaryBlueLight;
           }
           return _darkTextTertiary;
         }),
-        trackColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
             return _primaryBlueLight.withOpacity(0.5);
           }
           return _darkDivider;

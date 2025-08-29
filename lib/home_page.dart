@@ -11,7 +11,6 @@ import 'main.dart';
 import 'currency_widget.dart';
 import 'services/currency_service.dart';
 import 'services/connectivity_service.dart';
-import 'app_theme.dart';
 
 class CurrencyConverterScreen extends StatefulWidget {
   final bool showSuccess;
