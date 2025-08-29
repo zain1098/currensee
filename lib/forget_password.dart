@@ -303,7 +303,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                     keyboardType: TextInputType.emailAddress,
                                     decoration: InputDecoration(
                                       labelText: 'Email',
-                                      prefixIcon: Icon(
+                                      prefixIcon: const Icon(
                                         Icons.email,
                                         color: Color(0xFF1E3A8A),
                                       ),
@@ -319,12 +319,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                                         : Color(0xFF1E3A8A),
                                               )
                                               : null,
-                                      border: OutlineInputBorder(
+                                      border: const OutlineInputBorder(
                                         borderRadius: BorderRadius.all(
                                           Radius.circular(12),
                                         ),
                                       ),
-                                      focusedBorder: OutlineInputBorder(
+                                      focusedBorder: const OutlineInputBorder(
                                         borderRadius: BorderRadius.all(
                                           Radius.circular(12),
                                         ),

@@ -98,22 +98,22 @@ I remember our conversations and adapt to your preferences! 🚀""",
           PopupMenuButton<String>(
             itemBuilder:
                 (context) => [
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'history',
                     child: Row(
                       children: [
-                        Icon(Icons.history, color: Color(0xFF1E3A8A)),
-                        SizedBox(width: 8),
+                        Icon(Icons.history, color: theme.colorScheme.primary),
+                        const SizedBox(width: 8),
                         Text('Clear History'),
                       ],
                     ),
                   ),
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'settings',
                     child: Row(
                       children: [
-                        Icon(Icons.settings, color: Color(0xFF1E3A8A)),
-                        SizedBox(width: 8),
+                        Icon(Icons.settings, color: theme.colorScheme.primary),
+                        const SizedBox(width: 8),
                         Text('AI Settings'),
                       ],
                     ),
@@ -146,18 +146,21 @@ I remember our conversations and adapt to your preferences! 🚀""",
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+                  colors: [
+                    theme.colorScheme.primary,
+                    theme.colorScheme.primary.withOpacity(0.8),
+                  ],
                 ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     '💡 Quick Insights',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: theme.colorScheme.onPrimary,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
@@ -173,8 +176,8 @@ I remember our conversations and adapt to your preferences! 🚀""",
                       }
                       return Text(
                         snapshot.data ?? 'Loading insights...',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: theme.colorScheme.onPrimary,
                           fontSize: 14,
                         ),
                       );
@@ -305,12 +308,19 @@ I remember our conversations and adapt to your preferences! 🚀""",
 
   void _showConversationStats(ChatService chatService) {
     final stats = chatService.getConversationStats();
+    final theme = Theme.of(context);
 
     showDialog(
       context: context,
       builder:
           (context) => AlertDialog(
-            title: const Text('Conversation Statistics'),
+            backgroundColor: theme.colorScheme.surface,
+            title: Text(
+              'Conversation Statistics',
+              style: TextStyle(
+                color: theme.textTheme.titleLarge?.color,
+              ),
+            ),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -338,7 +348,10 @@ I remember our conversations and adapt to your preferences! 🚀""",
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
+                child: Text(
+                  'Close',
+                  style: TextStyle(color: theme.colorScheme.primary),
+                ),
               ),
             ],
           ),
@@ -389,9 +402,30 @@ I remember our conversations and adapt to your preferences! 🚀""",
               controller: _textController,
               decoration: InputDecoration(
                 hintText: 'Ask me about currencies, rates, or markets...',
+                hintStyle: TextStyle(
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(25),
+                  borderSide: BorderSide(
+                    color: theme.colorScheme.outline.withOpacity(0.3),
+                  ),
                 ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(25),
+                  borderSide: BorderSide(
+                    color: theme.colorScheme.outline.withOpacity(0.3),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(25),
+                  borderSide: BorderSide(
+                    color: theme.colorScheme.primary,
+                    width: 2,
+                  ),
+                ),
+                filled: true,
+                fillColor: theme.colorScheme.surface,
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 16,
                   vertical: 12,
@@ -405,6 +439,10 @@ I remember our conversations and adapt to your preferences! 🚀""",
             onPressed: () => _sendMessage(_textController.text, chatService),
             icon: Icon(Icons.send),
             color: theme.colorScheme.primary,
+            style: IconButton.styleFrom(
+              backgroundColor: theme.colorScheme.primaryContainer,
+              foregroundColor: theme.colorScheme.onPrimaryContainer,
+            ),
           ),
         ],
       ),
@@ -454,18 +492,31 @@ I remember our conversations and adapt to your preferences! 🚀""",
   }
 
   void _clearChat(ChatService chatService) {
+    final theme = Theme.of(context);
     showDialog(
       context: context,
       builder:
           (context) => AlertDialog(
-            title: const Text('Clear Chat History'),
-            content: const Text(
+            backgroundColor: theme.colorScheme.surface,
+            title: Text(
+              'Clear Chat History',
+              style: TextStyle(
+                color: theme.textTheme.titleLarge?.color,
+              ),
+            ),
+            content: Text(
               'Are you sure you want to clear all chat history?',
+              style: TextStyle(
+                color: theme.textTheme.bodyLarge?.color,
+              ),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(color: theme.colorScheme.primary),
+                ),
               ),
               TextButton(
                 onPressed: () {
@@ -476,7 +527,10 @@ I remember our conversations and adapt to your preferences! 🚀""",
                   _addWelcomeMessage();
                   Navigator.pop(context);
                 },
-                child: const Text('Clear'),
+                child: Text(
+                  'Clear',
+                  style: TextStyle(color: theme.colorScheme.error),
+                ),
               ),
             ],
           ),
@@ -484,26 +538,44 @@ I remember our conversations and adapt to your preferences! 🚀""",
   }
 
   void _showAISettings() {
+    final theme = Theme.of(context);
     showDialog(
       context: context,
       builder:
           (context) => AlertDialog(
-            title: const Text('AI Assistant Settings'),
-            content: const Column(
+            backgroundColor: theme.colorScheme.surface,
+            title: Text(
+              'AI Assistant Settings',
+              style: TextStyle(
+                color: theme.textTheme.titleLarge?.color,
+              ),
+            ),
+            content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Advanced settings coming soon!'),
-                SizedBox(height: 16),
+                Text(
+                  'Advanced settings coming soon!',
+                  style: TextStyle(
+                    color: theme.textTheme.bodyLarge?.color,
+                  ),
+                ),
+                const SizedBox(height: 16),
                 Text(
                   'Features in development:\n• Response style customization\n• Language preferences\n• Detail level control\n• Specialized knowledge areas',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.textTheme.bodySmall?.color,
+                  ),
                 ),
               ],
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
+                child: Text(
+                  'OK',
+                  style: TextStyle(color: theme.colorScheme.primary),
+                ),
               ),
             ],
           ),

@@ -326,6 +326,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                   Radius.circular(12),
                                 ),
                               ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(12),
+                                ),
+                                borderSide: BorderSide(
+                                  color: Color(0xFF1E3A8A),
+                                  width: 2,
+                                ),
+                              ),
                             ),
                             validator: (value) {
                               if (value == null || value.isEmpty) {
@@ -340,7 +349,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             keyboardType: TextInputType.emailAddress,
                             decoration: InputDecoration(
                               labelText: 'Email',
-                              prefixIcon: Icon(
+                              prefixIcon: const Icon(
                                 Icons.email,
                                 color: Color(0xFF1E3A8A),
                               ),
@@ -356,12 +365,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                                 : Color(0xFF1E3A8A),
                                       )
                                       : null,
-                              border: OutlineInputBorder(
+                              border: const OutlineInputBorder(
                                 borderRadius: BorderRadius.all(
                                   Radius.circular(12),
                                 ),
                               ),
-                              focusedBorder: OutlineInputBorder(
+                              focusedBorder: const OutlineInputBorder(
                                 borderRadius: BorderRadius.all(
                                   Radius.circular(12),
                                 ),
@@ -410,6 +419,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                   Radius.circular(12),
                                 ),
                               ),
+                              focusedBorder: const OutlineInputBorder(
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(12),
+                                ),
+                                borderSide: BorderSide(
+                                  color: Color(0xFF1E3A8A),
+                                  width: 2,
+                                ),
+                              ),
                             ),
                             validator: (value) {
                               if (value == null || value.isEmpty) {
@@ -448,6 +466,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
                               border: const OutlineInputBorder(
                                 borderRadius: BorderRadius.all(
                                   Radius.circular(12),
+                                ),
+                              ),
+                              focusedBorder: const OutlineInputBorder(
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(12),
+                                ),
+                                borderSide: BorderSide(
+                                  color: Color(0xFF1E3A8A),
+                                  width: 2,
                                 ),
                               ),
                             ),

@@ -1064,6 +1064,7 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
     required Currency? currency,
     required Function(Currency) onCurrencySelected,
   }) {
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1071,7 +1072,11 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
           padding: const EdgeInsets.only(left: 8.0, bottom: 8),
           child: Text(
             title,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: theme.textTheme.titleLarge?.color,
+            ),
           ),
         ),
         SizedBox(
@@ -1121,11 +1126,11 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                                 end: Alignment.bottomRight,
                               )
                               : null,
-                      color: isSelected ? null : Colors.white,
+                      color: isSelected ? null : theme.cardColor,
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.grey.withOpacity(0.2),
+                          color: theme.shadowColor.withOpacity(0.2),
                           blurRadius: 8,
                           spreadRadius: 2,
                           offset: const Offset(0, 4),
@@ -1153,7 +1158,10 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
-                              color: isSelected ? Colors.white : Colors.black,
+                              color:
+                                  isSelected
+                                      ? Colors.white
+                                      : theme.textTheme.bodyLarge?.color,
                             ),
                             textAlign: TextAlign.center,
                           ),
@@ -1166,10 +1174,7 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                                 color:
                                     isSelected
                                         ? Colors.white70
-                                        : (Theme.of(context).brightness ==
-                                                Brightness.dark
-                                            ? Colors.grey[300]
-                                            : Colors.grey[700]),
+                                        : theme.textTheme.bodySmall?.color,
                               ),
                               textAlign: TextAlign.center,
                               overflow: TextOverflow.ellipsis,

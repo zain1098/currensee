@@ -1,0 +1,5 @@
+[33ma0553b6[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m)[m Dark Mode Work
+[33m8c6ea38[m APK Function Improve
+[33m6842b94[m Updated Code
+[33m572d576[m Performance Optimization: Implemented caching, API batching, and performance monitoring - Enhanced flag service with 48-hour cache - Improved API service with 15-minute cache and request batching - Added LottieManager for animation optimization - Created PerformanceMonitor for comprehensive tracking - Added performance monitoring UI in settings - Fixed app initialization issues - Optimized network requests and reduced OkHttp calls
+[33m595fbe0[m  Security: Remove sensitive service account key and update .gitignore

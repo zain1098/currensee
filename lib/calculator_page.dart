@@ -1746,24 +1746,35 @@ class _ExchangeProfitCalculatorState extends State<ExchangeProfitCalculator> {
 // Helper Widgets
 class CalculatorUtils {
   static Widget buildInputCard({required String title, required Widget child}) {
-    return Card(
-      elevation: 2,
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+    return Builder(
+      builder: (context) {
+        final theme = Theme.of(context);
+        return Card(
+          elevation: 2,
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: theme.textTheme.titleLarge?.color,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                child,
+              ],
             ),
-            const SizedBox(height: 12),
-            child,
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -1771,44 +1782,78 @@ class CalculatorUtils {
     required String title,
     required List<Widget> children,
   }) {
-    return Card(
-      elevation: 4,
-      color: Colors.blue[50],
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue,
-              ),
+    return Builder(
+      builder: (context) {
+        final theme = Theme.of(context);
+        return Card(
+          elevation: 4,
+          color:
+              theme.brightness == Brightness.dark
+                  ? theme.colorScheme.surface
+                  : Colors.blue[50],
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color:
+                        theme.brightness == Brightness.dark
+                            ? theme.colorScheme.primary
+                            : Colors.blue,
+                  ),
+                ),
+                Divider(
+                  thickness: 1.5,
+                  color:
+                      theme.brightness == Brightness.dark
+                          ? theme.colorScheme.primary
+                          : Colors.blue,
+                ),
+                ...children,
+              ],
             ),
-            const Divider(thickness: 1.5, color: Colors.blue),
-            ...children,
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
   static Widget buildResultRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 16)),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+    return Builder(
+      builder: (context) {
+        final theme = Theme.of(context);
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: theme.textTheme.bodyLarge?.color,
+                ),
+              ),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: theme.textTheme.bodyLarge?.color,
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

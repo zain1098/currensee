@@ -917,7 +917,7 @@ class _SignInScreenState extends State<SignInScreen> {
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
+                      color: Colors.white.withOpacity(0.95),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
@@ -936,7 +936,7 @@ class _SignInScreenState extends State<SignInScreen> {
                             keyboardType: TextInputType.emailAddress,
                             decoration: InputDecoration(
                               labelText: 'Email',
-                              prefixIcon: Icon(
+                              prefixIcon: const Icon(
                                 Icons.email,
                                 color: Color(0xFF1E3A8A),
                               ),
@@ -952,12 +952,12 @@ class _SignInScreenState extends State<SignInScreen> {
                                                 : Color(0xFF1E3A8A),
                                       )
                                       : null,
-                              border: OutlineInputBorder(
+                              border: const OutlineInputBorder(
                                 borderRadius: BorderRadius.all(
                                   Radius.circular(12),
                                 ),
                               ),
-                              focusedBorder: OutlineInputBorder(
+                              focusedBorder: const OutlineInputBorder(
                                 borderRadius: BorderRadius.all(
                                   Radius.circular(12),
                                 ),
@@ -1000,6 +1000,20 @@ class _SignInScreenState extends State<SignInScreen> {
                                       () =>
                                           _obscurePassword = !_obscurePassword,
                                     ),
+                              ),
+                              border: const OutlineInputBorder(
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(12),
+                                ),
+                              ),
+                              focusedBorder: const OutlineInputBorder(
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(12),
+                                ),
+                                borderSide: BorderSide(
+                                  color: Color(0xFF1E3A8A),
+                                  width: 2,
+                                ),
                               ),
                             ),
                             validator: (value) {
