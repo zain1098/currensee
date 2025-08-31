@@ -1,11 +1,8 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'dart:async';
 import '../models/task_model.dart';
-import 'task_service.dart';
 
 class NotificationManager {
   static final FlutterLocalNotificationsPlugin _notifications =

@@ -177,4 +177,37 @@ class AppSettings extends ChangeNotifier {
   bool isFavoriteCurrency(String currencyCode) {
     return _favoriteCurrencies.contains(currencyCode);
   }
+
+  // Reset all settings to defaults
+  Future<void> resetToDefaults() async {
+    _darkMode = false;
+    _decimalPlaces = 2;
+    _baseCurrency = 'USD';
+    _autoUpdateRates = true;
+    _biometricAuth = false;
+    _hapticFeedback = true;
+    _showCalculator = true;
+    _historicalData = false;
+    _offlineMode = false;
+    _selectedLanguage = 'English';
+    _selectedAppearance = 'System';
+    _favoriteCurrencies = [];
+
+    // Clear all settings from SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('darkMode');
+    await prefs.remove('decimalPlaces');
+    await prefs.remove('baseCurrency');
+    await prefs.remove('autoUpdateRates');
+    await prefs.remove('biometricAuth');
+    await prefs.remove('hapticFeedback');
+    await prefs.remove('showCalculator');
+    await prefs.remove('historicalData');
+    await prefs.remove('offlineMode');
+    await prefs.remove('selectedLanguage');
+    await prefs.remove('selectedAppearance');
+    await prefs.remove('favoriteCurrencies');
+
+    notifyListeners();
+  }
 }

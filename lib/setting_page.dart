@@ -28,6 +28,8 @@ import 'services/connectivity_service.dart';
 import 'services/currency_service.dart';
 import 'services/alert_history_service.dart';
 import 'services/version_history_service.dart';
+import 'services/firestore_index_service.dart';
+import 'services/task_service.dart';
 import 'app_theme.dart';
 
 // Add ShineText widget for animated gradient text
@@ -2121,6 +2123,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                     const SizedBox(height: 16),
                     _buildNotificationHistorySection(),
+                    const SizedBox(height: 16),
+                    _buildResetAndClearSection(),
                   ],
                 ),
               ),
@@ -4738,7 +4742,8 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
         const SizedBox(height: 8),
-        Row(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Collections: alert_history, version_history',
@@ -4748,45 +4753,63 @@ class _SettingsPageState extends State<SettingsPage> {
                 fontStyle: FontStyle.italic,
               ),
             ),
-            const Spacer(),
-            TextButton.icon(
-              onPressed: _testCollections,
-              icon: const Icon(Icons.bug_report, size: 14),
-              label: const Text('Test', style: TextStyle(fontSize: 12)),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                minimumSize: const Size(0, 0),
-              ),
-            ),
-            const SizedBox(width: 8),
-            TextButton.icon(
-              onPressed: _addTestData,
-              icon: const Icon(Icons.add, size: 14),
-              label: const Text('Add Test', style: TextStyle(fontSize: 12)),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                minimumSize: const Size(0, 0),
-              ),
-            ),
-            const SizedBox(width: 8),
-            TextButton.icon(
-              onPressed: _refreshNotificationHistory,
-              icon: const Icon(Icons.refresh, size: 14),
-              label: const Text('Refresh', style: TextStyle(fontSize: 12)),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                minimumSize: const Size(0, 0),
-              ),
-            ),
-            const SizedBox(width: 8),
-            TextButton.icon(
-              onPressed: _testDirectQuery,
-              icon: const Icon(Icons.search, size: 14),
-              label: const Text('Direct Query', style: TextStyle(fontSize: 12)),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                minimumSize: const Size(0, 0),
-              ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                TextButton.icon(
+                  onPressed: _testCollections,
+                  icon: const Icon(Icons.bug_report, size: 14),
+                  label: const Text('Test', style: TextStyle(fontSize: 12)),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    minimumSize: const Size(0, 0),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _addTestData,
+                  icon: const Icon(Icons.add, size: 14),
+                  label: const Text('Add Test', style: TextStyle(fontSize: 12)),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    minimumSize: const Size(0, 0),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _refreshNotificationHistory,
+                  icon: const Icon(Icons.refresh, size: 14),
+                  label: const Text('Refresh', style: TextStyle(fontSize: 12)),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    minimumSize: const Size(0, 0),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _testDirectQuery,
+                  icon: const Icon(Icons.search, size: 14),
+                  label: const Text(
+                    'Direct Query',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    minimumSize: const Size(0, 0),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -5467,7 +5490,7 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  // Test method to check if collections exist
+  // Test method to check if collections exist and indexes are working
   Future<void> _testCollections() async {
     print('=== Starting Collection Test ===');
     try {
@@ -5534,20 +5557,34 @@ class _SettingsPageState extends State<SettingsPage> {
         print('Version history collection error: $e');
       }
 
+      // Check for missing indexes
+      print('=== Checking for missing indexes ===');
+      final indexResults = await FirestoreIndexService.checkMissingIndexes();
+      final indexSummary = FirestoreIndexService.getIndexStatusSummary(
+        indexResults,
+      );
+      print('Index Status: $indexSummary');
+
       // Show results
       String message = 'User: $userStatus\n';
       message +=
           'Alert History: ${await _getCollectionCount('alert_history')}\n';
       message +=
-          'Version History: ${await _getCollectionCount('version_history')}';
+          'Version History: ${await _getCollectionCount('version_history')}\n';
+      message += 'Index Status: $indexSummary';
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
           backgroundColor: Colors.blue,
-          duration: const Duration(seconds: 5),
+          duration: const Duration(seconds: 8),
         ),
       );
+
+      // Show index creation dialog if indexes are missing
+      if (indexResults.values.any((result) => result['status'] == 'missing')) {
+        FirestoreIndexService.showIndexCreationDialog(context, indexResults);
+      }
     } catch (e) {
       print('Error testing collections: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -5571,6 +5608,53 @@ class _SettingsPageState extends State<SettingsPage> {
       }
     } catch (e) {
       return 'Error: $e';
+    }
+  }
+
+  // Get alert history as Future for testing
+  Future<List<AlertHistory>> _getAlertHistoryFuture() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        print('No user logged in for alert history future');
+        return <AlertHistory>[];
+      }
+
+      print('Getting alert history future for user: ${user.uid}');
+
+      final snapshot =
+          await FirebaseFirestore.instance
+              .collection('alert_history')
+              .where('userId', isEqualTo: user.uid)
+              .orderBy('triggeredAt', descending: true)
+              .limit(100)
+              .get();
+
+      print('Alert History Future: ${snapshot.docs.length} documents');
+
+      final alertHistory =
+          snapshot.docs
+              .map((doc) {
+                try {
+                  final data = doc.data();
+                  print('Processing alert history document: ${doc.id}');
+                  return AlertHistory.fromJson(data, doc.id);
+                } catch (e) {
+                  print('Error parsing alert history document ${doc.id}: $e');
+                  return null;
+                }
+              })
+              .where((alert) => alert != null)
+              .cast<AlertHistory>()
+              .toList();
+
+      print(
+        'Alert History Future: Successfully parsed ${alertHistory.length} records',
+      );
+      return alertHistory;
+    } catch (e) {
+      print('Error in alert history future: $e');
+      return <AlertHistory>[];
     }
   }
 
@@ -5616,9 +5700,28 @@ class _SettingsPageState extends State<SettingsPage> {
         'Version History Direct Query: ${versionSnapshot.docs.length} documents',
       );
 
+      // Test without user filter to see if collections exist
+      final allAlertSnapshot =
+          await FirebaseFirestore.instance
+              .collection('alert_history')
+              .limit(5)
+              .get();
+
+      final allVersionSnapshot =
+          await FirebaseFirestore.instance
+              .collection('version_history')
+              .limit(5)
+              .get();
+
+      print('All Alert History: ${allAlertSnapshot.docs.length} documents');
+      print('All Version History: ${allVersionSnapshot.docs.length} documents');
+
       String message = 'Direct Query Results:\n';
-      message += 'Alert History: ${alertSnapshot.docs.length} docs\n';
-      message += 'Version History: ${versionSnapshot.docs.length} docs';
+      message += 'User Alert History: ${alertSnapshot.docs.length} docs\n';
+      message += 'User Version History: ${versionSnapshot.docs.length} docs\n';
+      message += 'Total Alert History: ${allAlertSnapshot.docs.length} docs\n';
+      message +=
+          'Total Version History: ${allVersionSnapshot.docs.length} docs';
 
       if (alertSnapshot.docs.isNotEmpty) {
         final firstAlert = alertSnapshot.docs.first.data();
@@ -5630,11 +5733,21 @@ class _SettingsPageState extends State<SettingsPage> {
         message += '\nFirst Version: ${firstVersion['version']}';
       }
 
+      if (allAlertSnapshot.docs.isNotEmpty) {
+        final firstAllAlert = allAlertSnapshot.docs.first.data();
+        message += '\nFirst All Alert User: ${firstAllAlert['userId']}';
+      }
+
+      if (allVersionSnapshot.docs.isNotEmpty) {
+        final firstAllVersion = allVersionSnapshot.docs.first.data();
+        message += '\nFirst All Version User: ${firstAllVersion['userId']}';
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
           backgroundColor: Colors.blue,
-          duration: const Duration(seconds: 8),
+          duration: const Duration(seconds: 10),
         ),
       );
     } catch (e) {
@@ -5680,6 +5793,222 @@ class _SettingsPageState extends State<SettingsPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error refreshing: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Build reset and clear notifications section
+  Widget _buildResetAndClearSection() {
+    final theme = Theme.of(context);
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.cleaning_services, color: Colors.red, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Reset & Clear Data',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Clear all notifications, reset app settings, or perform a complete app reset',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _clearAllNotifications,
+                    icon: const Icon(Icons.clear_all, size: 16),
+                    label: const Text('Clear All Notifications'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _resetAppSettings,
+                    icon: const Icon(Icons.settings_backup_restore, size: 16),
+                    label: const Text('Reset Settings'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _showResetAppDialog,
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Complete App Reset'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Reset app settings to defaults
+  Future<void> _resetAppSettings() async {
+    try {
+      // Show confirmation dialog
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder:
+            (context) => AlertDialog(
+              title: const Text('Reset App Settings'),
+              content: const Text(
+                'This will reset all app settings to default values:\n'
+                '• Theme settings\n'
+                '• Currency preferences\n'
+                '• Notification settings\n'
+                '• Calculator settings\n'
+                '• Other app preferences\n\n'
+                'Your data and account will remain intact. Continue?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                  child: const Text('Reset Settings'),
+                ),
+              ],
+            ),
+      );
+
+      if (confirmed != true) return;
+
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder:
+            (context) => const AlertDialog(
+              content: Row(
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(width: 16),
+                  Text('Resetting settings...'),
+                ],
+              ),
+            ),
+      );
+
+      // Reset all settings to defaults
+      final prefs = await SharedPreferences.getInstance();
+
+      // Reset theme settings
+      await prefs.remove('darkMode');
+      await prefs.remove('themeMode');
+
+      // Reset currency settings
+      await prefs.remove('baseCurrency');
+      await prefs.remove('decimalPlaces');
+      await prefs.remove('favoriteCurrencies');
+
+      // Reset notification settings
+      await prefs.remove('notificationSound');
+      await prefs.remove('hapticFeedback');
+      await prefs.remove('autoUpdateRates');
+
+      // Reset calculator settings
+      await prefs.remove('showCalculator');
+
+      // Reset other settings
+      await prefs.remove('biometricAuth');
+      await prefs.remove('vibrationEnabled');
+      await prefs.remove('historicalData');
+      await prefs.remove('offlineMode');
+      await prefs.remove('selectedLanguage');
+      await prefs.remove('selectedAppearance');
+
+      // Update UI state
+      setState(() {
+        _darkMode = false;
+        _decimalPlaces = 2;
+        _baseCurrency = 'USD';
+        _autoUpdateRates = true;
+        _biometricAuth = false;
+        _hapticFeedback = true;
+        _showCalculator = true;
+        _historicalData = false;
+        _offlineMode = false;
+        _selectedLanguage = 'English';
+        _selectedAppearance = 'System';
+        _notificationSound = '';
+      });
+
+      // Update provider
+      final appSettings = Provider.of<AppSettings>(context, listen: false);
+      appSettings.setDarkMode(false);
+      appSettings.setDecimalPlaces(2);
+      appSettings.setBaseCurrency('USD');
+      appSettings.setAutoUpdateRates(true);
+      appSettings.setBiometricAuth(false);
+      appSettings.setHapticFeedback(true);
+      appSettings.setShowCalculator(true);
+      appSettings.setHistoricalData(false);
+      appSettings.setOfflineMode(false);
+      appSettings.setSelectedLanguage('English');
+      appSettings.setSelectedAppearance('System');
+
+      // Close loading dialog
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('App settings reset to defaults successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      // Close loading dialog if still open
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      print('Error resetting app settings: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error resetting settings: $e'),
           backgroundColor: Colors.red,
         ),
       );
@@ -5743,6 +6072,210 @@ class _SettingsPageState extends State<SettingsPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error adding test data: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Clear all notifications from all collections
+  Future<void> _clearAllNotifications() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please login first'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Show confirmation dialog
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder:
+            (context) => AlertDialog(
+              title: const Text('Clear All Notifications'),
+              content: const Text(
+                'This will clear all your notification history including:\n'
+                '• Alert notifications\n'
+                '• App update notifications\n'
+                '• Task notifications\n'
+                '• All other notification history\n\n'
+                'This action cannot be undone. Continue?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                  ),
+                  child: const Text('Clear All'),
+                ),
+              ],
+            ),
+      );
+
+      if (confirmed != true) return;
+
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder:
+            (context) => const AlertDialog(
+              content: Row(
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(width: 16),
+                  Text('Clearing all notifications...'),
+                ],
+              ),
+            ),
+      );
+
+      // Clear alert history
+      await AlertHistoryService.clearAllAlertHistory();
+
+      // Clear version history
+      await VersionHistoryService.clearAllVersionHistory();
+
+      // Clear task history
+      await TaskService().clearAllTaskHistory();
+
+      // Clear local notification history
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('notification_history');
+
+      // Clear any other notification-related data
+      await prefs.remove('lastAlertCheck');
+      await prefs.remove('lastNotificationTime');
+
+      // Close loading dialog
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('All notifications cleared successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      // Close loading dialog if still open
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      print('Error clearing all notifications: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error clearing notifications: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Show complete app reset dialog
+  Future<void> _showResetAppDialog() async {
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder:
+            (context) => AlertDialog(
+              title: const Text('Complete App Reset'),
+              content: const Text(
+                '⚠️ WARNING: This will completely reset the app!\n\n'
+                'This action will:\n'
+                '• Clear ALL notifications and history\n'
+                '• Reset ALL settings to defaults\n'
+                '• Clear ALL local data\n'
+                '• Remove ALL saved preferences\n'
+                '• Log you out of your account\n\n'
+                'This action cannot be undone. Are you absolutely sure?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  child: const Text('Reset App'),
+                ),
+              ],
+            ),
+      );
+
+      if (confirmed != true) return;
+
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder:
+            (context) => const AlertDialog(
+              content: Row(
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(width: 16),
+                  Text('Performing complete app reset...'),
+                ],
+              ),
+            ),
+      );
+
+      // Clear all notifications first
+      await _clearAllNotifications();
+
+      // Clear all local data
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      // Sign out user
+      await FirebaseAuth.instance.signOut();
+
+      // Close loading dialog
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('App reset complete! Please restart the app.'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 5),
+        ),
+      );
+
+      // Navigate to login page
+      if (mounted) {
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/signin',
+          (Route<dynamic> route) => false,
+        );
+      }
+    } catch (e) {
+      // Close loading dialog if still open
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      print('Error performing complete app reset: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error resetting app: $e'),
           backgroundColor: Colors.red,
         ),
       );

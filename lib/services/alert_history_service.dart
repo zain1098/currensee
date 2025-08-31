@@ -97,10 +97,9 @@ class AlertHistoryService {
         'Fetching alert history for user: ${user.uid} from collection: $_collectionName',
       );
 
+      // Fetch all documents and filter in memory to avoid index requirements
       return _firestore
           .collection(_collectionName)
-          .where('userId', isEqualTo: user.uid)
-          .orderBy('triggeredAt', descending: true)
           .limit(100) // Limit to prevent too many documents
           .snapshots()
           .map((snapshot) {
@@ -108,8 +107,17 @@ class AlertHistoryService {
               print(
                 'Received ${snapshot.docs.length} alert history records from Firestore',
               );
+              
+              // Filter by userId in memory
+              final userDocs = snapshot.docs.where((doc) {
+                final data = doc.data();
+                return data['userId'] == user.uid;
+              }).toList();
+              
+              print('Filtered to ${userDocs.length} documents for user ${user.uid}');
+              
               final alertHistory =
-                  snapshot.docs
+                  userDocs
                       .map((doc) {
                         try {
                           final data = doc.data();
@@ -125,6 +133,9 @@ class AlertHistoryService {
                       .where((alert) => alert != null)
                       .cast<AlertHistory>()
                       .toList();
+
+              // Sort in memory by triggeredAt descending
+              alertHistory.sort((a, b) => b.triggeredAt.compareTo(a.triggeredAt));
 
               print(
                 'Successfully parsed ${alertHistory.length} alert history records',
@@ -145,6 +156,8 @@ class AlertHistoryService {
     }
   }
 
+
+
   // Clear all alert history (move to deleted collection)
   static Future<void> clearAllAlertHistory() async {
     try {
@@ -153,14 +166,14 @@ class AlertHistoryService {
 
       print('Clearing alert history for user: ${user.uid}');
 
-      // Get all user's alert history
-      final snapshot =
-          await _firestore
-              .collection(_collectionName)
-              .where('userId', isEqualTo: user.uid)
-              .get();
+      // Get all documents and filter in memory to avoid index requirements
+      final snapshot = await _firestore.collection(_collectionName).get();
+      final userDocs = snapshot.docs.where((doc) {
+        final data = doc.data();
+        return data['userId'] == user.uid;
+      }).toList();
 
-      if (snapshot.docs.isEmpty) {
+      if (userDocs.isEmpty) {
         print('No alert history found to clear');
         return;
       }
@@ -176,16 +189,16 @@ class AlertHistoryService {
         'deletionReason': 'user_cleared_all_history',
         'deletionMethod': 'bulk_clear',
         'originalCollection': _collectionName,
-        'deletedRecordCount': snapshot.docs.length,
+        'deletedRecordCount': userDocs.length,
       };
 
-      for (final doc in snapshot.docs) {
+      for (final doc in userDocs) {
         final data = doc.data();
         // Add all deletion metadata
         data.addAll(deletionInfo);
         // Add individual record info
         data['originalDocumentId'] = doc.id;
-        data['deletedRecordIndex'] = snapshot.docs.indexOf(doc);
+        data['deletedRecordIndex'] = userDocs.indexOf(doc);
 
         final deletedDoc = _firestore
             .collection(_deletedCollectionName)
@@ -196,7 +209,7 @@ class AlertHistoryService {
 
       await batch.commit();
       print(
-        'Successfully cleared ${snapshot.docs.length} alert history records',
+        'Successfully cleared ${userDocs.length} alert history records',
       );
     } catch (e) {
       print('Error clearing alert history: $e');
@@ -262,9 +275,14 @@ class AlertHistoryService {
 
       return _firestore
           .collection(_collectionName)
-          .where('userId', isEqualTo: user.uid)
           .snapshots()
-          .map((snapshot) => snapshot.docs.length);
+          .map((snapshot) {
+            final userDocs = snapshot.docs.where((doc) {
+              final data = doc.data();
+              return data['userId'] == user.uid;
+            }).toList();
+            return userDocs.length;
+          });
     } catch (e) {
       print('Error getting alert history count: $e');
       return Stream.value(0);

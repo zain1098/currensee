@@ -17,7 +17,7 @@ import 'welcome_page.dart';
 import 'login.dart';
 import 'signup.dart';
 import 'package:firebase_core/firebase_core.dart';
-
+import 'setting_page.dart';
 import 'firebase_options.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'forget_password.dart';
@@ -26,7 +26,6 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'network_error_screen.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'currency_chat_screen.dart';
-import 'setting_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:feature_discovery/feature_discovery.dart';
 import 'package:local_auth/local_auth.dart';

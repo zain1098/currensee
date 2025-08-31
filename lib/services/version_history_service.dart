@@ -103,27 +103,38 @@ class VersionHistoryService {
         return Stream.value(<VersionHistory>[]);
       }
 
+      // Fetch all documents and filter in memory to avoid index requirements
       return _firestore
           .collection('version_history')
-          .where('userId', isEqualTo: userId)
-          .orderBy('timestamp', descending: true)
           .limit(50)
           .snapshots()
           .map((snapshot) {
             try {
-              final versionHistory = snapshot.docs
-                  .map((doc) {
-                    try {
-                      final data = doc.data();
-                      return VersionHistory.fromJson(data, doc.id);
-                    } catch (e) {
-                      print('Error parsing version history document ${doc.id}: $e');
-                      return null;
-                    }
-                  })
-                  .where((history) => history != null)
-                  .cast<VersionHistory>()
-                  .toList();
+              // Filter by userId in memory
+              final userDocs = snapshot.docs.where((doc) {
+                final data = doc.data();
+                return data['userId'] == userId;
+              }).toList();
+              
+              final versionHistory =
+                  userDocs
+                      .map((doc) {
+                        try {
+                          final data = doc.data();
+                          return VersionHistory.fromJson(data, doc.id);
+                        } catch (e) {
+                          print(
+                            'Error parsing version history document ${doc.id}: $e',
+                          );
+                          return null;
+                        }
+                      })
+                      .where((history) => history != null)
+                      .cast<VersionHistory>()
+                      .toList();
+
+              // Sort in memory by timestamp descending
+              versionHistory.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
               return versionHistory;
             } catch (e) {
@@ -141,6 +152,8 @@ class VersionHistoryService {
     }
   }
 
+
+
   // Get version history count
   static Stream<int> getVersionHistoryCount() {
     try {
@@ -151,9 +164,14 @@ class VersionHistoryService {
 
       return _firestore
           .collection('version_history')
-          .where('userId', isEqualTo: userId)
           .snapshots()
-          .map((snapshot) => snapshot.docs.length);
+          .map((snapshot) {
+            final userDocs = snapshot.docs.where((doc) {
+              final data = doc.data();
+              return data['userId'] == userId;
+            }).toList();
+            return userDocs.length;
+          });
     } catch (e) {
       print('Error getting version history count: $e');
       return Stream.value(0);
@@ -168,13 +186,14 @@ class VersionHistoryService {
     try {
       print('Clearing version history for user: ${user.uid}');
 
-      // Get all user's version history
-      final historyDocs = await _firestore
-          .collection('version_history')
-          .where('userId', isEqualTo: user.uid)
-          .get();
+      // Get all documents and filter in memory to avoid index requirements
+      final historyDocs = await _firestore.collection('version_history').get();
+      final userDocs = historyDocs.docs.where((doc) {
+        final data = doc.data();
+        return data['userId'] == user.uid;
+      }).toList();
 
-      if (historyDocs.docs.isEmpty) {
+      if (userDocs.isEmpty) {
         print('No version history found to clear');
         return;
       }
@@ -190,11 +209,11 @@ class VersionHistoryService {
         'deletionReason': 'user_cleared_all_version_history',
         'deletionMethod': 'bulk_clear',
         'originalCollection': 'version_history',
-        'deletedRecordCount': historyDocs.docs.length,
+        'deletedRecordCount': userDocs.length,
       };
 
-      for (int i = 0; i < historyDocs.docs.length; i++) {
-        final doc = historyDocs.docs[i];
+      for (int i = 0; i < userDocs.length; i++) {
+        final doc = userDocs[i];
         final data = doc.data();
 
         // Add all deletion metadata
@@ -211,7 +230,9 @@ class VersionHistoryService {
       }
 
       await batch.commit();
-      print('Successfully cleared ${historyDocs.docs.length} version history records');
+      print(
+        'Successfully cleared ${userDocs.length} version history records',
+      );
     } catch (e) {
       print('Error clearing version history: $e');
       throw Exception('Failed to clear version history: $e');
@@ -225,7 +246,11 @@ class VersionHistoryService {
       if (user == null) return;
 
       // Get the document first
-      final doc = await _firestore.collection('version_history').doc(versionHistoryId).get();
+      final doc =
+          await _firestore
+              .collection('version_history')
+              .doc(versionHistoryId)
+              .get();
 
       if (!doc.exists) {
         print('Version history document not found: $versionHistoryId');
@@ -255,7 +280,10 @@ class VersionHistoryService {
           .set(data);
 
       // Delete from original collection
-      await _firestore.collection('version_history').doc(versionHistoryId).delete();
+      await _firestore
+          .collection('version_history')
+          .doc(versionHistoryId)
+          .delete();
 
       print('Successfully deleted version history: $versionHistoryId');
     } catch (e) {
@@ -279,10 +307,8 @@ class VersionHistoryService {
   // Get current app version from Firestore
   static Future<Map<String, dynamic>?> getCurrentAppVersion() async {
     try {
-      final versionDoc = await _firestore
-          .collection('app_versions')
-          .doc('current')
-          .get();
+      final versionDoc =
+          await _firestore.collection('app_versions').doc('current').get();
 
       if (versionDoc.exists) {
         return versionDoc.data();
