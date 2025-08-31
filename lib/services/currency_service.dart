@@ -192,7 +192,7 @@ class CurrencyService {
     }
   }
 
-  // Load only active currencies from Firebase
+  // Load only active currencies from Firebase (for backward compatibility)
   static Future<List<Currency>> loadActiveCurrencies() async {
     try {
       print('🔄 Loading active currencies from Firebase...');

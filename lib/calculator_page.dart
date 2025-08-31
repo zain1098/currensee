@@ -6,6 +6,7 @@ import 'multi_currency_page.dart';
 import 'trend_chart.dart';
 import 'rate_list_page.dart';
 import 'setting_page.dart';
+import 'task_screen.dart';
 import 'world_clock.dart';
 import 'package:lottie/lottie.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -671,6 +672,12 @@ class _CalculatorsScreenState extends State<CalculatorsScreen> {
                 title: 'Calculator',
                 onTap:
                     () => _navigateAndClose(context, const CalculatorsScreen()),
+              ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.task_alt,
+                title: 'Currency Tasks',
+                onTap: () => _navigateAndClose(context, const TaskScreen()),
               ),
               const SizedBox(height: 16),
               const Divider(color: Colors.white24, height: 1),

@@ -10,6 +10,7 @@ import 'rate_list_page.dart';
 import 'package:provider/provider.dart';
 import 'calculator_page.dart';
 import 'setting_page.dart';
+import 'task_screen.dart';
 import 'multi_currency_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:lottie/lottie.dart';
@@ -716,6 +717,12 @@ class _WorldClockPageState extends State<WorldClockPage>
                 title: 'Calculator',
                 onTap:
                     () => _navigateAndClose(context, const CalculatorsScreen()),
+              ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.task_alt,
+                title: 'Currency Tasks',
+                onTap: () => _navigateAndClose(context, const TaskScreen()),
               ),
               const SizedBox(height: 16),
               const Divider(color: Colors.white24, height: 1),

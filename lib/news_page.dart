@@ -11,6 +11,7 @@ import 'rate_list_page.dart';
 import 'task_page.dart';
 import 'calculator_page.dart';
 import 'setting_page.dart';
+import 'task_screen.dart';
 import 'world_clock.dart';
 import 'multi_currency_page.dart';
 import 'package:lottie/lottie.dart';
@@ -338,6 +339,12 @@ class _NewsScreenState extends State<NewsScreen> {
                 title: 'Calculator',
                 onTap:
                     () => _navigateAndClose(context, const CalculatorsScreen()),
+              ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.task_alt,
+                title: 'Currency Tasks',
+                onTap: () => _navigateAndClose(context, const TaskScreen()),
               ),
               _buildDrawerItem(
                 context,

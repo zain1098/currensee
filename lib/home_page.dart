@@ -280,18 +280,33 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
     final settings = Provider.of<AppSettings>(context, listen: false);
     final favoriteCurrencies = settings.favoriteCurrencies;
 
-    // Separate favorite and non-favorite currencies
-    final favorites =
-        currencies
-            .where((currency) => favoriteCurrencies.contains(currency.code))
-            .toList();
-    final nonFavorites =
-        currencies
-            .where((currency) => !favoriteCurrencies.contains(currency.code))
-            .toList();
+    // Separate currencies by status and favorites
+    final favoriteActive = currencies
+        .where((currency) => 
+            favoriteCurrencies.contains(currency.code) && 
+            currency.status == 'active')
+        .toList();
+    
+    final favoriteInactive = currencies
+        .where((currency) => 
+            favoriteCurrencies.contains(currency.code) && 
+            currency.status == 'inactive')
+        .toList();
+    
+    final nonFavoriteActive = currencies
+        .where((currency) => 
+            !favoriteCurrencies.contains(currency.code) && 
+            currency.status == 'active')
+        .toList();
+    
+    final nonFavoriteInactive = currencies
+        .where((currency) => 
+            !favoriteCurrencies.contains(currency.code) && 
+            currency.status == 'inactive')
+        .toList();
 
-    // Return favorites first, then non-favorites
-    return [...favorites, ...nonFavorites];
+    // Return: favorite active, non-favorite active, favorite inactive, non-favorite inactive
+    return [...favoriteActive, ...nonFavoriteActive, ...favoriteInactive, ...nonFavoriteInactive];
   }
 
   bool _isFavoriteCurrency(String currencyCode) {
@@ -301,11 +316,11 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
 
   Future<void> initializeCurrencies() async {
     try {
-      // Load currencies from Firebase
-      final loadedCurrencies = await CurrencyService.loadActiveCurrencies();
+      // Load all currencies from Firebase (both active and inactive)
+      final loadedCurrencies = await CurrencyService.loadCurrencies();
       print('Loaded ${loadedCurrencies.length} currencies from Firebase');
 
-      // Sort currencies with favorites first
+      // Sort currencies with favorites first, then active, then inactive
       final sortedCurrencies = _sortCurrenciesWithFavorites(loadedCurrencies);
 
       setState(() {
@@ -314,17 +329,27 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
 
       // Set default currencies with robust fallback logic
       if (currencies.isNotEmpty) {
-        // Get preferred from currency (USD) with fallback
+        // Get preferred from currency (USD) with fallback - prefer active currencies
         Currency? preferredFrom = currencies.firstWhere(
-          (c) => c.code == 'USD',
-          orElse: () => currencies.first,
+          (c) => c.code == 'USD' && c.status == 'active',
+          orElse: () => currencies.firstWhere(
+            (c) => c.code == 'USD',
+            orElse: () => currencies.firstWhere(
+              (c) => c.status == 'active',
+              orElse: () => currencies.first,
+            ),
+          ),
         );
 
-        // Get preferred to currency (PKR) with fallback
+        // Get preferred to currency (PKR) with fallback - prefer active currencies
         Currency? preferredTo = currencies.firstWhere(
-          (c) => c.code == 'PKR',
-          orElse:
-              () => currencies.length > 1 ? currencies[1] : currencies.first,
+          (c) => c.code == 'PKR' && c.status == 'active',
+          orElse: () => currencies.firstWhere(
+            (c) => c.code == 'PKR',
+            orElse: () => currencies.where((c) => c.status == 'active').isNotEmpty
+                ? currencies.where((c) => c.status == 'active').first
+                : currencies.first,
+          ),
         );
 
         // Ensure from and to currencies are different
@@ -1127,6 +1152,9 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                               : null,
                       color: isSelected ? null : theme.cardColor,
                       borderRadius: BorderRadius.circular(16),
+                      border: curr.status == 'inactive' 
+                          ? Border.all(color: Colors.red.withOpacity(0.5), width: 1)
+                          : null,
                       boxShadow: [
                         BoxShadow(
                           color: theme.shadowColor.withOpacity(0.2),
@@ -1136,52 +1164,92 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                         ),
                       ],
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // Display flag emoji
-                          Text(curr.flag, style: const TextStyle(fontSize: 24)),
-                          const SizedBox(height: 4),
-                          // Star icon for favorite currencies
-                          if (_isFavoriteCurrency(curr.code))
-                            Icon(
-                              Icons.star,
-                              size: 12,
-                              color: isSelected ? Colors.white : Colors.amber,
-                            ),
-                          const SizedBox(height: 4),
-                          Text(
-                            curr.code,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color:
-                                  isSelected
-                                      ? Colors.white
-                                      : theme.textTheme.bodyLarge?.color,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 4),
-                          Flexible(
-                            child: Text(
-                              '1 ${fromCurrency?.code} = ${rate.toStringAsFixed(4)}',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color:
-                                    isSelected
-                                        ? Colors.white70
-                                        : theme.textTheme.bodySmall?.color,
+                    child: Stack(
+                      children: [
+                        // Inactive overlay
+                        if (curr.status == 'inactive')
+                          Positioned.fill(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.red.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(16),
                               ),
-                              textAlign: TextAlign.center,
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 2,
                             ),
                           ),
-                        ],
-                      ),
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              // Display flag emoji
+                              Text(
+                                curr.flag, 
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  color: curr.status == 'inactive' 
+                                      ? Colors.grey 
+                                      : null,
+                                )
+                              ),
+                              const SizedBox(height: 4),
+                              // Star icon for favorite currencies
+                              if (_isFavoriteCurrency(curr.code))
+                                Icon(
+                                  Icons.star,
+                                  size: 12,
+                                  color: isSelected ? Colors.white : Colors.amber,
+                                ),
+                              const SizedBox(height: 4),
+                              Text(
+                                curr.code,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : curr.status == 'inactive'
+                                          ? Colors.grey
+                                          : theme.textTheme.bodyLarge?.color,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 4),
+                              // Status indicator for inactive currencies
+                              if (curr.status == 'inactive')
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    'BLOCKED',
+                                    style: TextStyle(
+                                      fontSize: 8,
+                                      color: Colors.red,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                )
+                              else
+                                Flexible(
+                                  child: Text(
+                                    '1 ${fromCurrency?.code} = ${rate.toStringAsFixed(4)}',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: isSelected
+                                          ? Colors.white70
+                                          : theme.textTheme.bodySmall?.color,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 2,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 );

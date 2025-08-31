@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'dart:async';
 import 'services/task_service.dart';
 import 'services/currency_service.dart' as currency_service;
+import 'models/task_model.dart';
 import 'main.dart';
 import 'calculator_page.dart';
 import 'news_page.dart';
@@ -68,26 +69,25 @@ class _TaskPageState extends State<TaskPage> {
       final appSettings = Provider.of<AppSettings>(context, listen: false);
       final favoriteCurrencies = appSettings.favoriteCurrencies;
 
-      // Sort currencies: favorites first, then others (only active currencies)
+      // Sort currencies: favorites first, then others (both active and inactive)
       final sortedCurrencies = <currency_service.Currency>[];
 
-      // Add favorite currencies first (only if active)
+      // Add favorite currencies first (both active and inactive)
       for (final favoriteCode in favoriteCurrencies) {
         try {
           final favoriteCurrency = loadedCurrencies.firstWhere(
-            (c) => c.code == favoriteCode && c.status == 'active',
+            (c) => c.code == favoriteCode,
           );
           sortedCurrencies.add(favoriteCurrency);
         } catch (e) {
-          // Currency not found or inactive, skip it
-          print('Favorite currency $favoriteCode not found or inactive');
+          // Currency not found, skip it
+          print('Favorite currency $favoriteCode not found');
         }
       }
 
-      // Add remaining active currencies
+      // Add remaining currencies (both active and inactive)
       for (final currency in loadedCurrencies) {
-        if (currency.status == 'active' &&
-            !favoriteCurrencies.contains(currency.code)) {
+        if (!favoriteCurrencies.contains(currency.code)) {
           sortedCurrencies.add(currency);
         }
       }
@@ -822,13 +822,38 @@ class _TaskDialogState extends State<TaskDialog> {
                             value: currency.code,
                             child: Row(
                               children: [
-                                Text('${currency.flag} ${currency.code}'),
+                                Text(
+                                  '${currency.flag} ${currency.code}',
+                                  style: TextStyle(
+                                    color: currency.status == 'inactive' 
+                                        ? Colors.grey 
+                                        : null,
+                                  ),
+                                ),
                                 if (isFavorite) ...[
                                   const SizedBox(width: 8),
                                   const Icon(
                                     Icons.star,
                                     color: Colors.amber,
                                     size: 16,
+                                  ),
+                                ],
+                                if (currency.status == 'inactive') ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      'BLOCKED',
+                                      style: TextStyle(
+                                        fontSize: 8,
+                                        color: Colors.red,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ],
@@ -866,13 +891,38 @@ class _TaskDialogState extends State<TaskDialog> {
                             value: currency.code,
                             child: Row(
                               children: [
-                                Text('${currency.flag} ${currency.code}'),
+                                Text(
+                                  '${currency.flag} ${currency.code}',
+                                  style: TextStyle(
+                                    color: currency.status == 'inactive' 
+                                        ? Colors.grey 
+                                        : null,
+                                  ),
+                                ),
                                 if (isFavorite) ...[
                                   const SizedBox(width: 8),
                                   const Icon(
                                     Icons.star,
                                     color: Colors.amber,
                                     size: 16,
+                                  ),
+                                ],
+                                if (currency.status == 'inactive') ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      'BLOCKED',
+                                      style: TextStyle(
+                                        fontSize: 8,
+                                        color: Colors.red,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ],

@@ -16,46 +16,30 @@ class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
   late AnimationController _controller;
   late AnimationController _loaderController;
-  late Animation<double> _fadeAnimation;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _slideAnimation;
 
   @override
   void initState() {
     super.initState();
 
-    // Initialize main animations
+    // Initialize main animations with faster duration
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 3),
+      duration: const Duration(milliseconds: 1500), // Reduced from 3 seconds
     );
 
-    // Initialize loader animation
+    // Initialize loader animation with faster duration
     _loaderController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 2),
+      duration: const Duration(milliseconds: 1000), // Reduced from 2 seconds
     );
 
-    _fadeAnimation = Tween<double>(
-      begin: 0,
-      end: 1,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
 
-    _scaleAnimation = Tween<double>(
-      begin: 0.8,
-      end: 1,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.elasticOut));
-
-    _slideAnimation = Tween<double>(
-      begin: -50,
-      end: 0,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
 
     _controller.forward();
     _loaderController.repeat();
 
-    // Check authentication state after splash screen
-    Timer(const Duration(seconds: 3), () {
+    // Check authentication state after splash screen - reduced delay
+    Timer(const Duration(milliseconds: 1500), () { // Reduced from 3 seconds
       if (!mounted) return;
       _checkAuthState();
     });
@@ -71,7 +55,7 @@ class _SplashScreenState extends State<SplashScreen>
           pageBuilder: (_, __, ___) => const MainScreen(),
           transitionsBuilder:
               (_, a, __, c) => FadeTransition(opacity: a, child: c),
-          transitionDuration: const Duration(milliseconds: 800),
+          transitionDuration: const Duration(milliseconds: 500), // Reduced from 800
         ),
       );
     } else {
@@ -82,7 +66,7 @@ class _SplashScreenState extends State<SplashScreen>
           pageBuilder: (_, __, ___) => const SignInScreen(),
           transitionsBuilder:
               (_, a, __, c) => FadeTransition(opacity: a, child: c),
-          transitionDuration: const Duration(milliseconds: 800),
+          transitionDuration: const Duration(milliseconds: 500), // Reduced from 800
         ),
       );
     }
@@ -114,12 +98,15 @@ class _SplashScreenState extends State<SplashScreen>
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Top Welcome Logo
+              // Top Welcome Logo - Optimized for faster loading
               Lottie.asset(
                 'assets/Welcome Page Logo.json',
                 width: 160,
                 height: 160,
                 fit: BoxFit.contain,
+                frameRate: FrameRate(60), // Ensure smooth 60fps
+                repeat: true,
+                animate: true,
               ),
               // Main Content
               Column(
@@ -176,12 +163,15 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ],
               ),
-              // Loader at the bottom (smaller)
+              // Loader at the bottom - Optimized for faster loading
               Lottie.asset(
                 'assets/Currency Loader.json',
                 width: 100,
                 height: 100,
                 fit: BoxFit.contain,
+                frameRate: FrameRate(60), // Ensure smooth 60fps
+                repeat: true,
+                animate: true,
               ),
             ],
           ),
@@ -194,7 +184,7 @@ class _SplashScreenState extends State<SplashScreen>
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
-        final delay = index * 0.2;
+        final delay = index * 0.1; // Reduced delay from 0.2 to 0.1
         final animationValue = _controller.value;
         final chipAnimation =
             animationValue > delay
@@ -252,7 +242,7 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
-// Enhanced text widget with shine effect
+// Enhanced text widget with shine effect - Optimized
 class ShineText extends StatefulWidget {
   final String text;
   final TextStyle textStyle;
@@ -273,7 +263,7 @@ class _ShineTextState extends State<ShineText>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 4),
+      duration: const Duration(seconds: 3), // Reduced from 4 seconds
     )..repeat(reverse: true);
 
     _alignAnimation = Tween<Alignment>(
@@ -316,7 +306,7 @@ class _ShineTextState extends State<ShineText>
   }
 }
 
-// Enhanced animated typewriter text effect
+// Enhanced animated typewriter text effect - Optimized
 class AnimatedTypewriterText extends StatefulWidget {
   final String text;
   final TextStyle textStyle;
@@ -341,7 +331,7 @@ class _AnimatedTypewriterTextState extends State<AnimatedTypewriterText>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000),
+      duration: const Duration(milliseconds: 1500), // Reduced from 2000
     );
 
     _typingAnimation = IntTween(
@@ -349,8 +339,8 @@ class _AnimatedTypewriterTextState extends State<AnimatedTypewriterText>
       end: widget.text.length,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
 
-    // Start typing animation after a delay
-    Future.delayed(const Duration(milliseconds: 500), () {
+    // Start typing animation after a shorter delay
+    Future.delayed(const Duration(milliseconds: 200), () { // Reduced from 500
       if (mounted) _controller.forward();
     });
   }

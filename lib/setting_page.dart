@@ -20,11 +20,14 @@ import 'package:share_plus/share_plus.dart';
 import 'support_help_screen.dart';
 import 'dart:convert';
 import 'dart:async';
+import 'package:intl/intl.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'services/connectivity_service.dart';
 import 'services/currency_service.dart';
+import 'services/alert_history_service.dart';
+import 'services/version_history_service.dart';
 import 'app_theme.dart';
 
 // Add ShineText widget for animated gradient text
@@ -212,6 +215,13 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh user profile when page is accessed
+    _loadUserProfile();
+  }
+
+  @override
   void dispose() {
     // Cancel any ongoing timers when widget is disposed
     super.dispose();
@@ -225,18 +235,31 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _loadUserProfile() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      final userDoc =
-          await FirebaseFirestore.instance
-              .collection('currentUser')
-              .doc(user.uid)
-              .get();
+      try {
+        final userDoc =
+            await FirebaseFirestore.instance
+                .collection('currentUser')
+                .doc(user.uid)
+                .get();
 
-      setState(() {
-        _userName = userDoc.data()?['displayName'] ?? user.displayName ?? '';
-        _userEmail = user.email ?? '';
-        _userPhotoUrl = userDoc.data()?['photoURL'] ?? user.photoURL ?? '';
-        _nameController.text = _userName;
-      });
+        setState(() {
+          _userName = userDoc.data()?['displayName'] ?? user.displayName ?? '';
+          _userEmail = user.email ?? '';
+          _userPhotoUrl = userDoc.data()?['photoURL'] ?? user.photoURL ?? '';
+          _nameController.text = _userName;
+        });
+
+        print('User profile loaded - Photo URL: $_userPhotoUrl');
+      } catch (e) {
+        print('Error loading user profile: $e');
+        // Fallback to Firebase Auth user data
+        setState(() {
+          _userName = user.displayName ?? '';
+          _userEmail = user.email ?? '';
+          _userPhotoUrl = user.photoURL ?? '';
+          _nameController.text = _userName;
+        });
+      }
     }
   }
 
@@ -274,9 +297,10 @@ class _SettingsPageState extends State<SettingsPage> {
       final String downloadUrl = await snapshot.ref.getDownloadURL();
 
       await user.updatePhotoURL(downloadUrl);
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update(
-        {'photoURL': downloadUrl},
-      );
+      await FirebaseFirestore.instance
+          .collection('currentUser')
+          .doc(user.uid)
+          .update({'photoURL': downloadUrl});
 
       setState(() {
         _userPhotoUrl = downloadUrl;
@@ -2096,136 +2120,7 @@ class _SettingsPageState extends State<SettingsPage> {
                               ),
                     ),
                     const SizedBox(height: 16),
-                    const Text(
-                      'Notification History',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        if (_notificationHistory.isEmpty) {
-                          return Column(
-                            children: [
-                              const Icon(
-                                Icons.notifications_off,
-                                size: 40,
-                                color: Colors.grey,
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'No notifications yet.',
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            ],
-                          );
-                        } else {
-                          return ListView.separated(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: _notificationHistory.length,
-                            separatorBuilder:
-                                (context, idx) => const Divider(height: 1),
-                            itemBuilder: (context, idx) {
-                              final notif = _notificationHistory[idx];
-                              return Container(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 8,
-                                  horizontal: 4,
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (notif['soundName'] != null)
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          right: 8.0,
-                                          top: 2,
-                                        ),
-                                        child: Icon(
-                                          Icons.music_note,
-                                          color: Colors.blueGrey,
-                                          size: 20,
-                                        ),
-                                      ),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            notif['title'] ?? '',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 15,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                            maxLines: 1,
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            notif['body'] ?? '',
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                              color: Colors.black87,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                            maxLines:
-                                                constraints.maxWidth < 400
-                                                    ? 2
-                                                    : 1,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      children: [
-                                        Text(
-                                          notif['timestamp'] != null
-                                              ? notif['timestamp']
-                                                  .toString()
-                                                  .substring(0, 16)
-                                                  .replaceAll('T', ' ')
-                                              : '',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey,
-                                          ),
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(
-                                            Icons.delete,
-                                            color: Colors.red,
-                                            size: 20,
-                                          ),
-                                          onPressed:
-                                              () =>
-                                                  _deleteNotificationFromHistory(
-                                                    idx,
-                                                  ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          );
-                        }
-                      },
-                    ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        onPressed: _clearNotificationHistory,
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        label: const Text(
-                          'Clear History',
-                          style: TextStyle(color: Colors.red),
-                        ),
-                      ),
-                    ),
+                    _buildNotificationHistorySection(),
                   ],
                 ),
               ),
@@ -2379,41 +2274,63 @@ class _SettingsPageState extends State<SettingsPage> {
       child:
           _isUploadingImage
               ? const CircularProgressIndicator()
-              : FutureBuilder<LottieComposition>(
-                future: _animationComposition,
-                builder: (context, snapshot) {
-                  if (snapshot.hasData) {
-                    return Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            spreadRadius: 2,
-                            blurRadius: 10,
-                            offset: const Offset(0, 5),
+              : Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      spreadRadius: 2,
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: ClipOval(
+                  child:
+                      _userPhotoUrl.isNotEmpty
+                          ? Image.network(
+                            _userPhotoUrl,
+                            fit: BoxFit.cover,
+                            width: 120,
+                            height: 120,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Container(
+                                width: 120,
+                                height: 120,
+                                color: Colors.grey[200],
+                                child: const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                width: 120,
+                                height: 120,
+                                color: Colors.grey[200],
+                                child: const Icon(
+                                  Icons.person,
+                                  size: 60,
+                                  color: Colors.blue,
+                                ),
+                              );
+                            },
+                          )
+                          : Container(
+                            width: 120,
+                            height: 120,
+                            color: Colors.grey[200],
+                            child: const Icon(
+                              Icons.person,
+                              size: 60,
+                              color: Colors.blue,
+                            ),
                           ),
-                        ],
-                      ),
-                      child: Lottie(
-                        composition: snapshot.data!,
-                        fit: BoxFit.contain,
-                        repeat: true,
-                        animate: true,
-                      ),
-                    );
-                  } else if (snapshot.hasError) {
-                    return const Icon(
-                      Icons.person,
-                      size: 60,
-                      color: Colors.blue,
-                    );
-                  } else {
-                    return const CircularProgressIndicator();
-                  }
-                },
+                ),
               ),
     );
   }
@@ -4793,5 +4710,1042 @@ class _SettingsPageState extends State<SettingsPage> {
         );
       },
     );
+  }
+
+  Widget _buildNotificationHistorySection() {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.history, color: theme.colorScheme.primary, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              'Notification History',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'View all your notification history including alerts and app updates',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Text(
+              'Collections: alert_history, version_history',
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.grey[600],
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: _testCollections,
+              icon: const Icon(Icons.bug_report, size: 14),
+              label: const Text('Test', style: TextStyle(fontSize: 12)),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: const Size(0, 0),
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton.icon(
+              onPressed: _addTestData,
+              icon: const Icon(Icons.add, size: 14),
+              label: const Text('Add Test', style: TextStyle(fontSize: 12)),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: const Size(0, 0),
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton.icon(
+              onPressed: _refreshNotificationHistory,
+              icon: const Icon(Icons.refresh, size: 14),
+              label: const Text('Refresh', style: TextStyle(fontSize: 12)),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: const Size(0, 0),
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton.icon(
+              onPressed: _testDirectQuery,
+              icon: const Icon(Icons.search, size: 14),
+              label: const Text('Direct Query', style: TextStyle(fontSize: 12)),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: const Size(0, 0),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Alert History Section
+        _buildAlertHistorySection(),
+        const SizedBox(height: 16),
+
+        // App Version History Section
+        _buildAppVersionHistorySection(),
+      ],
+    );
+  }
+
+  Widget _buildAlertHistorySection() {
+    final theme = Theme.of(context);
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.notifications_active,
+                  color: Colors.orange,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Alert Notifications',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                StreamBuilder<List<AlertHistory>>(
+                  stream: AlertHistoryService.getUserAlertHistory(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                      return TextButton.icon(
+                        onPressed: _clearAlertHistory,
+                        icon: const Icon(Icons.clear_all, size: 16),
+                        label: const Text('Clear All'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            StreamBuilder<List<AlertHistory>>(
+              stream: AlertHistoryService.getUserAlertHistory(),
+              builder: (context, snapshot) {
+                print(
+                  'Alert History StreamBuilder - ConnectionState: ${snapshot.connectionState}',
+                );
+                print(
+                  'Alert History StreamBuilder - HasData: ${snapshot.hasData}',
+                );
+                print(
+                  'Alert History StreamBuilder - HasError: ${snapshot.hasError}',
+                );
+                if (snapshot.hasError) {
+                  print(
+                    'Alert History StreamBuilder - Error: ${snapshot.error}',
+                  );
+                }
+                if (snapshot.hasData) {
+                  print(
+                    'Alert History StreamBuilder - Data length: ${snapshot.data?.length}',
+                  );
+                }
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: Column(
+                      children: [
+                        SizedBox(height: 20),
+                        CircularProgressIndicator(),
+                        SizedBox(height: 8),
+                        Text(
+                          'Loading alert history...',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Collection: alert_history',
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'If loading takes too long, try Refresh button',
+                          style: TextStyle(fontSize: 10, color: Colors.orange),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          color: Colors.red[300],
+                          size: 32,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Error loading alert history',
+                          style: TextStyle(
+                            color: Colors.red[300],
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                final alertHistory = snapshot.data ?? [];
+
+                if (alertHistory.isEmpty) {
+                  return Center(
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.notifications_off,
+                          color: Colors.grey,
+                          size: 32,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'No alert notifications yet',
+                          style: TextStyle(color: Colors.grey, fontSize: 12),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Collection: alert_history (empty)',
+                          style: TextStyle(color: Colors.grey, fontSize: 10),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: alertHistory.length,
+                  separatorBuilder:
+                      (context, index) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final alert = alertHistory[index];
+                    return _buildAlertHistoryItem(alert);
+                  },
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAlertHistoryItem(AlertHistory alert) {
+    final theme = Theme.of(context);
+    final dateFormat = DateFormat('MMM dd, HH:mm');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              Icons.currency_exchange,
+              color: Colors.orange,
+              size: 16,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  alert.notificationTitle,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  alert.notificationBody,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '${alert.baseCurrency} → ${alert.targetCurrency}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.blue[700],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Target: ${alert.targetRate.toStringAsFixed(4)}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.green[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Rate: ${alert.currentRate.toStringAsFixed(4)}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.orange[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                dateFormat.format(alert.triggeredAt),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.textTheme.bodySmall?.color?.withOpacity(0.6),
+                  fontSize: 10,
+                ),
+              ),
+              const SizedBox(height: 4),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, size: 16),
+                onPressed: () => _deleteAlertHistory(alert.id),
+                style: IconButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  padding: const EdgeInsets.all(4),
+                  minimumSize: const Size(24, 24),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppVersionHistorySection() {
+    final theme = Theme.of(context);
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.system_update, color: Colors.blue, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'App Update Notifications',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                StreamBuilder<List<VersionHistory>>(
+                  stream: VersionHistoryService.getUserVersionHistory(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                      return TextButton.icon(
+                        onPressed: _clearAppVersionHistory,
+                        icon: const Icon(Icons.clear_all, size: 16),
+                        label: const Text('Clear All'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            StreamBuilder<List<VersionHistory>>(
+              stream: VersionHistoryService.getUserVersionHistory(),
+              builder: (context, snapshot) {
+                print(
+                  'Version History StreamBuilder - ConnectionState: ${snapshot.connectionState}',
+                );
+                print(
+                  'Version History StreamBuilder - HasData: ${snapshot.hasData}',
+                );
+                print(
+                  'Version History StreamBuilder - HasError: ${snapshot.hasError}',
+                );
+                if (snapshot.hasError) {
+                  print(
+                    'Version History StreamBuilder - Error: ${snapshot.error}',
+                  );
+                }
+                if (snapshot.hasData) {
+                  print(
+                    'Version History StreamBuilder - Data length: ${snapshot.data?.length}',
+                  );
+                }
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: Column(
+                      children: [
+                        SizedBox(height: 20),
+                        CircularProgressIndicator(),
+                        SizedBox(height: 8),
+                        Text(
+                          'Loading app version history...',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Collection: version_history',
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          color: Colors.red[300],
+                          size: 32,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Error loading app version history',
+                          style: TextStyle(
+                            color: Colors.red[300],
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                final versionHistory = snapshot.data ?? [];
+
+                if (versionHistory.isEmpty) {
+                  return Center(
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.system_update_alt,
+                          color: Colors.grey,
+                          size: 32,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'No app update notifications yet',
+                          style: TextStyle(color: Colors.grey, fontSize: 12),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Collection: version_history (empty)',
+                          style: TextStyle(color: Colors.grey, fontSize: 10),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: versionHistory.length,
+                  separatorBuilder:
+                      (context, index) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final version = versionHistory[index];
+                    return _buildAppVersionHistoryItem(version);
+                  },
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAppVersionHistoryItem(VersionHistory version) {
+    final theme = Theme.of(context);
+    final dateFormat = DateFormat('MMM dd, HH:mm');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(Icons.system_update, color: Colors.blue, size: 16),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'Version ${version.version}',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _getUpdateTypeColor(
+                          version.updateType,
+                        ).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        _getUpdateTypeText(version.updateType),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: _getUpdateTypeColor(version.updateType),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                if (version.releaseNotes != null &&
+                    version.releaseNotes!.isNotEmpty)
+                  Text(
+                    version.releaseNotes!,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'Build ${version.buildNumber}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey[700],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.purple.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        version.platform.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.purple[700],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                dateFormat.format(version.timestamp),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.textTheme.bodySmall?.color?.withOpacity(0.6),
+                  fontSize: 10,
+                ),
+              ),
+              const SizedBox(height: 4),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, size: 16),
+                onPressed: () => _deleteAppVersionHistory(version.id),
+                style: IconButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  padding: const EdgeInsets.all(4),
+                  minimumSize: const Size(24, 24),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getUpdateTypeColor(String updateType) {
+    switch (updateType.toLowerCase()) {
+      case 'available':
+        return Colors.blue;
+      case 'downloaded':
+        return Colors.orange;
+      case 'installed':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _getUpdateTypeText(String updateType) {
+    switch (updateType.toLowerCase()) {
+      case 'available':
+        return 'Available';
+      case 'downloaded':
+        return 'Downloaded';
+      case 'installed':
+        return 'Installed';
+      default:
+        return updateType;
+    }
+  }
+
+  Future<void> _clearAlertHistory() async {
+    try {
+      await AlertHistoryService.clearAllAlertHistory();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Alert history cleared successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error clearing alert history: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _clearAppVersionHistory() async {
+    try {
+      await VersionHistoryService.clearAllVersionHistory();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('App version history cleared successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error clearing app version history: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteAlertHistory(String alertId) async {
+    try {
+      await AlertHistoryService.deleteAlertHistory(alertId);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Alert notification deleted'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error deleting alert notification: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteAppVersionHistory(String versionId) async {
+    try {
+      await VersionHistoryService.deleteVersionHistory(versionId);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('App version notification deleted'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error deleting app version notification: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Test method to check if collections exist
+  Future<void> _testCollections() async {
+    print('=== Starting Collection Test ===');
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      String userStatus =
+          user != null ? 'Logged in: ${user.uid}' : 'Not logged in';
+
+      print('=== Collection Test Results ===');
+      print('User Status: $userStatus');
+
+      // Test alert_history collection (without user filter first)
+      try {
+        final alertSnapshotAll =
+            await FirebaseFirestore.instance
+                .collection('alert_history')
+                .limit(5)
+                .get();
+
+        print(
+          'Alert history collection exists: ${alertSnapshotAll.docs.length} total documents',
+        );
+
+        if (user != null) {
+          final alertSnapshotUser =
+              await FirebaseFirestore.instance
+                  .collection('alert_history')
+                  .where('userId', isEqualTo: user.uid)
+                  .limit(5)
+                  .get();
+
+          print(
+            'Alert history for user: ${alertSnapshotUser.docs.length} documents',
+          );
+        }
+      } catch (e) {
+        print('Alert history collection error: $e');
+      }
+
+      // Test version_history collection (without user filter first)
+      try {
+        final versionSnapshotAll =
+            await FirebaseFirestore.instance
+                .collection('version_history')
+                .limit(5)
+                .get();
+
+        print(
+          'Version history collection exists: ${versionSnapshotAll.docs.length} total documents',
+        );
+
+        if (user != null) {
+          final versionSnapshotUser =
+              await FirebaseFirestore.instance
+                  .collection('version_history')
+                  .where('userId', isEqualTo: user.uid)
+                  .limit(5)
+                  .get();
+
+          print(
+            'Version history for user: ${versionSnapshotUser.docs.length} documents',
+          );
+        }
+      } catch (e) {
+        print('Version history collection error: $e');
+      }
+
+      // Show results
+      String message = 'User: $userStatus\n';
+      message +=
+          'Alert History: ${await _getCollectionCount('alert_history')}\n';
+      message +=
+          'Version History: ${await _getCollectionCount('version_history')}';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.blue,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    } catch (e) {
+      print('Error testing collections: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<String> _getCollectionCount(String collectionName) async {
+    try {
+      final snapshot =
+          await FirebaseFirestore.instance
+              .collection(collectionName)
+              .limit(1)
+              .get();
+
+      if (snapshot.docs.isEmpty) {
+        return 'Collection empty';
+      } else {
+        return '${snapshot.docs.length}+ documents';
+      }
+    } catch (e) {
+      return 'Error: $e';
+    }
+  }
+
+  // Test direct query to check if data exists
+  Future<void> _testDirectQuery() async {
+    try {
+      print('=== Testing Direct Query ===');
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please login first'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      print('User ID: ${user.uid}');
+
+      // Test alert history directly
+      final alertSnapshot =
+          await FirebaseFirestore.instance
+              .collection('alert_history')
+              .where('userId', isEqualTo: user.uid)
+              .limit(5)
+              .get();
+
+      print(
+        'Alert History Direct Query: ${alertSnapshot.docs.length} documents',
+      );
+
+      // Test version history directly
+      final versionSnapshot =
+          await FirebaseFirestore.instance
+              .collection('version_history')
+              .where('userId', isEqualTo: user.uid)
+              .limit(5)
+              .get();
+
+      print(
+        'Version History Direct Query: ${versionSnapshot.docs.length} documents',
+      );
+
+      String message = 'Direct Query Results:\n';
+      message += 'Alert History: ${alertSnapshot.docs.length} docs\n';
+      message += 'Version History: ${versionSnapshot.docs.length} docs';
+
+      if (alertSnapshot.docs.isNotEmpty) {
+        final firstAlert = alertSnapshot.docs.first.data();
+        message += '\nFirst Alert: ${firstAlert['notificationTitle']}';
+      }
+
+      if (versionSnapshot.docs.isNotEmpty) {
+        final firstVersion = versionSnapshot.docs.first.data();
+        message += '\nFirst Version: ${firstVersion['version']}';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.blue,
+          duration: const Duration(seconds: 8),
+        ),
+      );
+    } catch (e) {
+      print('Error in direct query: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Direct Query Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Refresh notification history
+  Future<void> _refreshNotificationHistory() async {
+    try {
+      print('=== Refreshing Notification History ===');
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please login first'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Force refresh by rebuilding the widget
+      setState(() {
+        // This will trigger a rebuild and refresh the streams
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Notification history refreshed'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      print('Error refreshing notification history: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error refreshing: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Add test data to collections
+  Future<void> _addTestData() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please login first'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Add test alert history
+      await FirebaseFirestore.instance.collection('alert_history').add({
+        'userId': user.uid,
+        'alertId': 'test_alert_${DateTime.now().millisecondsSinceEpoch}',
+        'baseCurrency': 'USD',
+        'targetCurrency': 'PKR',
+        'targetRate': 280.0,
+        'triggerType': 'above',
+        'triggeredAt': FieldValue.serverTimestamp(),
+        'currentRate': 285.50,
+        'notificationTitle': 'Test Alert Triggered',
+        'notificationBody': 'USD to PKR rate is now 285.50',
+        'sound': 'default',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      // Add test version history
+      await FirebaseFirestore.instance.collection('version_history').add({
+        'userId': user.uid,
+        'userName': user.displayName ?? 'Test User',
+        'userEmail': user.email ?? 'test@example.com',
+        'userPhotoUrl': user.photoURL,
+        'version': '1.0.0',
+        'buildNumber': '100',
+        'platform': 'android',
+        'updateType': 'available',
+        'downloadUrl': 'https://example.com/app.apk',
+        'releaseNotes': 'Test version with new features',
+        'timestamp': FieldValue.serverTimestamp(),
+        'isRead': false,
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Test data added successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      print('Error adding test data: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error adding test data: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 }

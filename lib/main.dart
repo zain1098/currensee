@@ -40,6 +40,9 @@ import 'services/user_status_service.dart';
 import 'services/maintenance_service.dart';
 import 'services/connectivity_service.dart';
 import 'app_theme.dart';
+import 'task_screen.dart';
+import 'services/notification_manager.dart';
+import 'services/task_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -94,6 +97,14 @@ void main() async {
     print('Error initializing MessagingService: $e');
   }
 
+  // Initialize NotificationManager for task notifications
+  try {
+    await NotificationManager.initialize();
+    print('NotificationManager initialized successfully');
+  } catch (e) {
+    print('Error initializing NotificationManager: $e');
+  }
+
   // Initialize ConnectivityService
   try {
     ConnectivityService().initialize();
@@ -121,6 +132,7 @@ void main() async {
           ChangeNotifierProvider<VoiceService>(create: (_) => VoiceService()),
           Provider<ChatService>(create: (_) => ChatService()),
           ChangeNotifierProvider(create: (_) => AppSettings()),
+          ChangeNotifierProvider<TaskService>(create: (_) => TaskService()),
         ],
         child: const MyApp(),
       ),
@@ -1246,6 +1258,12 @@ class _MainScreenState extends State<MainScreen> {
                 title: 'Calculator',
                 onTap:
                     () => _navigateAndClose(context, const CalculatorsScreen()),
+              ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.task_alt,
+                title: 'Currency Tasks',
+                onTap: () => _navigateAndClose(context, const TaskScreen()),
               ),
               const SizedBox(height: 16),
               const Divider(color: Colors.white24, height: 1),
