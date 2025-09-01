@@ -257,8 +257,11 @@ class TaskService extends ChangeNotifier {
       // Only process active tasks
       if (!task.isActive) continue;
 
+      print('🔍 Checking task: ${task.taskName} at ${task.time.hour}:${task.time.minute.toString().padLeft(2, '0')}');
+
       // Check if it's time to execute this task
       if (_shouldExecuteTask(task, currentTime)) {
+        print('✅ Executing task: ${task.taskName}');
         try {
           // Simulate getting rate from API
           final rate =
@@ -267,9 +270,13 @@ class TaskService extends ChangeNotifier {
 
           await completeTask(task.id, convertedAmount, rate);
           await showTaskNotification(task, convertedAmount, rate);
+          
+          print('✅ Task executed successfully: ${task.taskName}');
         } catch (e) {
-          print('Failed to execute task ${task.id}: $e');
+          print('❌ Failed to execute task ${task.id}: $e');
         }
+      } else {
+        print('⏰ Task not due yet: ${task.taskName}');
       }
     }
   }

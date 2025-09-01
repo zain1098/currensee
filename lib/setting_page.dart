@@ -30,6 +30,7 @@ import 'services/alert_history_service.dart';
 import 'services/version_history_service.dart';
 import 'services/firestore_index_service.dart';
 import 'services/task_service.dart';
+import 'services/app_version_service.dart';
 import 'app_theme.dart';
 
 // Add ShineText widget for animated gradient text
@@ -881,7 +882,7 @@ class _SettingsPageState extends State<SettingsPage> {
       // Fallback to default version if package info fails
       setState(() {
         _currentAppVersion = {
-          'version': '1.0.0', // Default fallback version
+          'version': AppVersionService.getAppVersionSync(), // Dynamic version
           'buildNumber': '1',
           'platform': kIsWeb ? 'Web' : (Platform.isAndroid ? 'Android' : 'iOS'),
         };
@@ -927,7 +928,7 @@ class _SettingsPageState extends State<SettingsPage> {
         });
 
         // Compare versions
-        final currentVersion = _currentAppVersion?['version'] ?? '1.0.0';
+        final currentVersion = await AppVersionService.getAppVersion();
         final latestVersionStr = latestVersion['version'];
 
         print(
@@ -1166,7 +1167,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
       if (versionDoc.exists) {
         final latestVersion = versionDoc.data()!;
-        final currentVersion = _currentAppVersion?['version'] ?? '1.0.0';
+        final currentVersion = await AppVersionService.getAppVersion();
         final latestVersionStr = latestVersion['version'];
 
         print(
@@ -1656,12 +1657,17 @@ class _SettingsPageState extends State<SettingsPage> {
                                   fontSize: 12,
                                 ),
                               ),
-                              Text(
-                                '${_currentAppVersion?['version'] ?? '1.0.0'}',
-                                style: const TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 11,
-                                ),
+                              FutureBuilder<String>(
+                                future: AppVersionService.getAppVersion(),
+                                builder: (context, snapshot) {
+                                  return Text(
+                                    '${snapshot.data ?? '1.0.6'}',
+                                    style: const TextStyle(
+                                      color: Colors.grey,
+                                      fontSize: 11,
+                                    ),
+                                  );
+                                },
                               ),
                             ],
                           ),
@@ -3185,7 +3191,12 @@ class _SettingsPageState extends State<SettingsPage> {
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 4),
-        Text('Version ${_currentAppVersion?['version'] ?? '1.0.0'}'),
+        FutureBuilder<String>(
+          future: AppVersionService.getAppVersion(),
+          builder: (context, snapshot) {
+            return Text('Version ${snapshot.data ?? '1.0.6'}');
+          },
+        ),
         const SizedBox(height: 12),
         const Text(
           'This app provides real-time currency conversion using the latest exchange rates.',
@@ -3321,8 +3332,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           'userLastLoginAt': userData['lastLoginAt'],
                           'rating': selectedRating,
                           'timestamp': FieldValue.serverTimestamp(),
-                          'appVersion':
-                              _currentAppVersion?['version'] ?? '1.0.0',
+                          'appVersion': await AppVersionService.getAppVersion(),
                           'platform':
                               kIsWeb
                                   ? 'Web'
@@ -6051,7 +6061,7 @@ class _SettingsPageState extends State<SettingsPage> {
         'userName': user.displayName ?? 'Test User',
         'userEmail': user.email ?? 'test@example.com',
         'userPhotoUrl': user.photoURL,
-        'version': '1.0.0',
+        'version': AppVersionService.getAppVersionSync(),
         'buildNumber': '100',
         'platform': 'android',
         'updateType': 'available',

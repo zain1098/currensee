@@ -67,43 +67,67 @@ class NotificationManager {
   static Future<void> scheduleTaskNotification(Task task) async {
     if (!_initialized) await initialize();
 
-    // Calculate next execution time
-    final nextExecution = _calculateNextExecution(task);
-    if (nextExecution == null) return;
+    try {
+      print('🔔 Scheduling notification for task: ${task.taskName}');
+      
+      // Calculate next execution time
+      final nextExecution = _calculateNextExecution(task);
+      if (nextExecution == null) {
+        print('❌ Could not calculate next execution time for task: ${task.taskName}');
+        return;
+      }
 
-    // Create notification details
-    const androidDetails = AndroidNotificationDetails(
-      'currency_tasks',
-      'Currency Tasks',
-      channelDescription: 'Notifications for currency conversion tasks',
-      importance: Importance.high,
-      priority: Priority.high,
-      showWhen: true,
-    );
+      print('📅 Next execution time: $nextExecution');
 
-    const iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    );
+      // Create notification details
+      const androidDetails = AndroidNotificationDetails(
+        'currency_tasks',
+        'Currency Tasks',
+        channelDescription: 'Notifications for currency conversion tasks',
+        importance: Importance.high,
+        priority: Priority.high,
+        showWhen: true,
+        enableVibration: true,
+        playSound: true,
+      );
 
-    const details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
+      const iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
 
-    // Schedule notification
-    await _notifications.zonedSchedule(
-      task.id.hashCode, // Use hash code as notification ID
-      'Currency Task: ${task.taskName}',
-      'Time to check ${task.amount} ${task.fromCurrency} to ${task.toCurrency}',
-      tz.TZDateTime.from(nextExecution, tz.local),
-      details,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: _getDateTimeComponents(task.frequency),
-    );
+      const details = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      // Cancel any existing notification for this task
+      await _notifications.cancel(task.id.hashCode);
+
+      // Schedule notification
+      await _notifications.zonedSchedule(
+        task.id.hashCode, // Use hash code as notification ID
+        'Currency Task: ${task.taskName}',
+        'Time to check ${task.amount} ${task.fromCurrency} to ${task.toCurrency}',
+        tz.TZDateTime.from(nextExecution, tz.local),
+        details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: _getDateTimeComponents(task.frequency),
+      );
+
+      print('✅ Notification scheduled successfully for task: ${task.taskName}');
+      
+      // Verify the notification was scheduled
+      final pending = await getPendingNotifications();
+      final isScheduled = pending.any((notification) => notification.id == task.id.hashCode);
+      print('🔍 Notification verification: ${isScheduled ? 'Scheduled' : 'Not scheduled'}');
+      
+    } catch (e) {
+      print('❌ Failed to schedule notification for task ${task.taskName}: $e');
+    }
   }
 
   // Cancel a task notification

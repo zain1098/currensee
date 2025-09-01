@@ -1,4 +1,5 @@
 // rate_list_page.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -21,6 +22,7 @@ import 'support_help_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'alert_service.dart';
 import 'services/currency_service.dart'; // Add this import
+import 'services/app_version_service.dart';
 
 // EmailJS Configuration (keeping user's existing service ID)
 // const String _serviceId = 'service_ih5ns2r';
@@ -1090,12 +1092,17 @@ class _RateListPageState extends State<RateListPage> {
                       builder: (context, value, child) {
                         return Opacity(
                           opacity: value,
-                          child: const Text(
-                            'Version 2.0.0',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.white70,
-                            ),
+                          child: FutureBuilder<String>(
+                            future: AppVersionService.getAppVersion(),
+                            builder: (context, snapshot) {
+                              return Text(
+                                'Version ${snapshot.data ?? '1.0.6'}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white70,
+                                ),
+                              );
+                            },
                           ),
                         );
                       },

@@ -16,6 +16,7 @@ import 'world_clock.dart';
 import 'setting_page.dart';
 import 'login.dart';
 import 'support_help_screen.dart';
+import 'services/app_version_service.dart';
 
 class TaskPage extends StatefulWidget {
   const TaskPage({super.key});
@@ -277,16 +278,21 @@ class _TaskPageState extends State<TaskPage> {
                       builder: (context, value, child) {
                         return Opacity(
                           opacity: value,
-                          child: Text(
-                            'Version 2.0.0',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color:
-                                  Theme.of(context).brightness ==
-                                          Brightness.dark
-                                      ? Colors.white70
-                                      : Colors.white70,
-                            ),
+                          child: FutureBuilder<String>(
+                            future: AppVersionService.getAppVersion(),
+                            builder: (context, snapshot) {
+                              return Text(
+                                'Version ${snapshot.data ?? '1.0.6'}',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color:
+                                      Theme.of(context).brightness ==
+                                              Brightness.dark
+                                          ? Colors.white70
+                                          : Colors.white70,
+                                ),
+                              );
+                            },
                           ),
                         );
                       },

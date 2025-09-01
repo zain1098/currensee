@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -16,6 +17,7 @@ import 'package:lottie/lottie.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'support_help_screen.dart';
 import 'services/currency_service.dart';
+import 'services/app_version_service.dart';
 
 class MultiCurrencyConverter extends StatefulWidget {
   const MultiCurrencyConverter({super.key});
@@ -101,7 +103,7 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
     'HNL': '🇭🇳',
     'GTQ': '🇬🇹',
     'CRC': '🇨🇷',
-    'UYU': '🇺🇾',
+    'UYU': '��🇾',
     'BOB': '🇧🇴',
     'PYG': '🇵🇾',
     'DOP': '🇩🇴',
@@ -843,12 +845,17 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                       builder: (context, value, child) {
                         return Opacity(
                           opacity: value,
-                          child: const Text(
-                            'Version 2.0.0',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.white70,
-                            ),
+                          child: FutureBuilder<String>(
+                            future: AppVersionService.getAppVersion(),
+                            builder: (context, snapshot) {
+                              return Text(
+                                'Version ${snapshot.data ?? '1.0.6'}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white70,
+                                ),
+                              );
+                            },
                           ),
                         );
                       },

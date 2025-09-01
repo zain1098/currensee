@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -18,6 +19,7 @@ import 'package:lottie/lottie.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'contact_form_screen.dart';
 import 'services/news_service.dart';
+import 'services/app_version_service.dart';
 
 // ... (Keep the existing MyApp, MainNavigationScreen and CurrencyConverterScreen code)
 
@@ -278,12 +280,17 @@ class _NewsScreenState extends State<NewsScreen> {
                       builder: (context, value, child) {
                         return Opacity(
                           opacity: value,
-                          child: const Text(
-                            'Version 2.0.0',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.white70,
-                            ),
+                          child: FutureBuilder<String>(
+                            future: AppVersionService.getAppVersion(),
+                            builder: (context, snapshot) {
+                              return Text(
+                                'Version ${snapshot.data ?? '1.0.6'}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white70,
+                                ),
+                              );
+                            },
                           ),
                         );
                       },

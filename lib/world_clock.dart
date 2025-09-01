@@ -17,6 +17,7 @@ import 'package:lottie/lottie.dart';
 import 'support_help_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'services/flag_service.dart';
+import 'services/app_version_service.dart';
 
 class WorldClockPage extends StatefulWidget {
   const WorldClockPage({super.key});
@@ -365,14 +366,26 @@ class _WorldClockPageState extends State<WorldClockPage>
     setState(() {
       if (query.isEmpty) {
         _searchResults.clear();
+        print(
+          '🔍 Search cleared, showing all ${allLocations.length} locations',
+        );
       } else {
         // Show all matching locations (both active and inactive)
         _searchResults =
             allLocations
                 .where(
-                  (loc) => loc.city.toLowerCase().contains(query.toLowerCase()),
+                  (loc) =>
+                      loc.city.toLowerCase().contains(query.toLowerCase()) ||
+                      (loc.country?.toLowerCase().contains(
+                            query.toLowerCase(),
+                          ) ??
+                          false),
                 )
                 .toList();
+        print('🔍 Search for "$query" found ${_searchResults.length} results');
+        for (final loc in _searchResults) {
+          print('  - ${loc.city} (${loc.country}) - Status: ${loc.status}');
+        }
       }
     });
   }
@@ -656,12 +669,17 @@ class _WorldClockPageState extends State<WorldClockPage>
                       builder: (context, value, child) {
                         return Opacity(
                           opacity: value,
-                          child: const Text(
-                            'Version 2.0.0',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.white70,
-                            ),
+                          child: FutureBuilder<String>(
+                            future: AppVersionService.getAppVersion(),
+                            builder: (context, snapshot) {
+                              return Text(
+                                'Version ${snapshot.data ?? '1.0.6'}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white70,
+                                ),
+                              );
+                            },
                           ),
                         );
                       },
@@ -893,6 +911,56 @@ class _WorldClockPageState extends State<WorldClockPage>
                                 Icons.add,
                                 color: Colors.white,
                                 size: 28,
+                              ),
+                            ),
+                          ),
+                          // Debug button to check Firebase data
+                          GestureDetector(
+                            onTap: () {
+                              print('🔍 === DEBUG: Firebase Data Check ===');
+                              print(
+                                '🔍 allLocations count: ${allLocations.length}',
+                              );
+                              print(
+                                '🔍 searchResults count: ${_searchResults.length}',
+                              );
+                              print(
+                                '🔍 current locations count: ${locations.length}',
+                              );
+
+                              if (allLocations.isNotEmpty) {
+                                print('🔍 === All Cities from Firebase ===');
+                                for (int i = 0; i < allLocations.length; i++) {
+                                  final loc = allLocations[i];
+                                  print(
+                                    '  ${i + 1}. ${loc.city} - ${loc.country} - Status: ${loc.status}',
+                                  );
+                                }
+                              } else {
+                                print('❌ No cities loaded from Firebase!');
+                              }
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Debug info logged. Check console for details.',
+                                  ),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              margin: const EdgeInsets.only(left: 8),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.orange.withOpacity(0.8),
+                              ),
+                              child: const Icon(
+                                Icons.bug_report,
+                                color: Colors.white,
+                                size: 16,
                               ),
                             ),
                           ),

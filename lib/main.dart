@@ -42,6 +42,7 @@ import 'app_theme.dart';
 import 'task_screen.dart';
 import 'services/notification_manager.dart';
 import 'services/task_service.dart';
+import 'services/app_version_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -123,6 +124,14 @@ void main() async {
         return 'unknown_method';
     }
   });
+
+  // Initialize AppVersionService
+  try {
+    await AppVersionService.initialize();
+    print('AppVersionService initialized successfully');
+  } catch (e) {
+    print('Error initializing AppVersionService: $e');
+  }
 
   runApp(
     FeatureDiscovery(
@@ -1196,12 +1205,17 @@ class _MainScreenState extends State<MainScreen> {
                       builder: (context, value, child) {
                         return Opacity(
                           opacity: value,
-                          child: const Text(
-                            'Version 2.0.0',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.white70,
-                            ),
+                          child: FutureBuilder<String>(
+                            future: AppVersionService.getAppVersion(),
+                            builder: (context, snapshot) {
+                              return Text(
+                                'Version ${snapshot.data ?? '1.0.6'}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white70,
+                                ),
+                              );
+                            },
                           ),
                         );
                       },

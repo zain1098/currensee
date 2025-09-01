@@ -1,17 +1,22 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 import 'dart:math';
-import 'main.dart'; // For CustomAppBar, AppSettings, and navigation
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'main.dart'; // For CustomAppBar
 import 'news_page.dart';
-import 'multi_currency_page.dart';
 import 'trend_chart.dart';
 import 'rate_list_page.dart';
+import 'package:provider/provider.dart';
 import 'setting_page.dart';
 import 'task_screen.dart';
 import 'world_clock.dart';
-import 'package:lottie/lottie.dart';
+import 'multi_currency_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:provider/provider.dart';
+import 'package:lottie/lottie.dart';
 import 'support_help_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'services/app_version_service.dart';
 
 // Unified currency management
 class CurrencyUtils {
@@ -611,12 +616,17 @@ class _CalculatorsScreenState extends State<CalculatorsScreen> {
                       builder: (context, value, child) {
                         return Opacity(
                           opacity: value,
-                          child: const Text(
-                            'Version 2.0.0',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.white70,
-                            ),
+                          child: FutureBuilder<String>(
+                            future: AppVersionService.getAppVersion(),
+                            builder: (context, snapshot) {
+                              return Text(
+                                'Version ${snapshot.data ?? '1.0.6'}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white70,
+                                ),
+                              );
+                            },
                           ),
                         );
                       },
