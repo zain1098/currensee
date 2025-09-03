@@ -6,19 +6,17 @@ class AppVersionService {
 
   /// Get the current app version dynamically
   static Future<String> getAppVersion() async {
-    if (_isInitialized) {
-      return _cachedVersion;
-    }
-
     try {
       PackageInfo packageInfo = await PackageInfo.fromPlatform();
       _cachedVersion = packageInfo.version;
       _isInitialized = true;
+      print('📱 Dynamic version loaded: $_cachedVersion');
       return _cachedVersion;
     } catch (e) {
-      // Fallback to default version if package info fails
-      _cachedVersion = '1.0.6';
-      _isInitialized = true;
+      print('❌ Error loading package info: $e');
+      // Force re-initialization on next call
+      _isInitialized = false;
+      _cachedVersion = 'Error loading version';
       return _cachedVersion;
     }
   }

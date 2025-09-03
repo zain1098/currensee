@@ -879,10 +879,11 @@ class _SettingsPageState extends State<SettingsPage> {
       );
     } catch (e) {
       print('❌ Error loading app version: $e');
-      // Fallback to default version if package info fails
+      // Fallback - try to get version again
+      final fallbackVersion = await AppVersionService.getAppVersion();
       setState(() {
         _currentAppVersion = {
-          'version': AppVersionService.getAppVersionSync(), // Dynamic version
+          'version': fallbackVersion, // Dynamic version
           'buildNumber': '1',
           'platform': kIsWeb ? 'Web' : (Platform.isAndroid ? 'Android' : 'iOS'),
         };
@@ -1661,7 +1662,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                 future: AppVersionService.getAppVersion(),
                                 builder: (context, snapshot) {
                                   return Text(
-                                    '${snapshot.data ?? '1.0.6'}',
+                                    snapshot.data ?? '1.0.6',
                                     style: const TextStyle(
                                       color: Colors.grey,
                                       fontSize: 11,
@@ -3194,7 +3195,19 @@ class _SettingsPageState extends State<SettingsPage> {
         FutureBuilder<String>(
           future: AppVersionService.getAppVersion(),
           builder: (context, snapshot) {
-            return Text('Version ${snapshot.data ?? '1.0.6'}');
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Row(
+                children: [
+                  Text('Version '),
+                  SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 1),
+                  ),
+                ],
+              );
+            }
+            return Text('Version ${snapshot.data ?? 'Loading...'}');
           },
         ),
         const SizedBox(height: 12),

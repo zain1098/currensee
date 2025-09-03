@@ -7,10 +7,21 @@ import 'package:lottie/lottie.dart';
 import 'package:feature_discovery/feature_discovery.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'main.dart';
 import 'currency_widget.dart';
 import 'services/currency_service.dart';
 import 'services/connectivity_service.dart';
+import 'services/app_version_service.dart';
+import 'news_page.dart';
+import 'trend_chart.dart';
+import 'world_clock.dart';
+import 'multi_currency_page.dart' as multi_currency;
+import 'rate_list_page.dart';
+import 'calculator_page.dart';
+import 'task_screen.dart';
+import 'support_help_screen.dart';
+import 'setting_page.dart';
 
 class CurrencyConverterScreen extends StatefulWidget {
   final bool showSuccess;
@@ -22,6 +33,7 @@ class CurrencyConverterScreen extends StatefulWidget {
 }
 
 class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   List<Currency> currencies = [];
   Currency? fromCurrency;
   Currency? toCurrency;
@@ -281,32 +293,49 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
     final favoriteCurrencies = settings.favoriteCurrencies;
 
     // Separate currencies by status and favorites
-    final favoriteActive = currencies
-        .where((currency) => 
-            favoriteCurrencies.contains(currency.code) && 
-            currency.status == 'active')
-        .toList();
-    
-    final favoriteInactive = currencies
-        .where((currency) => 
-            favoriteCurrencies.contains(currency.code) && 
-            currency.status == 'inactive')
-        .toList();
-    
-    final nonFavoriteActive = currencies
-        .where((currency) => 
-            !favoriteCurrencies.contains(currency.code) && 
-            currency.status == 'active')
-        .toList();
-    
-    final nonFavoriteInactive = currencies
-        .where((currency) => 
-            !favoriteCurrencies.contains(currency.code) && 
-            currency.status == 'inactive')
-        .toList();
+    final favoriteActive =
+        currencies
+            .where(
+              (currency) =>
+                  favoriteCurrencies.contains(currency.code) &&
+                  currency.status == 'active',
+            )
+            .toList();
+
+    final favoriteInactive =
+        currencies
+            .where(
+              (currency) =>
+                  favoriteCurrencies.contains(currency.code) &&
+                  currency.status == 'inactive',
+            )
+            .toList();
+
+    final nonFavoriteActive =
+        currencies
+            .where(
+              (currency) =>
+                  !favoriteCurrencies.contains(currency.code) &&
+                  currency.status == 'active',
+            )
+            .toList();
+
+    final nonFavoriteInactive =
+        currencies
+            .where(
+              (currency) =>
+                  !favoriteCurrencies.contains(currency.code) &&
+                  currency.status == 'inactive',
+            )
+            .toList();
 
     // Return: favorite active, non-favorite active, favorite inactive, non-favorite inactive
-    return [...favoriteActive, ...nonFavoriteActive, ...favoriteInactive, ...nonFavoriteInactive];
+    return [
+      ...favoriteActive,
+      ...nonFavoriteActive,
+      ...favoriteInactive,
+      ...nonFavoriteInactive,
+    ];
   }
 
   bool _isFavoriteCurrency(String currencyCode) {
@@ -332,24 +361,31 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
         // Get preferred from currency (USD) with fallback - prefer active currencies
         Currency? preferredFrom = currencies.firstWhere(
           (c) => c.code == 'USD' && c.status == 'active',
-          orElse: () => currencies.firstWhere(
-            (c) => c.code == 'USD',
-            orElse: () => currencies.firstWhere(
-              (c) => c.status == 'active',
-              orElse: () => currencies.first,
-            ),
-          ),
+          orElse:
+              () => currencies.firstWhere(
+                (c) => c.code == 'USD',
+                orElse:
+                    () => currencies.firstWhere(
+                      (c) => c.status == 'active',
+                      orElse: () => currencies.first,
+                    ),
+              ),
         );
 
         // Get preferred to currency (PKR) with fallback - prefer active currencies
         Currency? preferredTo = currencies.firstWhere(
           (c) => c.code == 'PKR' && c.status == 'active',
-          orElse: () => currencies.firstWhere(
-            (c) => c.code == 'PKR',
-            orElse: () => currencies.where((c) => c.status == 'active').isNotEmpty
-                ? currencies.where((c) => c.status == 'active').first
-                : currencies.first,
-          ),
+          orElse:
+              () => currencies.firstWhere(
+                (c) => c.code == 'PKR',
+                orElse:
+                    () =>
+                        currencies.where((c) => c.status == 'active').isNotEmpty
+                            ? currencies
+                                .where((c) => c.status == 'active')
+                                .first
+                            : currencies.first,
+              ),
         );
 
         // Ensure from and to currencies are different
@@ -637,10 +673,303 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
     return '${convertLessThanOneThousand(number ~/ 1000000000)} Billion${number % 1000000000 != 0 ? ' ${_numberToWords(number % 1000000000)}' : ''}';
   }
 
+  void _navigateAndClose(BuildContext context, Widget page) {
+    Navigator.pop(context);
+    Navigator.push(context, MaterialPageRoute(builder: (context) => page));
+  }
+
+  Widget _buildDrawerItem(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Material(
+        borderRadius: BorderRadius.circular(12),
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          splashColor: Colors.white.withOpacity(0.1),
+          highlightColor: Colors.white.withOpacity(0.05),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
+            child: Row(
+              children: [
+                Icon(icon, color: Colors.white, size: 24),
+                const SizedBox(width: 16),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const Spacer(),
+                const Icon(
+                  Icons.chevron_right,
+                  color: Colors.white70,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
+      key: _scaffoldKey,
+      appBar: CustomAppBar(
+        title: 'CurrenSee Pro',
+        onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
+      ),
+      drawer: Drawer(
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors:
+                  Theme.of(context).brightness == Brightness.dark
+                      ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+                      : [const Color(0xFF1E3A8A), const Color(0xFF3B82F6)],
+            ),
+          ),
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              // Professional Drawer Header
+              Container(
+                height: 180,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(20),
+                    bottomRight: Radius.circular(20),
+                  ),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors:
+                        Theme.of(context).brightness == Brightness.dark
+                            ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+                            : [
+                              const Color(0xFF1E3A8A),
+                              const Color(0xFF2563EB),
+                            ],
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // App Icon with subtle animation
+                    Container(
+                      width: 70,
+                      height: 70,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withOpacity(0.2),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                          width: 2,
+                        ),
+                      ),
+                      child: Center(
+                        child: Lottie.asset(
+                          'assets/Menu Icon.json', // Your app icon animation
+                          width: 50,
+                          height: 50,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // App Name
+                    const Text(
+                      'CurrenSee Pro',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    // Version text with fade-in animation
+                    TweenAnimationBuilder(
+                      tween: Tween<double>(begin: 0, end: 1),
+                      duration: const Duration(milliseconds: 800),
+                      builder: (context, value, child) {
+                        return Opacity(
+                          opacity: value,
+                          child: FutureBuilder<String>(
+                            future: AppVersionService.getAppVersion(),
+                            builder: (context, snapshot) {
+                              return Text(
+                                'Version ${snapshot.data ?? '1.0.6'}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white70,
+                                ),
+                              );
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              // Menu Items
+              _buildDrawerItem(
+                context,
+                icon: Icons.currency_exchange,
+                title: 'Currency Converter',
+                onTap:
+                    () => _navigateAndClose(
+                      context,
+                      const CurrencyConverterScreen(),
+                    ),
+              ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.newspaper,
+                title: 'Market News',
+                onTap: () => _navigateAndClose(context, const NewsScreen()),
+              ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.calculate,
+                title: 'Multi-Currency',
+                onTap:
+                    () => _navigateAndClose(
+                      context,
+                      const multi_currency.MultiCurrencyConverter(),
+                    ),
+              ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.trending_up,
+                title: 'Trend Analysis',
+                onTap:
+                    () => _navigateAndClose(context, const CurrencyChartPage()),
+              ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.timer,
+                title: 'World Clock',
+                onTap: () => _navigateAndClose(context, const WorldClockPage()),
+              ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.list_alt,
+                title: 'Rate List',
+                onTap: () => _navigateAndClose(context, const RateListPage()),
+              ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.calculate_outlined,
+                title: 'Calculator',
+                onTap:
+                    () => _navigateAndClose(context, const CalculatorsScreen()),
+              ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.task_alt,
+                title: 'Currency Tasks',
+                onTap: () => _navigateAndClose(context, const TaskScreen()),
+              ),
+
+              const SizedBox(height: 16),
+              Divider(color: Theme.of(context).dividerColor, height: 1),
+              const SizedBox(height: 16),
+              // Settings Section
+              _buildDrawerItem(
+                context,
+                icon: Icons.settings,
+                title: 'Settings',
+                onTap:
+                    () => _navigateAndClose(
+                      context,
+                      SettingsPage(
+                        onThemeChanged: (isDark) {
+                          Provider.of<AppSettings>(
+                            context,
+                            listen: false,
+                          ).setDarkMode(isDark);
+                        },
+                        onDecimalChanged: (decimalPlaces) {
+                          Provider.of<AppSettings>(
+                            context,
+                            listen: false,
+                          ).setDecimalPlaces(decimalPlaces);
+                        },
+                        onBaseCurrencyChanged: (currency) {
+                          Provider.of<AppSettings>(
+                            context,
+                            listen: false,
+                          ).setBaseCurrency(currency);
+                        },
+                        onAutoUpdateChanged: (autoUpdate) {
+                          Provider.of<AppSettings>(
+                            context,
+                            listen: false,
+                          ).setAutoUpdateRates(autoUpdate);
+                        },
+                        onBiometricChanged: (useBiometric) {
+                          Provider.of<AppSettings>(
+                            context,
+                            listen: false,
+                          ).setBiometricAuth(useBiometric);
+                        },
+                        onVibrationChanged: (vibration) {
+                          Provider.of<AppSettings>(
+                            context,
+                            listen: false,
+                          ).setHapticFeedback(vibration);
+                        },
+                        onCalculatorChanged: (showCalculator) {
+                          Provider.of<AppSettings>(
+                            context,
+                            listen: false,
+                          ).setShowCalculator(showCalculator);
+                        },
+                      ),
+                    ),
+              ),
+              _buildDrawerItem(
+                context,
+                icon: Icons.help_center,
+                title: 'Help & Support',
+                onTap:
+                    () => _navigateAndClose(context, const SupportHelpScreen()),
+              ),
+              const SizedBox(height: 16),
+              Divider(color: Theme.of(context).dividerColor, height: 1),
+              const SizedBox(height: 16),
+              _buildDrawerItem(
+                context,
+                icon: Icons.logout,
+                title: 'Logout',
+                onTap: () async {
+                  await FirebaseAuth.instance.signOut();
+                  Navigator.of(
+                    context,
+                  ).pushNamedAndRemoveUntil('/signin', (route) => false);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
       body: Stack(
         children: [
           isLoading
@@ -1152,9 +1481,13 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                               : null,
                       color: isSelected ? null : theme.cardColor,
                       borderRadius: BorderRadius.circular(16),
-                      border: curr.status == 'inactive' 
-                          ? Border.all(color: Colors.red.withOpacity(0.5), width: 1)
-                          : null,
+                      border:
+                          curr.status == 'inactive'
+                              ? Border.all(
+                                color: Colors.red.withOpacity(0.5),
+                                width: 1,
+                              )
+                              : null,
                       boxShadow: [
                         BoxShadow(
                           color: theme.shadowColor.withOpacity(0.2),
@@ -1183,13 +1516,14 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                             children: [
                               // Display flag emoji
                               Text(
-                                curr.flag, 
+                                curr.flag,
                                 style: TextStyle(
                                   fontSize: 24,
-                                  color: curr.status == 'inactive' 
-                                      ? Colors.grey 
-                                      : null,
-                                )
+                                  color:
+                                      curr.status == 'inactive'
+                                          ? Colors.grey
+                                          : null,
+                                ),
                               ),
                               const SizedBox(height: 4),
                               // Star icon for favorite currencies
@@ -1197,7 +1531,8 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                                 Icon(
                                   Icons.star,
                                   size: 12,
-                                  color: isSelected ? Colors.white : Colors.amber,
+                                  color:
+                                      isSelected ? Colors.white : Colors.amber,
                                 ),
                               const SizedBox(height: 4),
                               Text(
@@ -1205,9 +1540,10 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : curr.status == 'inactive'
+                                  color:
+                                      isSelected
+                                          ? Colors.white
+                                          : curr.status == 'inactive'
                                           ? Colors.grey
                                           : theme.textTheme.bodyLarge?.color,
                                 ),
@@ -1217,7 +1553,10 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                               // Status indicator for inactive currencies
                               if (curr.status == 'inactive')
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 2,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: Colors.red.withOpacity(0.2),
                                     borderRadius: BorderRadius.circular(8),
@@ -1237,9 +1576,13 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                                     '1 ${fromCurrency?.code} = ${rate.toStringAsFixed(4)}',
                                     style: TextStyle(
                                       fontSize: 10,
-                                      color: isSelected
-                                          ? Colors.white70
-                                          : theme.textTheme.bodySmall?.color,
+                                      color:
+                                          isSelected
+                                              ? Colors.white70
+                                              : theme
+                                                  .textTheme
+                                                  .bodySmall
+                                                  ?.color,
                                     ),
                                     textAlign: TextAlign.center,
                                     overflow: TextOverflow.ellipsis,

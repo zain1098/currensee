@@ -9,7 +9,6 @@ import 'package:provider/provider.dart';
 import 'main.dart'; // For CustomAppBar
 import 'trend_chart.dart';
 import 'rate_list_page.dart';
-import 'task_page.dart';
 import 'calculator_page.dart';
 import 'setting_page.dart';
 import 'task_screen.dart';
@@ -213,11 +212,14 @@ class _NewsScreenState extends State<NewsScreen> {
       ),
       drawer: Drawer(
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+              colors:
+                  Theme.of(context).brightness == Brightness.dark
+                      ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+                      : [const Color(0xFF1E3A8A), const Color(0xFF3B82F6)],
             ),
           ),
           child: ListView(
@@ -227,15 +229,21 @@ class _NewsScreenState extends State<NewsScreen> {
               Container(
                 height: 180,
                 padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(
-                  borderRadius: BorderRadius.only(
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.only(
                     bottomLeft: Radius.circular(20),
                     bottomRight: Radius.circular(20),
                   ),
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
+                    colors:
+                        Theme.of(context).brightness == Brightness.dark
+                            ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+                            : [
+                              const Color(0xFF1E3A8A),
+                              const Color(0xFF2563EB),
+                            ],
                   ),
                 ),
                 child: Column(
@@ -353,12 +361,7 @@ class _NewsScreenState extends State<NewsScreen> {
                 title: 'Currency Tasks',
                 onTap: () => _navigateAndClose(context, const TaskScreen()),
               ),
-              _buildDrawerItem(
-                context,
-                icon: Icons.task_alt,
-                title: 'Currency Tasks',
-                onTap: () => _navigateAndClose(context, const TaskPage()),
-              ),
+
               const SizedBox(height: 16),
               const Divider(color: Colors.white24, height: 1),
               const SizedBox(height: 16),

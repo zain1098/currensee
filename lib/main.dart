@@ -100,7 +100,11 @@ void main() async {
   // Initialize NotificationManager for task notifications
   try {
     await NotificationManager.initialize();
-    print('NotificationManager initialized successfully');
+    // Request notification permissions
+    final permissionGranted = await NotificationManager.requestPermissions();
+    print(
+      'NotificationManager initialized successfully. Permissions granted: $permissionGranted',
+    );
   } catch (e) {
     print('Error initializing NotificationManager: $e');
   }
@@ -1093,7 +1097,6 @@ class _MainScreenState extends State<MainScreen> {
     Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
   }
 
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _showSuccess = false;
 
   @override
@@ -1123,239 +1126,9 @@ class _MainScreenState extends State<MainScreen> {
     super.dispose();
   }
 
-  void _navigateAndClose(BuildContext context, Widget page) {
-    Navigator.pop(context); // Close drawer
-    Navigator.push(context, MaterialPageRoute(builder: (context) => page));
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      key: _scaffoldKey,
-      appBar: CustomAppBar(
-        title: 'CurrenSee Pro',
-        onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
-      ),
-      drawer: Drawer(
-        child: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
-            ),
-          ),
-          child: ListView(
-            padding: EdgeInsets.zero,
-            children: [
-              // Professional Drawer Header
-              Container(
-                height: 180,
-                padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(20),
-                    bottomRight: Radius.circular(20),
-                  ),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // App Icon with subtle animation
-                    Container(
-                      width: 70,
-                      height: 70,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.2),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.3),
-                          width: 2,
-                        ),
-                      ),
-                      child: Center(
-                        child: Lottie.asset(
-                          'assets/Menu Icon.json', // Your app icon animation
-                          width: 50,
-                          height: 50,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    // App Name
-                    const Text(
-                      'CurrenSee Pro',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 1.0,
-                      ),
-                    ),
-                    // Version text with fade-in animation
-                    TweenAnimationBuilder(
-                      tween: Tween<double>(begin: 0, end: 1),
-                      duration: const Duration(milliseconds: 800),
-                      builder: (context, value, child) {
-                        return Opacity(
-                          opacity: value,
-                          child: FutureBuilder<String>(
-                            future: AppVersionService.getAppVersion(),
-                            builder: (context, snapshot) {
-                              return Text(
-                                'Version ${snapshot.data ?? '1.0.6'}',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.white70,
-                                ),
-                              );
-                            },
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              // Menu Items
-              _buildDrawerItem(
-                context,
-                icon: Icons.currency_exchange,
-                title: 'Currency Converter',
-                onTap: () => _navigateAndClose(context, const MainScreen()),
-              ),
-              _buildDrawerItem(
-                context,
-                icon: Icons.newspaper,
-                title: 'Market News',
-                onTap: () => _navigateAndClose(context, const NewsScreen()),
-              ),
-              _buildDrawerItem(
-                context,
-                icon: Icons.calculate,
-                title: 'Multi-Currency',
-                onTap:
-                    () => _navigateAndClose(
-                      context,
-                      const MultiCurrencyConverter(),
-                    ),
-              ),
-              _buildDrawerItem(
-                context,
-                icon: Icons.trending_up,
-                title: 'Trend Analysis',
-                onTap:
-                    () => _navigateAndClose(context, const CurrencyChartPage()),
-              ),
-              _buildDrawerItem(
-                context,
-                icon: Icons.timer,
-                title: 'World Clock',
-                onTap: () => _navigateAndClose(context, const WorldClockPage()),
-              ),
-              _buildDrawerItem(
-                context,
-                icon: Icons.list_alt,
-                title: 'Rate List',
-                onTap: () => _navigateAndClose(context, const RateListPage()),
-              ),
-              _buildDrawerItem(
-                context,
-                icon: Icons.calculate_outlined,
-                title: 'Calculator',
-                onTap:
-                    () => _navigateAndClose(context, const CalculatorsScreen()),
-              ),
-              _buildDrawerItem(
-                context,
-                icon: Icons.task_alt,
-                title: 'Currency Tasks',
-                onTap: () => _navigateAndClose(context, const TaskScreen()),
-              ),
-              const SizedBox(height: 16),
-              const Divider(color: Colors.white24, height: 1),
-              const SizedBox(height: 16),
-              // Settings Section
-              _buildDrawerItem(
-                context,
-                icon: Icons.settings,
-                title: 'Settings',
-                onTap:
-                    () => _navigateAndClose(
-                      context,
-                      SettingsPage(
-                        onThemeChanged: (isDark) {
-                          Provider.of<AppSettings>(
-                            context,
-                            listen: false,
-                          ).setDarkMode(isDark);
-                        },
-                        onDecimalChanged: (decimalPlaces) {
-                          Provider.of<AppSettings>(
-                            context,
-                            listen: false,
-                          ).setDecimalPlaces(decimalPlaces);
-                        },
-                        onBaseCurrencyChanged: (currency) {
-                          Provider.of<AppSettings>(
-                            context,
-                            listen: false,
-                          ).setBaseCurrency(currency);
-                        },
-                        onAutoUpdateChanged: (autoUpdate) {
-                          Provider.of<AppSettings>(
-                            context,
-                            listen: false,
-                          ).setAutoUpdateRates(autoUpdate);
-                        },
-                        onBiometricChanged: (useBiometric) {
-                          Provider.of<AppSettings>(
-                            context,
-                            listen: false,
-                          ).setBiometricAuth(useBiometric);
-                        },
-                        onVibrationChanged: (vibration) {
-                          Provider.of<AppSettings>(
-                            context,
-                            listen: false,
-                          ).setHapticFeedback(vibration);
-                        },
-                        onCalculatorChanged: (showCalculator) {
-                          Provider.of<AppSettings>(
-                            context,
-                            listen: false,
-                          ).setShowCalculator(showCalculator);
-                        },
-                      ),
-                    ),
-              ),
-              _buildDrawerItem(
-                context,
-                icon: Icons.help_center,
-                title: 'Help & Support',
-                onTap:
-                    () => _navigateAndClose(context, const ContactFormScreen()),
-              ),
-
-              const SizedBox(height: 16),
-              const Divider(color: Colors.white24, height: 1),
-              const SizedBox(height: 16),
-              _buildDrawerItem(
-                context,
-                icon: Icons.logout,
-                title: 'Logout',
-                onTap: _logout,
-              ),
-            ],
-          ),
-        ),
-      ),
       body: Stack(
         children: [
           CurrencyConverterScreen(showSuccess: _showSuccess),
@@ -1364,47 +1137,6 @@ class _MainScreenState extends State<MainScreen> {
       ),
     );
   }
-}
-
-Widget _buildDrawerItem(
-  BuildContext context, {
-  required IconData icon,
-  required String title,
-  required VoidCallback onTap,
-}) {
-  return Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-    child: Material(
-      borderRadius: BorderRadius.circular(12),
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        splashColor: Colors.white.withOpacity(0.1),
-        highlightColor: Colors.white.withOpacity(0.05),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
-          child: Row(
-            children: [
-              Icon(icon, color: Colors.white, size: 24),
-              const SizedBox(width: 16),
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const Spacer(),
-              const Icon(Icons.chevron_right, color: Colors.white70, size: 20),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
 }
 
 // MODIFIED: Added onRestart parameter

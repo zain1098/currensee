@@ -4,6 +4,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'services/news_service.dart';
 
 class ChatService {
   static String? _apiKey;
@@ -297,7 +298,7 @@ class ChatService {
     if (_apiKey == null || _apiKey == 'DEFAULT_API_KEY' || _apiKey!.isEmpty) {
       print("⚠️ Using basic response system (no valid API key)");
       // Use basic response system
-      final response = _getBasicResponse(userInput);
+      final response = await _getBasicResponse(userInput);
       _addToHistory('assistant', response);
       return response;
     }
@@ -306,75 +307,76 @@ class ChatService {
 
     // Enhanced system prompt with advanced features
     final systemPrompt = """
-You are **CurrencyPro Ultra AI**, the world's most advanced financial intelligence assistant.
-
-${_formatRates()}
+You are **CurrenSee AI Assistant**, a helpful and intelligent companion for the CurrenSee app.
 
 🎯 **CORE CAPABILITIES:**
 
-1. **REAL-TIME FINANCIAL INTELLIGENCE:**
-   • Live currency, crypto, and commodity rates
-   • Market sentiment analysis
-   • Economic indicator tracking
-   • Breaking financial news synthesis
+1. **GENERAL ASSISTANCE:**
+   • Answer questions about any topic
+   • Provide helpful information and guidance
+   • Assist with app features and navigation
+   • Offer friendly conversation and support
 
-2. **ADVANCED ANALYTICS:**
-   • Predictive market insights
-   • Risk assessment and recommendations
-   • Portfolio optimization suggestions
-   • Technical analysis summaries
+2. **FINANCIAL INTELLIGENCE:**
+   • Currency conversion and exchange rates
+   • Market insights and trends
+   • Investment guidance and tips
+   • Financial news and updates
 
-3. **COMPREHENSIVE SUPPORT:**
-   • Complex multi-currency calculations
-   • Historical trend analysis
-   • Investment strategy consultation
-   • Tax and regulatory guidance
+3. **APP SUPPORT:**
+   • Help users navigate the CurrenSee app
+   • Explain features and functionality
+   • Troubleshoot common issues
+   • Provide usage tips and best practices
 
 4. **PERSONALIZED EXPERIENCE:**
-   • Conversation memory ($_conversationCount interactions)
-   • User preference learning
-   • Context-aware responses
-   • Adaptive communication style
+   • Remember conversation context
+   • Adapt to user preferences
+   • Provide relevant and helpful responses
+   • Maintain friendly and professional tone
 
-📋 **RESPONSE PROTOCOLS:**
+📋 **RESPONSE GUIDELINES:**
 
-**For Conversion Requests:**
-• Show real-time rates with timestamps
-• Provide step-by-step calculations
-• Include conversion fees and spreads
-• Suggest optimal conversion timing
+**IMPORTANT SAFETY RULES:**
+• NEVER provide adult content, inappropriate material, or harmful information
+• NEVER engage in discussions about illegal activities
+• NEVER provide medical, legal, or financial advice that could be harmful
+• ALWAYS prioritize user safety and well-being
+• If asked about inappropriate topics, politely redirect to appropriate subjects
 
-**For Market Queries:**
-• Current market status with trends
-• 24h/7d/30d performance metrics
-• Key influencing factors
-• Risk level assessment
+**For General Questions:**
+• Provide accurate, helpful information
+• Use clear and simple language
+• Include relevant examples when helpful
+• Be friendly and engaging
 
-**For Investment Advice:**
-• Diversification recommendations
-• Risk-reward analysis
-• Market timing insights
-• Regulatory considerations
+**For Financial Queries:**
+• Use real-time data when available
+• Provide educational information
+• Include risk warnings when appropriate
+• Suggest consulting professionals for complex decisions
 
-**For News Requests:**
-• Top 3 breaking stories
-• Market impact analysis
-• Source credibility ratings
-• Actionable insights
+**For App Support:**
+• Guide users through features
+• Explain how to use different functions
+• Provide troubleshooting steps
+• Suggest best practices
 
 **For Casual Conversation:**
-• Be friendly and engaging
-• Use emojis appropriately
+• Be friendly and personable
+• Use appropriate emojis
 • Show personality while staying professional
-• Guide conversation back to financial topics naturally
+• Keep responses helpful and relevant
 
 🎨 **RESPONSE FORMATTING:**
-• Use tables for multi-currency comparisons
-• Mark volatility: 📈📉📊
-• Urgent updates: 🔔⚡
-• Format numbers: 1,234.56
-• Include confidence ratings: ⭐⭐⭐⭐⭐
-• Add data freshness indicators
+• Use clear, readable formatting
+• Include relevant emojis for visual appeal
+• Format numbers clearly: 1,234.56
+• Use bullet points for lists
+• Keep responses concise but informative
+
+**Current Financial Data:**
+${_formatRates()}
 
 **Conversation Context:**
 $_userContext
@@ -382,13 +384,15 @@ $_userContext
 **Current Session:** Interaction #$_conversationCount
 **Date:** $formattedDate | **Time:** $formattedTime UTC
 **Data Freshness:** ${_lastUpdated.isNotEmpty ? 'Live' : 'Cached'}
+
+Remember: You are a helpful assistant for the CurrenSee app. Focus on being useful, safe, and user-friendly.
 """;
 
     try {
       // Check if API key is valid for advanced responses
       if (_apiKey == null || _apiKey == 'DEFAULT_API_KEY') {
         // Use basic response system
-        final response = _getBasicResponse(userInput);
+        final response = await _getBasicResponse(userInput);
         _addToHistory('assistant', response);
         return response;
       }
@@ -503,7 +507,7 @@ $_userContext
   }
 
   // Basic responses without API - Now with smart detection
-  String _getBasicResponse(String userInput) {
+  Future<String> _getBasicResponse(String userInput) async {
     print("🔄 Processing user input: '$userInput'");
 
     // Handle special test commands first
@@ -578,7 +582,7 @@ ${_formatRates()}
     if (lowerInput.contains('news') ||
         lowerInput.contains('trending') ||
         lowerInput.contains('latest')) {
-      return _getNewsResponse();
+      return await _getNewsResponse();
     }
 
     // Market queries
@@ -596,34 +600,37 @@ ${_formatRates()}
     }
 
     // For all other queries, provide a comprehensive response
-    return """🤖 **CurrencyPro Ultra AI**
+    return """🤖 **CurrenSee AI Assistant**
 
-Hi! I'm your financial assistant. I can help you with:
+Hi! I'm your helpful assistant for the CurrenSee app. I can help you with:
 
-💱 **Currency Operations:**
-• Exchange rates and conversions
-• Multi-currency calculations
-• Rate comparisons
+💡 **General Assistance:**
+• Answer questions about any topic
+• Provide helpful information and guidance
+• Assist with app features and navigation
+• Offer friendly conversation and support
 
-📊 **Market Information:**
-• Cryptocurrency prices
-• Gold and commodity rates
-• Basic market insights
+💱 **Financial Information:**
+• Currency conversion and exchange rates
+• Market insights and trends
+• Investment guidance and tips
+• Financial news and updates
 
-💡 **Investment Guidance:**
-• Basic investment principles
-• Portfolio diversification tips
-• Risk management advice
+📱 **App Support:**
+• Help you navigate the CurrenSee app
+• Explain features and functionality
+• Troubleshoot common issues
+• Provide usage tips and best practices
 
 ${_formatRates()}
 
-**Examples:**
-• "Convert 100 USD to PKR"
-• "What's the Bitcoin price?"
-• "Tell me about gold rates"
-• "Investment advice"
-• "Latest financial news"
-• "Market trends"
+**Examples of what I can help with:**
+• "How do I convert currencies?"
+• "What's the current Bitcoin price?"
+• "Tell me about the app features"
+• "Help me with investment tips"
+• "What's the latest financial news?"
+• "How do I use the calculator?"
 
 **Test Commands:**
 • "test api key" - Check API key status
@@ -824,8 +831,12 @@ ${_formatRates()}""";
   }
 
   // News response method
-  String _getNewsResponse() {
-    return """📰 **Financial News & Updates**
+  Future<String> _getNewsResponse() async {
+    try {
+      final news = await NewsService.getFinancialNews();
+      return NewsService.formatNewsForChat(news);
+    } catch (e) {
+      return """📰 **Financial News & Updates**
 
 🔔 **Latest Market Headlines:**
 • Federal Reserve policy updates
@@ -848,6 +859,7 @@ ${_formatRates()}""";
 ${_formatRates()}
 
 *For real-time news and detailed analysis, please configure your API key for advanced features.*""";
+    }
   }
 
   // Market response method

@@ -60,7 +60,10 @@ class NotificationManager {
         >()
         ?.requestPermissions(alert: true, badge: true, sound: true);
 
-    return (androidGranted ?? false) || (iosGranted ?? false);
+    print('Android notification permission: $androidGranted');
+    print('iOS notification permission: $iosGranted');
+    
+    return (androidGranted ?? true) || (iosGranted ?? true); // Default true for Android if null
   }
 
   // Schedule a task notification

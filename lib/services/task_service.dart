@@ -216,13 +216,15 @@ class TaskService extends ChangeNotifier {
     double rate,
   ) async {
     try {
+      print('🔔 Attempting to show notification for task: ${task.taskName}');
       await NotificationManager.showTaskNotification(
         task,
         convertedAmount,
         rate,
       );
+      print('✅ Notification shown successfully for task: ${task.taskName}');
     } catch (e) {
-      print('Failed to show notification: $e');
+      print('❌ Failed to show notification: $e');
     }
   }
 

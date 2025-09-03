@@ -106,29 +106,127 @@ class VoiceService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Enhanced voice response with language detection
+  // Voice response disabled - bot will not speak
   Future<void> speakResponse(String text, {String? language}) async {
-    if (_isSpeaking) {
-      await _flutterTts.stop();
-    }
+    // Bot voice response is disabled
+    print("Bot voice response is disabled");
+    return;
+  }
 
-    // Detect language from text
-    _detectedLanguage = _detectLanguage(text);
-    _languageDisplayName = _getLanguageDisplayName(_detectedLanguage);
-    notifyListeners();
+  // Clean text for better speech synthesis
+  String _cleanTextForSpeech(String text) {
+    // Remove markdown formatting
+    String cleanText = text
+        .replaceAll(RegExp(r'\*\*(.*?)\*\*'), '\$1') // Bold
+        .replaceAll(RegExp(r'\*(.*?)\*'), '\$1') // Italic
+        .replaceAll(RegExp(r'`(.*?)`'), '\$1') // Code
+        .replaceAll(RegExp(r'#{1,6}\s'), '') // Headers
+        .replaceAll(RegExp(r'\[(.*?)\]\(.*?\)'), '\$1') // Links
+        .replaceAll(RegExp(r'!\[.*?\]\(.*?\)'), '') // Images
+        .replaceAll(RegExp(r'^\s*[-*+]\s', multiLine: true), '') // List items
+        .replaceAll(RegExp(r'^\s*\d+\.\s', multiLine: true), '') // Numbered lists
+        .replaceAll(RegExp(r'^\s*>\s', multiLine: true), '') // Blockquotes
+        .replaceAll(RegExp(r'^\s*\|.*\|$', multiLine: true), '') // Tables
+        .replaceAll(RegExp(r'^\s*---\s*$', multiLine: true), '') // Horizontal rules
+        .replaceAll(RegExp(r'^\s*```.*$', multiLine: true), '') // Code blocks
+        .replaceAll(RegExp(r'^\s*`.*$', multiLine: true), ''); // Inline code blocks
 
-    try {
-      await _flutterTts.setLanguage(_detectedLanguage);
-      await _flutterTts.speak(text);
-    } catch (e) {
-      print("Error speaking text: $e");
-      // Fallback to English
-      _detectedLanguage = 'en-US';
-      _languageDisplayName = 'English';
-      notifyListeners();
-      await _flutterTts.setLanguage("en-US");
-      await _flutterTts.speak(text);
-    }
+    // Replace common emojis with text descriptions
+    cleanText = cleanText
+        .replaceAll('💱', 'currency exchange')
+        .replaceAll('📊', 'chart')
+        .replaceAll('💰', 'money')
+        .replaceAll('🪙', 'cryptocurrency')
+        .replaceAll('🥇', 'gold')
+        .replaceAll('📈', 'trending up')
+        .replaceAll('📉', 'trending down')
+        .replaceAll('🔔', 'notification')
+        .replaceAll('⚡', 'urgent')
+        .replaceAll('⭐', 'star')
+        .replaceAll('💡', 'idea')
+        .replaceAll('📱', 'mobile app')
+        .replaceAll('🤖', 'AI assistant')
+        .replaceAll('🔄', 'loading')
+        .replaceAll('✅', 'success')
+        .replaceAll('❌', 'error')
+        .replaceAll('⚠️', 'warning')
+        .replaceAll('🚨', 'alert')
+        .replaceAll('🎯', 'target')
+        .replaceAll('📋', 'list')
+        .replaceAll('🎨', 'formatting')
+        .replaceAll('🔍', 'search')
+        .replaceAll('⏰', 'time')
+        .replaceAll('📝', 'note')
+        .replaceAll('🧪', 'test')
+        .replaceAll('🔑', 'key')
+        .replaceAll('📁', 'folder')
+        .replaceAll('📄', 'document')
+        .replaceAll('🌐', 'network')
+        .replaceAll('📡', 'signal')
+        .replaceAll('🚀', 'launch')
+        .replaceAll('💪', 'strength')
+        .replaceAll('🎉', 'celebration')
+        .replaceAll('🔥', 'hot')
+        .replaceAll('❄️', 'cold')
+        .replaceAll('🌈', 'colorful')
+        .replaceAll('🎵', 'music')
+        .replaceAll('🎬', 'video')
+        .replaceAll('📷', 'photo')
+        .replaceAll('🎮', 'game')
+        .replaceAll('🏠', 'home')
+        .replaceAll('🏢', 'office')
+        .replaceAll('🏫', 'school')
+        .replaceAll('🏥', 'hospital')
+        .replaceAll('🏪', 'store')
+        .replaceAll('🏦', 'bank')
+        .replaceAll('🏧', 'ATM')
+        .replaceAll('🚗', 'car')
+        .replaceAll('✈️', 'plane')
+        .replaceAll('🚢', 'ship')
+        .replaceAll('🚅', 'train')
+        .replaceAll('🚌', 'bus')
+        .replaceAll('🚲', 'bike')
+        .replaceAll('🚶', 'walking')
+        .replaceAll('🏃', 'running')
+        .replaceAll('🏊', 'swimming')
+        .replaceAll('⚽', 'soccer')
+        .replaceAll('🏀', 'basketball')
+        .replaceAll('🎾', 'tennis')
+        .replaceAll('🏓', 'ping pong')
+        .replaceAll('🎯', 'target')
+        .replaceAll('🎲', 'dice')
+        .replaceAll('🎰', 'slot machine')
+        .replaceAll('🎪', 'circus')
+        .replaceAll('🎭', 'theater')
+        .replaceAll('🎨', 'art')
+        .replaceAll('🎬', 'movie')
+        .replaceAll('🎤', 'microphone')
+        .replaceAll('🎧', 'headphones')
+        .replaceAll('🎹', 'piano')
+        .replaceAll('🎸', 'guitar')
+        .replaceAll('🎺', 'trumpet')
+        .replaceAll('🎻', 'violin')
+        .replaceAll('🥁', 'drum')
+        .replaceAll('🎼', 'music sheet')
+        .replaceAll('🎵', 'note')
+        .replaceAll('🎶', 'notes')
+        .replaceAll('🎷', 'saxophone')
+        .replaceAll('🎸', 'guitar')
+        .replaceAll('🎹', 'piano')
+        .replaceAll('🎺', 'trumpet')
+        .replaceAll('🎻', 'violin')
+        .replaceAll('🥁', 'drum')
+        .replaceAll('🎼', 'music sheet')
+        .replaceAll('🎵', 'note')
+        .replaceAll('🎶', 'notes')
+        .replaceAll('🎷', 'saxophone');
+
+    // Remove extra whitespace and normalize
+    cleanText = cleanText
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    return cleanText;
   }
 
   // Get human-readable language name

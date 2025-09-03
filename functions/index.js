@@ -897,3 +897,221 @@ exports.initializeAllNewsCategories = functions.https.onCall(async (data, contex
     throw new functions.https.HttpsError("internal", "Failed to initialize all news categories");
   }
 });
+
+// Cloud Function to check and execute scheduled tasks every minute
+exports.checkScheduledTasks = functions.pubsub
+    .schedule("every 1 minutes")
+    .onRun(async (context) => {
+      try {
+        console.log("🔍 Starting scheduled task check...");
+        
+        // Get all active tasks from all users
+        const tasksSnapshot = await admin.firestore()
+            .collection("tasks")
+            .where("isActive", "==", true)
+            .get();
+            
+        if (tasksSnapshot.empty) {
+          console.log("📝 No active tasks found");
+          return null;
+        }
+        
+        console.log(`📋 Found ${tasksSnapshot.docs.length} active tasks`);
+        
+        const now = new Date();
+        const currentTime = {
+          hour: now.getHours(),
+          minute: now.getMinutes()
+        };
+        
+        let executedCount = 0;
+        
+        for (const doc of tasksSnapshot.docs) {
+          const task = doc.data();
+          const taskId = doc.id;
+          
+          try {
+            // Check if task is due for execution
+            if (isTaskDue(task, currentTime)) {
+              console.log(`⏰ Executing task: ${task.taskName} (${taskId})`);
+              
+              // Execute the task
+              await executeTaskAndNotify(task, taskId);
+              executedCount++;
+              
+              console.log(`✅ Task executed successfully: ${task.taskName}`);
+            }
+          } catch (error) {
+            console.error(`❌ Error executing task ${taskId}:`, error);
+          }
+        }
+        
+        console.log(`🎯 Task check completed. Executed: ${executedCount} tasks`);
+        return null;
+        
+      } catch (error) {
+        console.error("❌ Error in scheduled task check:", error);
+        return null;
+      }
+    });
+
+// Helper function to check if task is due
+function isTaskDue(task, currentTime) {
+  const taskTime = task.time;
+  
+  // Check if current time matches task time (within 1 minute)
+  const timeDiff = Math.abs(
+    (currentTime.hour * 60 + currentTime.minute) - 
+    (taskTime.hour * 60 + taskTime.minute)
+  );
+  
+  return timeDiff <= 1;
+}
+
+// Helper function to execute task and send notification
+async function executeTaskAndNotify(task, taskId) {
+  try {
+    // Simulate getting rate from API (you can replace this with real API call)
+    const rate = 1.0 + (Date.now() % 100) / 1000;
+    const convertedAmount = task.amount * rate;
+    
+    // Create task history entry
+    const notificationId = require('uuid').v4();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    
+    const taskHistory = {
+      notificationId: notificationId,
+      taskId: taskId,
+      userId: task.userId,
+      rate: rate,
+      convertedAmount: convertedAmount,
+      triggeredAt: now,
+      isRead: false,
+      executedBy: "cloud_function"
+    };
+    
+    // Save to task history
+    await admin.firestore()
+        .collection("task_history")
+        .doc(notificationId)
+        .set(taskHistory);
+    
+    // Send push notification to user
+    await sendTaskPushNotification(task, convertedAmount, rate);
+    
+    // Send email notification if user has email
+    if (task.userEmail) {
+      await sendTaskEmailNotification(task, convertedAmount, rate);
+    }
+    
+    console.log(`📱 Notifications sent for task: ${task.taskName}`);
+    
+  } catch (error) {
+    console.error(`❌ Error executing task ${taskId}:`, error);
+    throw error;
+  }
+}
+
+// Function to send push notification for task
+async function sendTaskPushNotification(task, convertedAmount, rate) {
+  try {
+    // Get user's FCM token
+    const userDoc = await admin.firestore()
+        .collection("currentUser")
+        .doc(task.userId)
+        .get();
+    
+    if (!userDoc.exists) {
+      console.log(`User ${task.userId} not found`);
+      return;
+    }
+    
+    const userData = userDoc.data();
+    const fcmToken = userData.fcmToken;
+    
+    if (!fcmToken) {
+      console.log(`No FCM token found for user ${task.userId}`);
+      return;
+    }
+    
+    // Send push notification
+    const message = {
+      token: fcmToken,
+      notification: {
+        title: "Currency Task Executed! 💰",
+        body: `${task.amount} ${task.fromCurrency} = ${convertedAmount.toFixed(2)} ${task.toCurrency}`,
+      },
+      data: {
+        taskId: task.id || "",
+        type: "task_execution",
+        rate: rate.toString(),
+        convertedAmount: convertedAmount.toString(),
+        fromCurrency: task.fromCurrency,
+        toCurrency: task.toCurrency,
+        amount: task.amount.toString()
+      },
+      android: {
+        notification: {
+          sound: "default",
+          channelId: "currency_tasks",
+          priority: "high",
+          defaultSound: true,
+          enableVibration: true
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+            badge: 1,
+          },
+        },
+      },
+    };
+    
+    const response = await admin.messaging().send(message);
+    console.log(`Push notification sent successfully: ${response}`);
+    
+  } catch (error) {
+    console.error("Error sending task push notification:", error);
+  }
+}
+
+// Function to send email notification for task
+async function sendTaskEmailNotification(task, convertedAmount, rate) {
+  try {
+    const mailOptions = {
+      from: "\"CurrenSee Pro\" <" + functions.config().gmail.email + ">",
+      to: task.userEmail,
+      subject: "Currency Task Executed Successfully! 💰",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+            <h2>Currency Task Executed! 💰</h2>
+          </div>
+          <div style="padding: 20px; background: #f8f9fa; border-radius: 0 0 8px 8px;">
+            <p>Hello ${task.userName || 'User'},</p>
+            <p>Your scheduled currency conversion task has been executed successfully:</p>
+            <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #1E3A8A;">
+              <p><strong>Task Name:</strong> ${task.taskName}</p>
+              <p><strong>Amount:</strong> ${task.amount} ${task.fromCurrency}</p>
+              <p><strong>Converted To:</strong> ${convertedAmount.toFixed(2)} ${task.toCurrency}</p>
+              <p><strong>Exchange Rate:</strong> 1 ${task.fromCurrency} = ${rate.toFixed(4)} ${task.toCurrency}</p>
+              <p><strong>Execution Time:</strong> ${new Date().toLocaleString()}</p>
+            </div>
+            <p>You can view your task history in the CurrenSee Pro app.</p>
+            <p style="margin-top: 20px; font-size: 12px; color: #6c757d;">
+              This is an automated message. Please do not reply.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+    
+    await transporter.sendMail(mailOptions);
+    console.log(`Task email notification sent to ${task.userEmail}`);
+    
+  } catch (error) {
+    console.error("Error sending task email notification:", error);
+  }
+}

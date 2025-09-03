@@ -1,8 +1,5 @@
-import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'main.dart'; // For CustomAppBar
 import 'news_page.dart';
 import 'trend_chart.dart';
@@ -15,7 +12,6 @@ import 'multi_currency_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:lottie/lottie.dart';
 import 'support_help_screen.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'services/app_version_service.dart';
 
 // Unified currency management
@@ -549,11 +545,14 @@ class _CalculatorsScreenState extends State<CalculatorsScreen> {
       ),
       drawer: Drawer(
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+              colors:
+                  Theme.of(context).brightness == Brightness.dark
+                      ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+                      : [const Color(0xFF1E3A8A), const Color(0xFF3B82F6)],
             ),
           ),
           child: ListView(
@@ -563,15 +562,21 @@ class _CalculatorsScreenState extends State<CalculatorsScreen> {
               Container(
                 height: 180,
                 padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(
-                  borderRadius: BorderRadius.only(
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.only(
                     bottomLeft: Radius.circular(20),
                     bottomRight: Radius.circular(20),
                   ),
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
+                    colors:
+                        Theme.of(context).brightness == Brightness.dark
+                            ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+                            : [
+                              const Color(0xFF1E3A8A),
+                              const Color(0xFF2563EB),
+                            ],
                   ),
                 ),
                 child: Column(

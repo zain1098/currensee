@@ -10,7 +10,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'main.dart'; // For CustomAppBar
 import 'news_page.dart';
 import 'trend_chart.dart';
-import 'task_page.dart';
 import 'world_clock.dart';
 import 'package:provider/provider.dart';
 import 'calculator_page.dart';
@@ -24,122 +23,6 @@ import 'alert_service.dart';
 import 'services/currency_service.dart'; // Add this import
 import 'services/app_version_service.dart';
 
-// EmailJS Configuration (keeping user's existing service ID)
-// const String _serviceId = 'service_ih5ns2r';
-// const String _templateId = 'template_dxxjw09';
-// const String _userId = 'AvgkUbQFSsE27b003';
-// const String _accessToken = 'MI_orvD-Qi96ykAmp3zIF';
-
-// EmailJS Templates
-// final String _alertTriggeredTemplate = '''
-// <!DOCTYPE html>
-// <html>
-// <head>
-//     <style>
-//         body { font-family: Arial, sans-serif; }
-//         .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; }
-//         .header { background-color: #1E3A8A; color: white; padding: 15px; text-align: center; border-radius: 8px 8px 0 0; }
-//         .content { padding: 20px; }
-//         .alert-info { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-//         .currency-row { display: flex; justify-content: space-between; margin-bottom: 10px; }
-//         .footer { text-align: center; padding: 15px; color: #6c757d; font-size: 12px; }
-//     </style>
-// </head>
-// <body>
-//     <div class="container">
-//         <div class="header">
-//             <h2>Currency Alert Triggered!</h2>
-//         </div>
-//         <div class="content">
-//             <p>Hello,</p>
-//             <p>Your currency alert has been triggered:</p>
-
-//             <div class="alert-info">
-//                 <div class="currency-row">
-//                     <span><strong>Base Currency:</strong></span>
-//                     <span>\${baseCurrency}</span>
-//                 </div>
-//                 <div class="currency-row">
-//                     <span><strong>Target Currency:</strong></span>
-//                     <span>\${targetCurrency}</span>
-//                 </div>
-//                 <div class="currency-row">
-//                     <span><strong>Condition:</strong></span>
-//                     <span>Rate is \${condition} \${targetRate}</span>
-//                 </div>
-//                 <div class="currency-row">
-//                     <span><strong>Current Rate:</strong></span>
-//                     <span>\${currentRate}</span>
-//                 </div>
-//                 <div class="currency-row">
-//                     <span><strong>Time:</strong></span>
-//                     <span>\${date}</span>
-//                 </div>
-//             </div>
-
-//             <p>You can manage your alerts in the CurrenSee Pro app.</p>
-//         </div>
-//         <div class="footer">
-//             <p>This is an automated message. Please do not reply.</p>
-//             <p>&copy; \${year} CurrenSee Pro</p>
-//         </div>
-//     </div>
-// </body>
-// </html>
-// ''';
-
-// final String _alertRemovedTemplate = '''
-// <!DOCTYPE html>
-// <html>
-// <head>
-//     <style>
-//         body { font-family: Arial, sans-serif; }
-//         .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; }
-//         .header { background-color: #1E3A8A; color: white; padding: 15px; text-align: center; border-radius: 8px 8px 0 0; }
-//         .content { padding: 20px; }
-//         .alert-info { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-//         .currency-row { display: flex; justify-content: space-between; margin-bottom: 10px; }
-//         .footer { text-align: center; padding: 15px; color: #6c757d; font-size: 12px; }
-//     </style>
-// </head>
-// <body>
-//     <div class="container">
-//         <div class="header">
-//             <h2>Currency Alert Removed</h2>
-//         </div>
-//         <div class="content">
-//             <p>Hello,</p>
-//             <p>Your currency alert has been removed:</p>
-
-//             <div class="alert-info">
-//                 <div class="currency-row">
-//                     <span><strong>Base Currency:</strong></span>
-//                     <span>\${baseCurrency}</span>
-//                 </div>
-//                 <div class="currency-row">
-//                     <span><strong>Target Currency:</strong></span>
-//                     <span>\${targetCurrency}</span>
-//                 </div>
-//                 <div class="currency-row">
-//                     <span><strong>Target Rate:</strong></span>
-//                     <span>\${targetRate}</span>
-//                 </div>
-//                 <div class="currency-row">
-//                     <span><strong>Time:</strong></span>
-//                     <span>\${date}</span>
-//                 </div>
-//             </div>
-
-//             <p>You can set new alerts in the CurrenSee Pro app.</p>
-//         </div>
-//         <div class="footer">
-//             <p>This is an automated message. Please do not reply.</p>
-//             <p>&copy; \${year} CurrenSee Pro</p>
-//         </div>
-//     </div>
-// </body>
-// </html>
-// ''';
 
 class RateListPage extends StatefulWidget {
   const RateListPage({super.key});
@@ -434,15 +317,6 @@ class _RateListPageState extends State<RateListPage> {
     setState(() {});
   }
 
-  // Future<void> _initEmailJS() async {
-  //   try {
-  //     await dotenv.load(fileName: ".env");
-  //     // EmailJS doesn't need initialization in newer versions
-  //     print('EmailJS ready with keys loaded');
-  //   } catch (e) {
-  //     print('EmailJS initialization error: $e');
-  //   }
-  // }
 
   void _getCurrentUser() {
     _currentUser = FirebaseAuth.instance.currentUser;
@@ -471,14 +345,6 @@ class _RateListPageState extends State<RateListPage> {
     );
   }
 
-  // void _requestNotificationPermissions() async {
-  //   final settings = await _notificationsPlugin.getNotificationSettings();
-  //   if (settings.authorizationStatus != AuthorizationStatus.authorized) {
-  //     await _notificationsPlugin
-  //         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-  //         ?.requestPermission();
-  //   }
-  // }
 
   Future<void> _loadAlerts() async {
     if (_currentUser == null) return;
@@ -526,22 +392,6 @@ class _RateListPageState extends State<RateListPage> {
     try {
       final alert = _alerts.firstWhere((a) => a.id == alertId);
 
-      // Send removal email ONLY to alert.userEmail
-      // final emailToSend = alert.userEmail;
-      // if (emailToSend != null && emailToSend.isNotEmpty) {
-      //   await _sendEmail(
-      //     toEmail: emailToSend,
-      //     subject: 'Currency Alert Removed',
-      //     template: _alertRemovedTemplate,
-      //     params: {
-      //       'baseCurrency': alert.baseCurrency,
-      //       'targetCurrency': alert.targetCurrency,
-      //       'targetRate': alert.targetRate.toStringAsFixed(4),
-      //       'date': DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now()),
-      //       'year': DateTime.now().year.toString(),
-      //     },
-      //   );
-      // }
 
       // Remove from Firestore directly (AlertService will sync)
       await _firestore.collection('alerts').doc(alertId).delete();
@@ -1165,12 +1015,7 @@ class _RateListPageState extends State<RateListPage> {
                 title: 'Currency Tasks',
                 onTap: () => _navigateAndClose(context, const TaskScreen()),
               ),
-              _buildDrawerItem(
-                context,
-                icon: Icons.task_alt,
-                title: 'Currency Tasks',
-                onTap: () => _navigateAndClose(context, const TaskPage()),
-              ),
+             
               const SizedBox(height: 16),
               Divider(color: Theme.of(context).dividerColor, height: 1),
               const SizedBox(height: 16),

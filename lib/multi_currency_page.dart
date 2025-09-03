@@ -778,11 +778,14 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
       ),
       drawer: Drawer(
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+              colors:
+                  Theme.of(context).brightness == Brightness.dark
+                      ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+                      : [const Color(0xFF1E3A8A), const Color(0xFF3B82F6)],
             ),
           ),
           child: ListView(
@@ -792,15 +795,21 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
               Container(
                 height: 180,
                 padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(
-                  borderRadius: BorderRadius.only(
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.only(
                     bottomLeft: Radius.circular(20),
                     bottomRight: Radius.circular(20),
                   ),
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
+                    colors:
+                        Theme.of(context).brightness == Brightness.dark
+                            ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+                            : [
+                              const Color(0xFF1E3A8A),
+                              const Color(0xFF2563EB),
+                            ],
                   ),
                 ),
                 child: Column(
