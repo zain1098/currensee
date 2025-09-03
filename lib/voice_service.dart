@@ -11,8 +11,8 @@ class VoiceService extends ChangeNotifier {
   bool _isSpeaking = false;
   String _lastResult = '';
   String _currentLanguage = 'en-US';
-  String _detectedLanguage = 'en-US';
-  String _languageDisplayName = 'English';
+  final String _detectedLanguage = 'en-US';
+  final String _languageDisplayName = 'English';
 
   bool get isListening => _isListening;
   bool get isSpeaking => _isSpeaking;

@@ -143,12 +143,18 @@ class _WorldClockPageState extends State<WorldClockPage>
     try {
       print('🔄 Loading locations from Firebase...');
 
-      // Load all locations (both active and inactive) for status display
-      final allSnapshot =
-          await FirebaseFirestore.instance
-              .collection('world_clock_cities')
-              .orderBy('display_order')
-              .get();
+      // Add timeout and better error handling
+      final allSnapshot = await FirebaseFirestore.instance
+          .collection('world_clock_cities')
+          .orderBy('display_order')
+          .get()
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              print('⏰ Firebase timeout - using fallback data');
+              throw Exception('Firebase timeout');
+            },
+          );
 
       if (allSnapshot.docs.isNotEmpty) {
         setState(() {
@@ -185,6 +191,17 @@ class _WorldClockPageState extends State<WorldClockPage>
       print('❌ Error loading from Firebase: $e');
       print('🔄 Using fallback data...');
       _loadFallbackLocations();
+      
+      // Show user-friendly message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Using offline city data'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
     }
   }
 
@@ -232,6 +249,46 @@ class _WorldClockPageState extends State<WorldClockPage>
           country: 'Pakistan',
           status: 'active',
         ),
+        ClockLocation(
+          timezone: 'Europe/Paris',
+          city: 'Paris',
+          utcOffset: '+1',
+          flagUrl: 'https://flagcdn.com/w40/fr.png',
+          country: 'France',
+          status: 'active',
+        ),
+        ClockLocation(
+          timezone: 'Asia/Shanghai',
+          city: 'Shanghai',
+          utcOffset: '+8',
+          flagUrl: 'https://flagcdn.com/w40/cn.png',
+          country: 'China',
+          status: 'active',
+        ),
+        ClockLocation(
+          timezone: 'Australia/Sydney',
+          city: 'Sydney',
+          utcOffset: '+11',
+          flagUrl: 'https://flagcdn.com/w40/au.png',
+          country: 'Australia',
+          status: 'active',
+        ),
+        ClockLocation(
+          timezone: 'Asia/Kolkata',
+          city: 'Mumbai',
+          utcOffset: '+5:30',
+          flagUrl: 'https://flagcdn.com/w40/in.png',
+          country: 'India',
+          status: 'active',
+        ),
+        ClockLocation(
+          timezone: 'Europe/Moscow',
+          city: 'Moscow',
+          utcOffset: '+3',
+          flagUrl: 'https://flagcdn.com/w40/ru.png',
+          country: 'Russia',
+          status: 'active',
+        ),
       ];
 
       // Debug fallback locations
@@ -245,6 +302,9 @@ class _WorldClockPageState extends State<WorldClockPage>
 
     // Load preferences after fallback locations are set
     _loadPreferences();
+    
+    print('✅ Loaded ${allLocations.length} fallback cities for offline use');
+    print('🌍 Cities available: ${allLocations.map((c) => c.city).join(', ')}');
   }
 
   @override
@@ -380,6 +440,10 @@ class _WorldClockPageState extends State<WorldClockPage>
   }
 
   void _toggleAddLocation() {
+    print('🔄 Toggle add location: $_showAddLocation -> ${!_showAddLocation}');
+    print('🌍 Available cities: ${allLocations.length}');
+    print('📍 Current locations: ${locations.length}');
+    
     setState(() {
       _showAddLocation = !_showAddLocation;
       if (_showAddLocation) {
