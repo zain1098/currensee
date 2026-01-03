@@ -266,6 +266,48 @@ Future<void> initializeWidget() async {
   }
 }
 
+/// Initialize watchlist widget with default values
+Future<void> initializeWatchlistWidget() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    
+    // Check if watchlist pairs exist, if not create default ones
+    List<String> pairs = prefs.getStringList('watchlist_pairs') ?? [];
+    
+    if (pairs.isEmpty) {
+      // Set some default popular pairs
+      pairs = ['USD/EUR', 'GBP/USD', 'USD/JPY'];
+      await prefs.setStringList('watchlist_pairs', pairs);
+    }
+    
+    print('Watchlist widget initialized with ${pairs.length} pairs');
+  } catch (e) {
+    print('Error initializing watchlist widget: $e');
+  }
+}
+
+/// Initialize converter widget with default values
+Future<void> initializeConverterWidget() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    
+    // Set default converter settings if not exist
+    if (!prefs.containsKey('converter_from')) {
+      await prefs.setString('converter_from', 'USD');
+    }
+    if (!prefs.containsKey('converter_to')) {
+      await prefs.setString('converter_to', 'EUR');
+    }
+    if (!prefs.containsKey('converter_amount')) {
+      await prefs.setDouble('converter_amount', 1.0);
+    }
+    
+    print('Converter widget initialized successfully');
+  } catch (e) {
+    print('Error initializing converter widget: $e');
+  }
+}
+
 /// Force update widget with current app data
 Future<void> forceUpdateWidget() async {
   try {

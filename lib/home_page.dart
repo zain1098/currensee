@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:math_expressions/math_expressions.dart' as math_expressions;
 import 'dart:async';
@@ -10,9 +9,10 @@ import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'main.dart';
 import 'currency_widget.dart';
-import 'services/currency_service.dart';
+import 'models/currency.dart';
 import 'services/connectivity_service.dart';
 import 'services/app_version_service.dart';
+import 'api_service.dart';
 import 'news_page.dart';
 import 'trend_chart.dart';
 import 'world_clock.dart';
@@ -346,8 +346,8 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
   Future<void> initializeCurrencies() async {
     try {
       // Load all currencies from Firebase (both active and inactive)
-      final loadedCurrencies = await CurrencyService.loadCurrencies();
-      print('Loaded ${loadedCurrencies.length} currencies from Firebase');
+      final loadedCurrencies = _getDefaultCurrencies();
+      print('Loaded ${loadedCurrencies.length} currencies from default list');
 
       // Sort currencies with favorites first, then active, then inactive
       final sortedCurrencies = _sortCurrenciesWithFavorites(loadedCurrencies);
@@ -436,31 +436,21 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
     });
 
     try {
-      final response = await http
-          .get(Uri.parse('https://open.er-api.com/v6/latest/USD'))
-          .timeout(const Duration(seconds: 10)); // Add timeout
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['result'] == 'success') {
-          setState(() {
-            rates = (data['rates'] as Map<String, dynamic>).map(
-              (key, value) => MapEntry(key, (value as num).toDouble()),
-            );
-
-            lastUpdated = data['time_last_update_utc'] ?? '';
-            isLoading = false;
-          });
-          convertCurrency();
-        } else {
-          setState(() {
-            errorMessage = data['error-type'] ?? 'Unknown error';
-            isLoading = false;
-          });
-        }
+      // Use our simplified API service
+      final ratesData = await ApiService.getExchangeRates('USD');
+      
+      if (ratesData['success']) {
+        setState(() {
+          rates = (ratesData['rates'] as Map<String, dynamic>).map(
+            (key, value) => MapEntry(key, (value as num).toDouble()),
+          );
+          lastUpdated = ratesData['lastUpdated'] ?? '';
+          isLoading = false;
+        });
+        convertCurrency();
       } else {
         setState(() {
-          errorMessage = 'Failed to load data. Status: ${response.statusCode}';
+          errorMessage = 'Failed to load exchange rates';
           isLoading = false;
         });
       }
@@ -676,6 +666,19 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
   void _navigateAndClose(BuildContext context, Widget page) {
     Navigator.pop(context);
     Navigator.push(context, MaterialPageRoute(builder: (context) => page));
+  }
+
+  List<Currency> _getDefaultCurrencies() {
+    return [
+      Currency(code: 'USD', name: 'US Dollar', flag: '🇺🇸', symbol: '\$'),
+      Currency(code: 'EUR', name: 'Euro', flag: '🇪🇺', symbol: '€'),
+      Currency(code: 'GBP', name: 'British Pound', flag: '🇬🇧', symbol: '£'),
+      Currency(code: 'JPY', name: 'Japanese Yen', flag: '🇯🇵', symbol: '¥'),
+      Currency(code: 'PKR', name: 'Pakistani Rupee', flag: '🇵🇰', symbol: '₨'),
+      Currency(code: 'INR', name: 'Indian Rupee', flag: '🇮🇳', symbol: '₹'),
+      Currency(code: 'CAD', name: 'Canadian Dollar', flag: '🇨🇦', symbol: 'C\$'),
+      Currency(code: 'AUD', name: 'Australian Dollar', flag: '🇦🇺', symbol: 'A\$'),
+    ];
   }
 
   Widget _buildDrawerItem(

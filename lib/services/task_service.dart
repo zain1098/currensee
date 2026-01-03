@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../models/task_model.dart';
-import 'notification_manager.dart';
+import 'simple_notification_manager.dart';
 import 'package:uuid/uuid.dart';
 
 class TaskService extends ChangeNotifier {
@@ -217,7 +217,7 @@ class TaskService extends ChangeNotifier {
   ) async {
     try {
       print('🔔 Attempting to show notification for task: ${task.taskName}');
-      await NotificationManager.showTaskNotification(
+      await SimpleNotificationManager.showTaskNotification(
         task,
         convertedAmount,
         rate,
@@ -231,7 +231,7 @@ class TaskService extends ChangeNotifier {
   // Schedule task notification
   static Future<void> scheduleTaskNotification(Task task) async {
     try {
-      await NotificationManager.scheduleTaskNotification(task);
+      await SimpleNotificationManager.scheduleTaskNotification(task);
     } catch (e) {
       print('Failed to schedule notification: $e');
     }

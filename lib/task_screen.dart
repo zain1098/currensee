@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'models/task_model.dart';
 import 'services/task_service.dart';
-import 'services/notification_manager.dart';
+import 'services/simple_notification_manager.dart';
 import 'main.dart';
 
 import 'calculator_page.dart';
@@ -47,7 +47,7 @@ class _TaskScreenState extends State<TaskScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _checkNotificationPermissions() async {
-    final enabled = await NotificationManager.requestPermissions();
+    final enabled = await SimpleNotificationManager.requestPermissions();
     setState(() {
       _notificationsEnabled = enabled;
     });
@@ -921,7 +921,7 @@ class _TaskScreenState extends State<TaskScreen> with TickerProviderStateMixin {
       try {
         setState(() => _isLoading = true);
         await TaskService.deleteTask(task.id, 'User deleted');
-        await NotificationManager.cancelTaskNotification(task);
+        await SimpleNotificationManager.cancelTaskNotification(task);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1025,7 +1025,7 @@ class _TaskScreenState extends State<TaskScreen> with TickerProviderStateMixin {
         await TaskService.scheduleTaskNotification(updatedTask);
       } else {
         // Task paused - cancel notification
-        await NotificationManager.cancelTaskNotification(updatedTask);
+        await SimpleNotificationManager.cancelTaskNotification(updatedTask);
       }
 
       if (mounted) {
@@ -1251,7 +1251,7 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: _selectedFromCurrency,
+                      initialValue: _selectedFromCurrency,
                       decoration: const InputDecoration(
                         labelText: 'From Currency',
                         hintText: 'Select currency',
@@ -1320,7 +1320,7 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: _selectedToCurrency,
+                      initialValue: _selectedToCurrency,
                       decoration: const InputDecoration(
                         labelText: 'To Currency',
                         hintText: 'Select currency',
@@ -1447,7 +1447,7 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: _selectedFrequency,
+                      initialValue: _selectedFrequency,
                       decoration: const InputDecoration(
                         labelText: 'Frequency',
                         border: OutlineInputBorder(),
@@ -1693,7 +1693,7 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: _selectedFromCurrency,
+                      initialValue: _selectedFromCurrency,
                       decoration: const InputDecoration(
                         labelText: 'From Currency',
                         hintText: 'Select currency',
@@ -1752,7 +1752,7 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: _selectedToCurrency,
+                      initialValue: _selectedToCurrency,
                       decoration: const InputDecoration(
                         labelText: 'To Currency',
                         hintText: 'Select currency',
@@ -1838,7 +1838,7 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: _selectedFrequency,
+                      initialValue: _selectedFrequency,
                       decoration: const InputDecoration(
                         labelText: 'Frequency',
                         border: OutlineInputBorder(),
@@ -1935,7 +1935,7 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
       );
 
       await TaskService.updateTask(updatedTask);
-      await NotificationManager.scheduleTaskNotification(updatedTask);
+      await SimpleNotificationManager.scheduleTaskNotification(updatedTask);
 
       widget.onTaskUpdated(updatedTask);
     } catch (e) {

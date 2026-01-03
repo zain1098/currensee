@@ -1464,7 +1464,7 @@ class _MultiCurrencyConverterState extends State<MultiCurrencyConverter> {
                   : Switch(
                     value: isSelected,
                     onChanged: (_) => toggleCurrency(currency.code),
-                    activeColor: const Color(0xFF4A6CD1),
+                    activeThumbColor: const Color(0xFF4A6CD1),
                   ),
           onTap:
               isInactive

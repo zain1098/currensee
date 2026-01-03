@@ -1,13 +1,12 @@
 // rate_list_page.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'main.dart'; // For CustomAppBar
+import 'main.dart';
 import 'news_page.dart';
 import 'trend_chart.dart';
 import 'world_clock.dart';
@@ -15,13 +14,14 @@ import 'package:provider/provider.dart';
 import 'calculator_page.dart';
 import 'setting_page.dart';
 import 'task_screen.dart';
-import 'multi_currency_page.dart' as multi_currency; // Add prefix
+import 'multi_currency_page.dart' as multi_currency;
 import 'package:lottie/lottie.dart';
 import 'support_help_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'alert_service.dart';
-import 'services/currency_service.dart'; // Add this import
+import 'services/simple_alert_service.dart';
+import 'services/currency_service.dart';
 import 'services/app_version_service.dart';
+import 'api_service.dart';
 
 
 class RateListPage extends StatefulWidget {
@@ -68,7 +68,7 @@ class _RateListPageState extends State<RateListPage> {
   User? _currentUser;
 
   // Alert Service
-  final AlertService _alertService = AlertService();
+  final SimpleAlertService _alertService = SimpleAlertService();
 
   // Comprehensive currency data
   final Map<String, Map<String, String>> _currencyData = {
@@ -200,31 +200,14 @@ class _RateListPageState extends State<RateListPage> {
     // _initEmailJS();
     _getCurrentUser();
     _loadAlerts();
-    _loadCurrenciesFromDatabase(); // Add this line
+    _loadCurrenciesFromDatabase();
     _fetchExchangeRates();
     _loadNotificationHistory();
-
-    // Initialize AlertService if not already initialized
-    _alertService.initialize().then((_) {
-      // After AlertService is initialized, check for missed alerts
-      _checkForMissedAlerts();
-    });
+    _getCurrentUser();
+    _loadAlerts();
   }
 
-  // Check for missed alerts when app reopens
-  Future<void> _checkForMissedAlerts() async {
-    try {
-      // Trigger a manual check to catch any missed alerts
-      await _alertService.manualCheckAlerts();
 
-      // Refresh alerts list
-      await _loadAlerts();
-
-      print('Missed alerts check completed');
-    } catch (e) {
-      print('Error checking for missed alerts: $e');
-    }
-  }
 
   // Add method to load currencies from database
   Future<void> _loadCurrenciesFromDatabase() async {
@@ -349,10 +332,12 @@ class _RateListPageState extends State<RateListPage> {
   Future<void> _loadAlerts() async {
     if (_currentUser == null) return;
     try {
-      // Load alerts from AlertService
-      _alerts = _alertService.getActiveAlerts();
-      setState(() {
-        _showAlertSection = _alerts.isNotEmpty;
+      // Load alerts from SimpleAlertService
+      SimpleAlertService.getUserAlerts().listen((alerts) {
+        setState(() {
+          _alerts = alerts;
+          _showAlertSection = _alerts.isNotEmpty;
+        });
       });
     } catch (e) {
       print("Error loading alerts: $e");
@@ -369,20 +354,16 @@ class _RateListPageState extends State<RateListPage> {
         baseCurrency: alert.baseCurrency,
         targetCurrency: alert.targetCurrency,
         targetRate: alert.targetRate,
-        triggerType: alert.triggerType, // Use triggerType
+        triggerType: alert.triggerType,
         createdAt: alert.createdAt,
         userId: alert.userId,
-        userEmail: userEmail, // Always set userEmail
+        userEmail: userEmail,
       );
 
-      // Use AlertService to add alert
-      await _alertService.addAlert(alertWithEmail);
-
-      // Refresh alerts from service
-      _alerts = _alertService.getActiveAlerts();
-      setState(() {
-        _showAlertSection = _alerts.isNotEmpty;
-      });
+      // Use SimpleAlertService to add alert
+      await SimpleAlertService.addAlert(alertWithEmail);
+      
+      print('Alert saved - backend will monitor it');
     } catch (e) {
       print("Error saving alert: $e");
     }
@@ -390,17 +371,9 @@ class _RateListPageState extends State<RateListPage> {
 
   Future<void> _removeAlert(String alertId) async {
     try {
-      final alert = _alerts.firstWhere((a) => a.id == alertId);
-
-
-      // Remove from Firestore directly (AlertService will sync)
-      await _firestore.collection('alerts').doc(alertId).delete();
-
-      // Refresh alerts from service
-      _alerts = _alertService.getActiveAlerts();
-      setState(() {
-        _showAlertSection = _alerts.isNotEmpty;
-      });
+      // Use SimpleAlertService to remove alert
+      await SimpleAlertService.removeAlert(alertId);
+      print('Alert removed - backend updated');
     } catch (e) {
       print("Error removing alert: $e");
     }
@@ -582,29 +555,25 @@ class _RateListPageState extends State<RateListPage> {
     });
 
     try {
-      final response = await http.get(
-        Uri.parse('https://open.er-api.com/v6/latest/$_baseCurrency'),
-      );
+      // Use our simplified API service
+      final ratesData = await ApiService.getExchangeRates(_baseCurrency);
+      
+      if (ratesData['success']) {
+        setState(() {
+          _exchangeRates = (ratesData['rates'] as Map<String, dynamic>).map(
+            (key, value) => MapEntry(key, (value as num).toDouble()),
+          );
+          _lastUpdated = _formatDate(ratesData['lastUpdated'] ?? '');
+          _isLoading = false;
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['result'] == 'success') {
-          setState(() {
-            _exchangeRates = data['rates'];
-            _lastUpdated = _formatDate(data['time_last_update_utc']);
-            _isLoading = false;
-
-            // Only initialize all currencies list if we don't have database currencies
-            if (_currencies.isEmpty) {
-              _allCurrencies = _exchangeRates.keys.toList();
-              _allCurrencies.sort();
-            }
-          });
-        } else {
-          throw Exception(data['error'] ?? 'API returned error');
-        }
+          // Only initialize all currencies list if we don't have database currencies
+          if (_currencies.isEmpty) {
+            _allCurrencies = _exchangeRates.keys.toList();
+            _allCurrencies.sort();
+          }
+        });
       } else {
-        throw Exception('Failed to load: ${response.statusCode}');
+        throw Exception('Failed to load exchange rates');
       }
     } catch (e) {
       setState(() {
@@ -637,12 +606,9 @@ class _RateListPageState extends State<RateListPage> {
       _baseCurrency = currency;
     });
     _fetchExchangeRates();
-
-    // Update AlertService base currency
-    _alertService.updateBaseCurrency(currency);
   }
 
-  // Manual check alerts
+  // Manual check alerts - simplified
   void _manualCheckAlerts() async {
     if (_alerts.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -651,45 +617,12 @@ class _RateListPageState extends State<RateListPage> {
       return;
     }
 
-    // Show loading indicator
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Row(
-          children: [
-            SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            SizedBox(width: 12),
-            Text('Checking alerts...'),
-          ],
-        ),
-        duration: Duration(seconds: 2),
+      SnackBar(
+        content: const Text('Alerts are monitored by backend service 24/7'),
+        backgroundColor: Theme.of(context).colorScheme.primary,
       ),
     );
-
-    try {
-      // Trigger manual check in AlertService
-      await _alertService.manualCheckAlerts();
-
-      // Refresh alerts list
-      await _loadAlerts();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Alerts checked successfully'),
-          backgroundColor: Theme.of(context).colorScheme.primary,
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error checking alerts: $e'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
-    }
   }
 
   void _sortBy(String column) {

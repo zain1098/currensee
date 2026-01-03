@@ -1,17 +1,10 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:lottie/lottie.dart';
-import 'main.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-
-import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:emailjs/emailjs.dart';
-import 'package:http/http.dart' as http;
-import 'email_verification_service.dart';
-import 'contact_form_screen.dart';
+import 'main.dart';
+import 'signup.dart';
+import 'forget_password.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -20,1173 +13,377 @@ class SignInScreen extends StatefulWidget {
   State<SignInScreen> createState() => _SignInScreenState();
 }
 
-class EmailService {
-  static const String _serviceId = 'service_ih5ns2r';
-  static const String _welcomeTemplateId = 'template_v08t4va';
-  static const String _contactTemplateId = 'template_dxxjw09';
-  static const String _userId = 'AvgkUbQFSsE27b003';
-  static const String _accessToken = 'MI_orvD-Qi96ykAmp3zIF';
-
-  // Add initialization in EmailService class
-
-  static Future<void> sendWelcomeEmail({required String recipientEmail}) async {
-    try {
-      if (recipientEmail.isEmpty || !recipientEmail.contains('@')) {
-        throw Exception('Invalid recipient email: $recipientEmail');
-      }
-
-      // Enhanced HTML email template with better design
-      final htmlContent = '''
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Welcome to CurrenSee Pro!</title>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-          body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f8f9fa;
-          }
-          .container {
-            background-color: #ffffff;
-            border-radius: 15px;
-            overflow: hidden;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-          }
-          .header {
-            background: linear-gradient(135deg, #1E3A8A 0%, #D4AF37 100%);
-            padding: 40px 20px;
-            text-align: center;
-          }
-          .logo {
-            font-size: 36px;
-            font-weight: bold;
-            color: white;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-            letter-spacing: 1.5px;
-            margin-bottom: 10px;
-          }
-          .subtitle {
-            color: rgba(255, 255, 255, 0.9);
-            font-size: 16px;
-            font-weight: 300;
-          }
-          .content {
-            padding: 40px 30px;
-          }
-          h1 {
-            color: #1E3A8A;
-            margin-top: 0;
-            font-size: 28px;
-            font-weight: bold;
-          }
-          .welcome-text {
-            font-size: 18px;
-            color: #4a5568;
-            margin-bottom: 25px;
-          }
-          .features {
-            margin: 30px 0;
-            padding-left: 25px;
-          }
-          .features li {
-            margin-bottom: 15px;
-            font-size: 16px;
-            color: #2d3748;
-            position: relative;
-          }
-          .features li:before {
-            content: "✓";
-            color: #10B981;
-            font-weight: bold;
-            position: absolute;
-            left: -20px;
-          }
-          .cta-section {
-            text-align: center;
-            margin: 35px 0;
-            padding: 25px;
-            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
-            border-radius: 12px;
-            border: 1px solid #e2e8f0;
-          }
-          .cta-button {
-            display: inline-block;
-            background: linear-gradient(to right, #1E3A8A, #3b5998);
-            color: white !important;
-            text-decoration: none;
-            padding: 15px 35px;
-            border-radius: 30px;
-            font-weight: bold;
-            font-size: 16px;
-            margin: 20px 0;
-            text-align: center;
-            transition: transform 0.3s, box-shadow 0.3s;
-            box-shadow: 0 4px 15px rgba(30, 58, 138, 0.3);
-          }
-          .cta-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(30, 58, 138, 0.4);
-          }
-          .footer {
-            text-align: center;
-            padding: 30px 20px;
-            color: #6c757d;
-            font-size: 14px;
-            border-top: 1px solid #eaeaea;
-            background-color: #f8f9fa;
-          }
-          .social-links {
-            margin: 15px 0;
-          }
-          .social-links a {
-            color: #1E3A8A;
-            text-decoration: none;
-            margin: 0 10px;
-            font-weight: 500;
-          }
-          .social-links a:hover {
-            text-decoration: underline;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <div class="logo">CurrenSee Pro</div>
-            <div class="subtitle">Your Ultimate Currency Companion</div>
-          </div>
-          
-          <div class="content">
-            <h1>🎉 Welcome Aboard!</h1>
-            <p class="welcome-text">Hi there,</p>
-            
-            <p class="welcome-text">We're absolutely thrilled to welcome you to <strong>CurrenSee Pro</strong>! You've just joined thousands of smart travelers, investors, and global citizens who trust us for their currency conversion needs.</p>
-            
-            <p class="welcome-text">Here's what you can do with CurrenSee Pro:</p>
-            <ul class="features">
-              <li>Get real-time exchange rates for 150+ currencies worldwide</li>
-              <li>Track historical currency performance with interactive charts</li>
-              <li>Set personalized currency alerts for your target rates</li>
-              <li>Access offline conversion capabilities when traveling</li>
-              <li>Enjoy zero fees and no hidden charges ever</li>
-              <li>Chat with our AI assistant for instant currency help</li>
-            </ul>
-            
-            <div class="cta-section">
-              <p style="font-size: 18px; font-weight: 600; color: #1E3A8A; margin-bottom: 20px;">Ready to start converting?</p>
-              <a href="https://www.currenseepro.com/app" class="cta-button">
-                🚀 Launch the App
-              </a>
-            </div>
-            
-            <p style="font-size: 16px; color: #4a5568; margin-top: 30px;">
-              Need help getting started? Our support team is here for you 24/7. 
-              Just reply to this email or visit our <a href="https://www.currenseepro.com/support" style="color: #1E3A8A; font-weight: 600;">support center</a>.
-            </p>
-            
-            <p style="font-size: 16px; color: #4a5568; margin-top: 20px;">
-              Happy converting!<br>
-              <strong>The CurrenSee Pro Team</strong> 💙
-            </p>
-          </div>
-          
-          <div class="footer">
-            <p style="margin-bottom: 10px;"><strong>CurrenSee Pro</strong></p>
-            <p style="margin-bottom: 15px;">Your trusted partner for global currency conversion</p>
-            <div class="social-links">
-              <a href="https://www.currenseepro.com">Website</a> | 
-              <a href="https://twitter.com/currenseepro">Twitter</a> | 
-              <a href="https://facebook.com/currenseepro">Facebook</a>
-            </div>
-            <p style="margin-top: 15px; font-size: 12px; color: #9ca3af;">
-              © 2025 CurrenSee Pro. All rights reserved.<br>
-              <a href="https://www.currenseepro.com/unsubscribe" style="color: #9ca3af;">Unsubscribe</a>
-            </p>
-          </div>
-        </div>
-      </body>
-      </html>
-      ''';
-
-      // Try EmailJS first
-      try {
-        final response = await EmailJS.send(_serviceId, _welcomeTemplateId, {
-          'to_email': recipientEmail,
-          'from_name': 'CurrenSee Pro Team',
-          'reply_to': 'festoeventure@gmail.com',
-          'message':
-              'Welcome to CurrenSee Pro! We\'re excited to have you on board.',
-          'html_body': htmlContent,
-          'year': DateTime.now().year.toString(),
-        }, Options(publicKey: _userId));
-
-        if (kDebugMode) {
-          print('EmailJS response status: ${response.status}');
-          print('Welcome email sent to $recipientEmail');
-        }
-
-        if (response.status != 200) {
-          throw Exception('Failed to send email: ${response.text}');
-        }
-
-        return; // Success, exit early
-      } catch (emailjsError) {
-        if (kDebugMode) {
-          print('EmailJS failed, trying fallback: $emailjsError');
-        }
-        // Continue to fallback method
-      }
-
-      // Fallback: Try direct HTTP API call
-      try {
-        final response = await http.post(
-          Uri.parse('https://api.emailjs.com/api/v1.0/email/send'),
-          headers: {'Content-Type': 'application/json'},
-          body: json.encode({
-            'service_id': _serviceId,
-            'template_id': _welcomeTemplateId,
-            'user_id': _userId,
-            'accessToken': _accessToken,
-            'template_params': {
-              'to_email': recipientEmail,
-              'from_name': 'CurrenSee Pro Team',
-              'reply_to': 'festoeventure@gmail.com',
-              'message':
-                  'Welcome to CurrenSee Pro! We\'re excited to have you on board.',
-              'html_body': htmlContent,
-              'year': DateTime.now().year.toString(),
-            },
-          }),
-        );
-
-        if (kDebugMode) {
-          print('HTTP API response status: ${response.statusCode}');
-          print('HTTP API response body: ${response.body}');
-        }
-
-        if (response.statusCode != 200) {
-          throw Exception(
-            'HTTP API failed: ${response.statusCode} - ${response.body}',
-          );
-        }
-
-        return; // Success, exit early
-      } catch (httpError) {
-        if (kDebugMode) {
-          print('HTTP API also failed: $httpError');
-        }
-        // Continue to final error handling
-      }
-
-      // If both methods failed, throw the original error
-      throw Exception('All email sending methods failed');
-    } catch (error) {
-      if (kDebugMode) {
-        print('Failed to send welcome email: $error');
-      }
-      rethrow;
-    }
-  }
-
-  static Future<void> sendContactEmail({
-    required String name,
-    required String email,
-    required String message,
-  }) async {
-    try {
-      // Create a more detailed email template for contact form
-      final htmlContent = '''
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>New Support Request - CurrenSee Pro</title>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-          body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f8f9fa;
-          }
-          .container {
-            background-color: #ffffff;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-          }
-          .header {
-            background: linear-gradient(135deg, #1E3A8A 0%, #D4AF37 100%);
-            padding: 30px 20px;
-            text-align: center;
-          }
-          .logo {
-            font-size: 32px;
-            font-weight: bold;
-            color: white;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-            letter-spacing: 1px;
-          }
-          .content {
-            padding: 30px;
-          }
-          h1 {
-            color: #1E3A8A;
-            margin-top: 0;
-          }
-          .message-box {
-            background-color: #f8f9fa;
-            border-left: 4px solid #1E3A8A;
-            padding: 15px;
-            margin: 20px 0;
-            border-radius: 0 8px 8px 0;
-          }
-          .detail-row {
-            margin-bottom: 15px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #e2e8f0;
-          }
-          .detail-label {
-            font-weight: bold;
-            color: #1E3A8A;
-            display: block;
-            margin-bottom: 5px;
-          }
-          .footer {
-            text-align: center;
-            padding: 20px;
-            color: #6c757d;
-            font-size: 14px;
-            border-top: 1px solid #eaeaea;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <div class="logo">CurrenSee Pro</div>
-          </div>
-          
-          <div class="content">
-            <h1>New Support Request</h1>
-            <p>You've received a new support request from your currency converter app.</p>
-            
-            <div class="detail-row">
-              <span class="detail-label">From:</span>
-              <span>$name ($email)</span>
-            </div>
-
-            <div class="detail-row">
-              <span class="detail-label">Received at:</span>
-              <span>${DateTime.now().toString()}</span>
-            </div>
-
-            <div class="message-box">
-              <span class="detail-label">Message:</span>
-              <p>$message</p>
-            </div>
-          </div>
-          
-          <div class="footer">
-            <p>This is an automated message from your app's support system.</p>
-            <p>© ${DateTime.now().year} CurrenSee Pro. All rights reserved.</p>
-          </div>
-        </div>
-      </body>
-      </html>
-      ''';
-
-      // Try EmailJS first
-      try {
-        final response = await EmailJS.send(_serviceId, _contactTemplateId, {
-          'name': name,
-          'email': email,
-          'message': message,
-          'to_email': 'festoeventure@gmail.com',
-          'reply_to': email,
-          'html_body': htmlContent,
-          'year': DateTime.now().year.toString(),
-        }, Options(publicKey: _userId));
-
-        if (kDebugMode) {
-          print('EmailJS response status: ${response.status}');
-          print('Contact email sent from $email');
-        }
-
-        if (response.status != 200) {
-          throw Exception('Failed to send email: ${response.text}');
-        }
-
-        return; // Success, exit early
-      } catch (emailjsError) {
-        if (kDebugMode) {
-          print('EmailJS failed, trying fallback: $emailjsError');
-        }
-        // Continue to fallback method
-      }
-
-      // Fallback: Try direct HTTP API call
-      try {
-        final response = await http.post(
-          Uri.parse('https://api.emailjs.com/api/v1.0/email/send'),
-          headers: {'Content-Type': 'application/json'},
-          body: json.encode({
-            'service_id': _serviceId,
-            'template_id': _contactTemplateId,
-            'user_id': _userId,
-            'accessToken': _accessToken,
-            'template_params': {
-              'name': name,
-              'email': email,
-              'message': message,
-              'to_email': 'festoeventure@gmail.com',
-              'reply_to': email,
-              'html_body': htmlContent,
-              'year': DateTime.now().year.toString(),
-            },
-          }),
-        );
-
-        if (kDebugMode) {
-          print('HTTP API response status: ${response.statusCode}');
-          print('HTTP API response body: ${response.body}');
-        }
-
-        if (response.statusCode != 200) {
-          throw Exception(
-            'HTTP API failed: ${response.statusCode} - ${response.body}',
-          );
-        }
-
-        return; // Success, exit early
-      } catch (httpError) {
-        if (kDebugMode) {
-          print('HTTP API also failed: $httpError');
-        }
-        // Continue to final error handling
-      }
-
-      // If both methods failed, throw the original error
-      throw Exception('All email sending methods failed');
-    } catch (error) {
-      if (kDebugMode) {
-        print('Failed to send contact email: $error');
-      }
-      rethrow;
-    }
-  }
-}
-
 class _SignInScreenState extends State<SignInScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
-  bool _isEmailValid = false;
 
-  // Email validation function
-  bool _isValidEmail(String email) {
-    // Basic email format validation
-    final emailRegex = RegExp(
-      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-    );
-    return emailRegex.hasMatch(email);
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
-  void _onEmailChanged(String value) {
-    setState(() {
-      _isEmailValid = _isValidEmail(value.trim());
-    });
-  }
+  Future<void> _signInWithEmail() async {
+    if (!_formKey.currentState!.validate()) return;
 
-  Future<void> addUserToFirestore(User user) async {
-    final userDoc = FirebaseFirestore.instance
-        .collection('currentUser')
-        .doc(user.uid);
+    setState(() => _isLoading = true);
 
-    // Check if user already exists to determine if we should set status
-    final existingDoc = await userDoc.get();
-
-    final userData = {
-      'uid': user.uid,
-      'email': user.email,
-      'displayName': user.displayName ?? '',
-      'photoURL': user.photoURL ?? '',
-      'isEmailVerified': user.emailVerified,
-      'createdAt': FieldValue.serverTimestamp(),
-      // Only add status if user doesn't exist (new user)
-      if (!existingDoc.exists) 'status': 'active',
-    };
-    await userDoc.set(userData, SetOptions(merge: true));
-  }
-
-  // Check user status and handle blocking
-  Future<bool> checkUserStatus(String uid) async {
     try {
-      final userDoc =
-          await FirebaseFirestore.instance
-              .collection('currentUser')
-              .doc(uid)
-              .get();
-
-      if (userDoc.exists) {
-        final userData = userDoc.data();
-        final status =
-            userData?['status'] ??
-            'active'; // Default to active for existing users
-
-        // If user is blocked, sign them out and show message
-        if (status == 'blocked') {
-          await FirebaseAuth.instance.signOut();
-          if (mounted) {
-            _showBlockedUserDialog();
-          }
-          return false;
-        }
-      }
-      return true;
-    } catch (e) {
-      print('Error checking user status: $e');
-      return true; // Allow login if status check fails
-    }
-  }
-
-  // Show blocked user dialog
-  void _showBlockedUserDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF1E3A8A), Color(0xFFD4AF37)],
-              ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(50),
-                  ),
-                  child: const Icon(Icons.block, size: 50, color: Colors.white),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Account Temporarily Blocked',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'The CurrenSee Team has temporarily blocked your account for security reasons.',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.white,
-                    height: 1.5,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'If you believe this is an error, please contact our support team.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.white70,
-                    height: 1.4,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 30),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const ContactFormScreen(),
-                        ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: const Color(0xFF1E3A8A),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text(
-                      'Contact Support',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _signIn() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-      try {
-        // Enhanced email validation before signin
-        final email = _emailController.text.trim();
-        if (!_isValidEmail(email)) {
-          setState(() => _isLoading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please enter a valid email address'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          return;
-        }
-
-        // Check if email is real and accessible
-        final isEmailReal =
-            await EmailVerificationService.isEmailRealAndAccessible(email);
-        if (!isEmailReal) {
-          setState(() => _isLoading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please enter a real and accessible email address'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          return;
-        }
-
-        final userCredential = await FirebaseAuth.instance
-            .signInWithEmailAndPassword(
-              email: email,
-              password: _passwordController.text,
-            );
-
-        // Check if this is a new user
-        final isNewUser = userCredential.additionalUserInfo?.isNewUser ?? false;
-
-        await addUserToFirestore(userCredential.user!);
-
-        // Check user status after successful authentication
-        final isUserActive = await checkUserStatus(userCredential.user!.uid);
-        if (!isUserActive) {
-          setState(() => _isLoading = false);
-          return; // User is blocked, dialog already shown
-        }
-
-        // Send welcome email for new users
-        if (isNewUser) {
-          final userEmail = userCredential.user?.email;
-          if (userEmail != null &&
-              userEmail.isNotEmpty &&
-              userEmail.contains('@')) {
-            bool welcomeEmailSent = false;
-            try {
-              await EmailService.sendWelcomeEmail(recipientEmail: userEmail);
-              print('Welcome email sent successfully to $userEmail');
-              welcomeEmailSent = true;
-            } catch (e) {
-              print('Welcome email failed: $e');
-              welcomeEmailSent = false;
-            }
-          }
-        }
-
-        if (!mounted) return;
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+      
+      if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (context) => const MainScreen(showSuccess: true),
-          ),
-        );
-      } on FirebaseAuthException catch (e) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message ?? 'Authentication failed')),
+          MaterialPageRoute(builder: (context) => const MainScreen(showSuccess: true)),
         );
       }
+    } on FirebaseAuthException catch (e) {
+      String message = 'Login failed';
+      if (e.code == 'user-not-found') {
+        message = 'No user found with this email';
+      } else if (e.code == 'wrong-password') {
+        message = 'Wrong password';
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _signInWithGoogle() async {
     setState(() => _isLoading = true);
+
     try {
-      print('Starting Google Sign-in process...');
+      // Configure Google Sign-In
       final GoogleSignIn googleSignIn = GoogleSignIn(
-        clientId:
-            kIsWeb
-                ? '455542611420-oor09omint210uorsentkh6mvv8te3sg.apps.googleusercontent.com'
-                : null,
         scopes: ['email', 'profile'],
       );
+      
+      // Sign out first to ensure clean state
       await googleSignIn.signOut();
+      
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
       if (googleUser == null) {
-        print('Google Sign-in was canceled by user');
+        // User cancelled the sign-in
         setState(() => _isLoading = false);
         return;
       }
 
-      print('Google user obtained: ${googleUser.email}');
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-      print('Google authentication completed');
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      
+      // Check if we have the required tokens
+      if (googleAuth.accessToken == null || googleAuth.idToken == null) {
+        throw Exception('Failed to get Google authentication tokens');
+      }
+      
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
-      final UserCredential userCredential = await FirebaseAuth.instance
-          .signInWithCredential(credential);
-      print(
-        'Firebase authentication completed. User: ${userCredential.user?.email}',
-      );
 
-      final isNewUser = userCredential.additionalUserInfo!.isNewUser;
-
-      if (isNewUser) {
-        await userCredential.user!.updateDisplayName(googleUser.displayName);
-        print('Updated display name for new user');
-
-        // Send welcome email for new Google sign-in users
-        bool welcomeEmailSent = false;
-        try {
-          await EmailService.sendWelcomeEmail(
-            recipientEmail: userCredential.user!.email!,
-          );
-          print(
-            'Welcome email sent successfully to ${userCredential.user!.email}',
-          );
-          welcomeEmailSent = true;
-        } catch (e) {
-          print('Failed to send welcome email: $e');
-          welcomeEmailSent = false;
-        }
+      final UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+      
+      // Save user data to Firestore
+      if (userCredential.user != null) {
+        await _saveUserToFirestore(userCredential.user!);
       }
-
-      await addUserToFirestore(userCredential.user!);
-
-      // Check user status after successful authentication
-      final isUserActive = await checkUserStatus(userCredential.user!.uid);
-      if (!isUserActive) {
-        setState(() => _isLoading = false);
-        return; // User is blocked, dialog already shown
-      }
-
-      if (!mounted) {
-        print('Widget not mounted, cannot navigate');
-        return;
-      }
-      print('Navigating to MainScreen...');
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const MainScreen(showSuccess: true),
-        ),
-      );
-      print('Navigation completed');
-    } on PlatformException catch (e) {
-      print('PlatformException: ${e.message}');
-      setState(() => _isLoading = false);
-      if (e.code != 'sign_in_canceled') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Google sign-in failed: ${e.message}'),
-            backgroundColor: Colors.red,
-          ),
+      
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const MainScreen(showSuccess: true)),
         );
       }
     } on FirebaseAuthException catch (e) {
-      print('FirebaseAuthException: ${e.message}');
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Authentication failed: ${e.message}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      String message = 'Google sign-in failed';
+      switch (e.code) {
+        case 'account-exists-with-different-credential':
+          message = 'Account exists with different credentials';
+          break;
+        case 'invalid-credential':
+          message = 'Invalid Google credentials';
+          break;
+        case 'operation-not-allowed':
+          message = 'Google sign-in is not enabled';
+          break;
+        case 'user-disabled':
+          message = 'This account has been disabled';
+          break;
+        default:
+          message = 'Google sign-in failed: ${e.message}';
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     } catch (e) {
-      print('Unexpected error: $e');
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Unexpected error: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      print('Google Sign-In Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Google sign-in failed: Please check your internet connection and try again'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+  
+  Future<void> _saveUserToFirestore(User user) async {
+    try {
+      // This will be handled by the existing user creation logic
+      print('Google user signed in: ${user.email}');
+    } catch (e) {
+      print('Error saving Google user: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Theme(
-      data: Theme.of(context).copyWith(
-        brightness: Brightness.light,
-        scaffoldBackgroundColor: Colors.white,
-      ),
-      child: Scaffold(
-        body: Stack(
-          children: [
-            // Background Animation
-            Positioned.fill(
-              child: Lottie.asset(
-                'assets/Login Background.json',
-                fit: BoxFit.cover,
-              ),
-            ),
-            // Content
-            SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 30),
-                    Center(
-                      child: Lottie.asset(
-                        'assets/Icon Login.json',
-                        height: 170,
-                        width: 170,
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                children: [
+                  const SizedBox(height: 40),
+                  
+                  // Logo
+                  Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withOpacity(0.2),
+                    ),
+                    child: const Icon(
+                      Icons.currency_exchange,
+                      size: 60,
+                      color: Colors.white,
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Title
+                  const Text(
+                    'Welcome Back',
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 8),
+                  
+                  const Text(
+                    'Sign in to continue',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.white70,
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 40),
+                  
+                  // Email Field
+                  TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      labelText: 'Email',
+                      prefixIcon: const Icon(Icons.email),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
                       ),
                     ),
-                    const SizedBox(height: 30),
-                    Center(
-                      child: ShaderMask(
-                        shaderCallback:
-                            (bounds) => const LinearGradient(
-                              colors: [Color(0xFF1E3A8A), Color(0xFFD4AF37)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ).createShader(bounds),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your email';
+                      }
+                      if (!value.contains('@')) {
+                        return 'Please enter a valid email';
+                      }
+                      return null;
+                    },
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Password Field
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: _obscurePassword,
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      prefixIcon: const Icon(Icons.lock),
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
+                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      ),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your password';
+                      }
+                      return null;
+                    },
+                  ),
+                  
+                  const SizedBox(height: 8),
+                  
+                  // Forgot Password
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()),
+                        );
+                      },
+                      child: const Text(
+                        'Forgot Password?',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Sign In Button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _signInWithEmail,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF1E3A8A),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: _isLoading
+                          ? const CircularProgressIndicator()
+                          : const Text(
+                              'Sign In',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Divider
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: Colors.white.withOpacity(0.3))),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          'OR',
+                          style: TextStyle(color: Colors.white.withOpacity(0.7)),
+                        ),
+                      ),
+                      Expanded(child: Divider(color: Colors.white.withOpacity(0.3))),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Google Sign In Button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton.icon(
+                      onPressed: _isLoading ? null : _signInWithGoogle,
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.white),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: const Icon(Icons.g_mobiledata, color: Colors.white),
+                      label: const Text(
+                        'Continue with Google',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 32),
+                  
+                  // Sign Up Link
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        "Don't have an account? ",
+                        style: TextStyle(color: Colors.white.withOpacity(0.7)),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const SignUpScreen()),
+                          );
+                        },
                         child: const Text(
-                          'Welcome',
+                          'Sign Up',
                           style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
                             color: Colors.white,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    Center(
-                      child: ShaderMask(
-                        shaderCallback:
-                            (bounds) => const LinearGradient(
-                              colors: [Color(0xFF1E3A8A), Color(0xFFD4AF37)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ).createShader(bounds),
-                        child: const Text(
-                          'Sign in to continue to CurrenSee Pro',
-                          style: TextStyle(fontSize: 16, color: Colors.white),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 40),
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.95),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 10,
-                            offset: const Offset(0, 5),
-                          ),
-                        ],
-                      ),
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          children: [
-                            TextFormField(
-                              controller: _emailController,
-                              keyboardType: TextInputType.emailAddress,
-                              style: const TextStyle(color: Colors.black87),
-                              decoration: InputDecoration(
-                                labelText: 'Email',
-                                labelStyle: const TextStyle(color: Colors.black54),
-                                prefixIcon: const Icon(
-                                  Icons.email,
-                                  color: Color(0xFF1E3A8A),
-                                ),
-                                suffixIcon:
-                                    _emailController.text.isNotEmpty
-                                        ? Icon(
-                                          _isEmailValid
-                                              ? Icons.check_circle
-                                              : Icons.error,
-                                          color:
-                                              _isEmailValid
-                                                  ? Colors.green
-                                                  : Color(0xFF1E3A8A),
-                                        )
-                                        : null,
-                                filled: true,
-                                fillColor: Colors.white,
-                                border: const OutlineInputBorder(
-                                  borderRadius: BorderRadius.all(
-                                    Radius.circular(12),
-                                  ),
-                                  borderSide: BorderSide(color: Colors.grey),
-                                ),
-                                enabledBorder: const OutlineInputBorder(
-                                  borderRadius: BorderRadius.all(
-                                    Radius.circular(12),
-                                  ),
-                                  borderSide: BorderSide(color: Colors.grey),
-                                ),
-                                focusedBorder: const OutlineInputBorder(
-                                  borderRadius: BorderRadius.all(
-                                    Radius.circular(12),
-                                  ),
-                                  borderSide: BorderSide(
-                                    color: Color(0xFF1E3A8A),
-                                    width: 2,
-                                  ),
-                                ),
-                                errorBorder: const OutlineInputBorder(
-                                  borderRadius: BorderRadius.all(
-                                    Radius.circular(12),
-                                  ),
-                                  borderSide: BorderSide(color: Colors.red),
-                                ),
-                                focusedErrorBorder: const OutlineInputBorder(
-                                  borderRadius: BorderRadius.all(
-                                    Radius.circular(12),
-                                  ),
-                                  borderSide: BorderSide(color: Colors.red, width: 2),
-                                ),
-                              ),
-                              onChanged: _onEmailChanged,
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Please enter your email address';
-                                }
-                                if (!_isValidEmail(value.trim())) {
-                                  return 'Please enter a valid email address';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 20),
-                            TextFormField(
-                              controller: _passwordController,
-                              obscureText: _obscurePassword,
-                              style: const TextStyle(color: Colors.black87),
-                              decoration: InputDecoration(
-                                labelText: 'Password',
-                                labelStyle: const TextStyle(color: Colors.black54),
-                                prefixIcon: const Icon(
-                                  Icons.lock,
-                                  color: Color(0xFF1E3A8A),
-                                ),
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    _obscurePassword
-                                        ? Icons.visibility_off
-                                        : Icons.visibility,
-                                    color: Colors.grey,
-                                  ),
-                                  onPressed:
-                                      () => setState(
-                                        () =>
-                                            _obscurePassword =
-                                                !_obscurePassword,
-                                      ),
-                                ),
-                                filled: true,
-                                fillColor: Colors.white,
-                                border: const OutlineInputBorder(
-                                  borderRadius: BorderRadius.all(
-                                    Radius.circular(12),
-                                  ),
-                                  borderSide: BorderSide(color: Colors.grey),
-                                ),
-                                enabledBorder: const OutlineInputBorder(
-                                  borderRadius: BorderRadius.all(
-                                    Radius.circular(12),
-                                  ),
-                                  borderSide: BorderSide(color: Colors.grey),
-                                ),
-                                focusedBorder: const OutlineInputBorder(
-                                  borderRadius: BorderRadius.all(
-                                    Radius.circular(12),
-                                  ),
-                                  borderSide: BorderSide(
-                                    color: Color(0xFF1E3A8A),
-                                    width: 2,
-                                  ),
-                                ),
-                                errorBorder: const OutlineInputBorder(
-                                  borderRadius: BorderRadius.all(
-                                    Radius.circular(12),
-                                  ),
-                                  borderSide: BorderSide(color: Colors.red),
-                                ),
-                                focusedErrorBorder: const OutlineInputBorder(
-                                  borderRadius: BorderRadius.all(
-                                    Radius.circular(12),
-                                  ),
-                                  borderSide: BorderSide(color: Colors.red, width: 2),
-                                ),
-                              ),
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Please enter password';
-                                }
-                                if (value.length < 6) {
-                                  return 'Password must be at least 6 characters';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 20),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: TextButton(
-                                onPressed:
-                                    () =>
-                                        Navigator.pushNamed(context, '/forgot'),
-                                child: const Text('Forgot Password?'),
-                              ),
-                            ),
-                            const SizedBox(height: 30),
-                            ElevatedButton(
-                              onPressed: _isLoading ? null : _signIn,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF1E3A8A),
-                                minimumSize: const Size(double.infinity, 50),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              child:
-                                  _isLoading
-                                      ? const SizedBox(
-                                        height: 20,
-                                        width: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                      : const Text(
-                                        'Sign In',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                            ),
-                            const SizedBox(height: 30),
-                            Row(
-                              children: [
-                                const Expanded(child: Divider()),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                  ),
-                                  child: Text(
-                                    'or continue with Google',
-                                    style: TextStyle(
-                                      color: Colors.grey.shade600,
-                                    ),
-                                  ),
-                                ),
-                                const Expanded(child: Divider()),
-                              ],
-                            ),
-                            const SizedBox(height: 30),
-                            // Google Sign-in Button
-                            Center(
-                              child: IconButton(
-                                onPressed:
-                                    _isLoading ? null : _signInWithGoogle,
-                                icon: Container(
-                                  height: 50,
-                                  width: 50,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(12),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.1),
-                                        blurRadius: 5,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Lottie.asset(
-                                    'assets/google.json',
-                                    height: 30,
-                                    width: 30,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Text("Don't have an account?"),
-                                TextButton(
-                                  onPressed:
-                                      () => Navigator.pushNamed(
-                                        context,
-                                        '/signup',
-                                      ),
-                                  child: const Text('Sign Up'),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );

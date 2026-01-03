@@ -25,15 +25,12 @@ import 'package:feature_discovery/feature_discovery.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'currency_widget.dart';
-import 'watchlist_widget.dart';
-import 'converter_widget.dart';
-import 'alert_service.dart';
-import 'messaging_service.dart';
+import 'services/simple_alert_service.dart';
+import 'services/simple_notification_manager.dart';
 import 'services/user_status_service.dart';
 import 'services/maintenance_service.dart';
 import 'services/connectivity_service.dart';
 import 'app_theme.dart';
-import 'services/notification_manager.dart';
 import 'services/task_service.dart';
 import 'services/app_version_service.dart';
 
@@ -74,32 +71,24 @@ void main() async {
     }
   });
 
-  // Initialize AlertService for background monitoring
+  // Initialize SimpleAlertService for basic alerts
   try {
-    await AlertService().initialize();
-    print('AlertService initialized successfully');
+    await SimpleAlertService().initialize();
+    print('SimpleAlertService initialized successfully');
   } catch (e) {
-    print('Error initializing AlertService: $e');
+    print('Error initializing SimpleAlertService: $e');
   }
 
-  // Initialize MessagingService for push notifications
+  // Initialize SimpleNotificationManager for basic notifications
   try {
-    await MessagingService().initialize();
-    print('MessagingService initialized successfully');
-  } catch (e) {
-    print('Error initializing MessagingService: $e');
-  }
-
-  // Initialize NotificationManager for task notifications
-  try {
-    await NotificationManager.initialize();
+    await SimpleNotificationManager.initialize();
     // Request notification permissions
-    final permissionGranted = await NotificationManager.requestPermissions();
+    final permissionGranted = await SimpleNotificationManager.requestPermissions();
     print(
-      'NotificationManager initialized successfully. Permissions granted: $permissionGranted',
+      'SimpleNotificationManager initialized successfully. Permissions granted: $permissionGranted',
     );
   } catch (e) {
-    print('Error initializing NotificationManager: $e');
+    print('Error initializing SimpleNotificationManager: $e');
   }
 
   // Initialize ConnectivityService
@@ -428,8 +417,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       await _clearOldDefaultPairs();
 
       initializeWidget();
-      initializeWatchlistWidget();
-      initializeConverterWidget();
+      // initializeWatchlistWidget();
+      // initializeConverterWidget();
     });
 
     // Initialize app and check biometric authentication after a delay
@@ -584,7 +573,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       if (user != null) {
         print('App resumed, checking for missed alerts...');
         Future.delayed(const Duration(milliseconds: 1000), () {
-          AlertService().checkForMissedAlerts();
+          SimpleAlertService().checkForMissedAlerts();
         });
       }
 

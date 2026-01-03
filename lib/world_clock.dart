@@ -18,9 +18,7 @@ class WorldClockPage extends StatefulWidget {
 class _WorldClockPageState extends State<WorldClockPage>
     with TickerProviderStateMixin, WidgetsBindingObserver {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  // Firebase data will be loaded here
   List<ClockLocation> allLocations = [];
-
   List<ClockLocation> locations = [];
   bool is24HourFormat = false;
   bool showAnalog = false;
@@ -37,8 +35,8 @@ class _WorldClockPageState extends State<WorldClockPage>
 
   List<ClockLocation> _searchResults = [];
   bool _showAddLocation = false;
-  bool _isLoading = true; // Add loading state
-  String? _errorMessage; // Add error state
+  bool _isLoading = true;
+  String? _errorMessage;
   late AnimationController _fabController;
   late AnimationController _clockChangeController;
   late Animation<double> _clockChangeAnimation;
@@ -48,7 +46,6 @@ class _WorldClockPageState extends State<WorldClockPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Initialize animation controllers
     _listController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -73,27 +70,16 @@ class _WorldClockPageState extends State<WorldClockPage>
       CurvedAnimation(parent: _clockChangeController, curve: Curves.easeInOut),
     );
 
-    // Start timer and animations
     _startTimer();
     _listController.forward();
-
-    // Load data in correct order
     _initializeData();
   }
 
-  // Initialize data in the correct order
   Future<void> _initializeData() async {
     try {
-      // Load basic preferences first (UI settings)
       await _loadBasicPreferences();
-
-      // Then load locations from Firebase (which will also load location preferences)
       await _loadLocationsFromFirebase();
-
-      // Finally update times
       _updateAllTimes();
-
-      // Mark loading as complete
       setState(() {
         _isLoading = false;
       });
@@ -106,7 +92,6 @@ class _WorldClockPageState extends State<WorldClockPage>
     }
   }
 
-  // Load only basic UI preferences
   Future<void> _loadBasicPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -118,7 +103,6 @@ class _WorldClockPageState extends State<WorldClockPage>
     });
   }
 
-  // Retry loading data
   Future<void> _retryLoading() async {
     setState(() {
       _isLoading = true;
@@ -138,12 +122,10 @@ class _WorldClockPageState extends State<WorldClockPage>
     }
   }
 
-  // Load locations from Firebase
   Future<void> _loadLocationsFromFirebase() async {
     try {
       print('🔄 Loading locations from Firebase...');
 
-      // Add timeout and better error handling
       final allSnapshot = await FirebaseFirestore.instance
           .collection('world_clock_cities')
           .orderBy('display_order')
@@ -158,30 +140,20 @@ class _WorldClockPageState extends State<WorldClockPage>
 
       if (allSnapshot.docs.isNotEmpty) {
         setState(() {
-          allLocations =
-              allSnapshot.docs.map((doc) {
-                final data = doc.data();
-                final location = ClockLocation(
-                  timezone: data['timezone'] ?? '',
-                  city: data['city'] ?? '',
-                  utcOffset: data['gmt_offset']?.toString() ?? '+0',
-                  flagUrl: data['flag_url'] ?? '',
-                  country: data['country'] ?? '',
-                  status: data['status'] ?? 'active', // Add status field
-                );
-                print(
-                  '📍 Loaded location: ${location.city} (${location.status}) with flag URL: ${location.flagUrl}',
-                );
-                print('🏳️ Country code extracted: ${location.countryCode}');
-                return location;
-              }).toList();
-
-          print(
-            '✅ Loaded ${allLocations.length} locations from Firebase (${allLocations.where((loc) => loc.status == 'active').length} active)',
-          );
+          allLocations = allSnapshot.docs.map((doc) {
+            final data = doc.data();
+            final location = ClockLocation(
+              timezone: data['timezone'] ?? '',
+              city: data['city'] ?? '',
+              utcOffset: data['gmt_offset']?.toString() ?? '+0',
+              flagUrl: data['flag_url'] ?? '',
+              country: data['country'] ?? '',
+              status: data['status'] ?? 'active',
+            );
+            return location;
+          }).toList();
         });
 
-        // Now load preferences after locations are loaded
         await _loadPreferences();
       } else {
         print('⚠️ No locations found in Firebase, using fallback data');
@@ -192,7 +164,6 @@ class _WorldClockPageState extends State<WorldClockPage>
       print('🔄 Using fallback data...');
       _loadFallbackLocations();
       
-      // Show user-friendly message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -205,7 +176,6 @@ class _WorldClockPageState extends State<WorldClockPage>
     }
   }
 
-  // Fallback to hardcoded data if Firebase fails
   void _loadFallbackLocations() {
     setState(() {
       allLocations = [
@@ -290,19 +260,9 @@ class _WorldClockPageState extends State<WorldClockPage>
           status: 'active',
         ),
       ];
-
-      // Debug fallback locations
-      for (final location in allLocations) {
-        print(
-          '📍 Fallback location: ${location.city} with flag URL: ${location.flagUrl}',
-        );
-        print('🏳️ Country code extracted: ${location.countryCode}');
-      }
     });
 
-    // Load preferences after fallback locations are set
     _loadPreferences();
-    
     print('✅ Loaded ${allLocations.length} fallback cities for offline use');
     print('🌍 Cities available: ${allLocations.map((c) => c.city).join(', ')}');
   }
@@ -334,16 +294,13 @@ class _WorldClockPageState extends State<WorldClockPage>
       showDayProgress = prefs.getBool('showDayProgress') ?? true;
       showWeather = prefs.getBool('showWeather') ?? true;
 
-      // Only try to load saved locations if allLocations is not empty
       if (allLocations.isNotEmpty) {
         final savedLocations = prefs.getStringList('savedLocations') ?? [];
-        locations =
-            allLocations
-                .where((loc) => savedLocations.contains(loc.timezone))
-                .toList();
+        locations = allLocations
+            .where((loc) => savedLocations.contains(loc.timezone))
+            .toList();
 
         if (locations.isEmpty && allLocations.isNotEmpty) {
-          // Use first active location as default
           final activeLocations =
               allLocations.where((loc) => loc.status == 'active').toList();
           if (activeLocations.isNotEmpty) {
@@ -369,7 +326,7 @@ class _WorldClockPageState extends State<WorldClockPage>
   }
 
   void _startTimer() {
-    _timer?.cancel(); // Cancel existing timer if any
+    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted && locations.isNotEmpty) {
         _updateAllTimes();
@@ -415,26 +372,19 @@ class _WorldClockPageState extends State<WorldClockPage>
     setState(() {
       if (query.isEmpty) {
         _searchResults.clear();
-        print(
-          '🔍 Search cleared, showing all ${allLocations.length} locations',
-        );
+        print('🔍 Search cleared, showing all ${allLocations.length} locations');
       } else {
-        // Show all matching locations (both active and inactive)
-        _searchResults =
-            allLocations
-                .where(
-                  (loc) =>
-                      loc.city.toLowerCase().contains(query.toLowerCase()) ||
-                      (loc.country?.toLowerCase().contains(
-                            query.toLowerCase(),
-                          ) ??
-                          false),
-                )
-                .toList();
+        _searchResults = allLocations
+            .where(
+              (loc) =>
+                  loc.city.toLowerCase().contains(query.toLowerCase()) ||
+                  (loc.country?.toLowerCase().contains(
+                        query.toLowerCase(),
+                      ) ??
+                      false),
+            )
+            .toList();
         print('🔍 Search for "$query" found ${_searchResults.length} results');
-        for (final loc in _searchResults) {
-          print('  - ${loc.city} (${loc.country}) - Status: ${loc.status}');
-        }
       }
     });
   }
@@ -455,7 +405,6 @@ class _WorldClockPageState extends State<WorldClockPage>
   }
 
   void _addLocation(ClockLocation location) {
-    // Check if location is active
     if (location.status != 'active') {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -485,35 +434,34 @@ class _WorldClockPageState extends State<WorldClockPage>
     if (locations.length > 1) {
       showDialog(
         context: context,
-        builder:
-            (context) => AlertDialog(
-              title: Text('Remove ${location.city}?'),
-              content: const Text(
-                'This location will be removed from your list',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      locations.remove(location);
-                      if (_selectedTimezone == location.timezone) {
-                        _selectedTimezone = locations.first.timezone;
-                      }
-                      _saveLocations();
-                    });
-                    Navigator.pop(context);
-                  },
-                  child: const Text(
-                    'Remove',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                ),
-              ],
+        builder: (context) => AlertDialog(
+          title: Text('Remove ${location.city}?'),
+          content: const Text(
+            'This location will be removed from your list',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
             ),
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  locations.remove(location);
+                  if (_selectedTimezone == location.timezone) {
+                    _selectedTimezone = locations.first.timezone;
+                  }
+                  _saveLocations();
+                });
+                Navigator.pop(context);
+              },
+              child: const Text(
+                'Remove',
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+          ],
+        ),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -522,13 +470,10 @@ class _WorldClockPageState extends State<WorldClockPage>
     }
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // Handle loading state
     if (_isLoading) {
       return Scaffold(
         key: _scaffoldKey,
@@ -575,7 +520,6 @@ class _WorldClockPageState extends State<WorldClockPage>
       );
     }
 
-    // Handle case when locations is empty
     if (locations.isEmpty) {
       return Scaffold(
         key: _scaffoldKey,
@@ -621,7 +565,6 @@ class _WorldClockPageState extends State<WorldClockPage>
       );
     }
 
-    // Safe way to get selected location
     ClockLocation selectedLocation;
     try {
       selectedLocation = locations.firstWhere(
@@ -629,7 +572,6 @@ class _WorldClockPageState extends State<WorldClockPage>
         orElse: () => locations.first,
       );
     } catch (e) {
-      // Fallback to first location if selected timezone not found
       selectedLocation = locations.first;
       _selectedTimezone = selectedLocation.timezone;
     }
@@ -646,429 +588,362 @@ class _WorldClockPageState extends State<WorldClockPage>
         onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
       ),
       drawer: const AppDrawer(),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Main clock area - takes available space
-            Expanded(
-              child: SingleChildScrollView(
-                child: Center(
-                  child: ScaleTransition(
-                    scale: _clockChangeAnimation,
-                    child: FadeTransition(
-                      opacity: _clockChangeAnimation,
-                      child: _ClockCard(
-                        location: selectedLocation,
-                        isNight: isNight,
-                        showAnalog: showAnalog,
-                        showDate: showDate,
-                        showDayProgress: showDayProgress,
-                        showWeather: showWeather,
-                        isMainClock: true,
-                        onSettingsPressed: _showSettingsDialog,
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Center(
+                      child: ScaleTransition(
+                        scale: _clockChangeAnimation,
+                        child: FadeTransition(
+                          opacity: _clockChangeAnimation,
+                          child: _ClockCard(
+                            location: selectedLocation,
+                            isNight: isNight,
+                            showAnalog: showAnalog,
+                            showDate: showDate,
+                            showDayProgress: showDayProgress,
+                            showWeather: showWeather,
+                            isMainClock: true,
+                            onSettingsPressed: _showSettingsDialog,
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ),
-            // My Locations section - always at bottom
-            if (!isKeyboardVisible)
-              Container(
-                height: 200,
-                padding: const EdgeInsets.only(top: 12, bottom: 20),
-                decoration: BoxDecoration(
-                  color: theme.cardColor,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(24),
-                    topRight: Radius.circular(24),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: theme.shadowColor.withOpacity(0.1),
-                      blurRadius: 15,
-                      offset: const Offset(0, -5),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'My Locations',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color:
-                                  Theme.of(context).textTheme.bodyLarge?.color,
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: _toggleAddLocation,
-                            child: Container(
-                              width: 44,
-                              height: 44,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Theme.of(context).colorScheme.primary,
-                                    Theme.of(context).colorScheme.secondary,
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary.withOpacity(0.18),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: const Icon(
-                                Icons.add,
-                                color: Colors.white,
-                                size: 28,
-                              ),
-                            ),
-                          ),
-
-                        ],
+                if (!isKeyboardVisible)
+                  Container(
+                    height: 200,
+                    padding: const EdgeInsets.only(top: 12, bottom: 20),
+                    decoration: BoxDecoration(
+                      color: theme.cardColor,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(24),
+                        topRight: Radius.circular(24),
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: theme.shadowColor.withOpacity(0.1),
+                          blurRadius: 15,
+                          offset: const Offset(0, -5),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      height: 120,
-                      child: ListView.separated(
-                        controller: _scrollController,
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: locations.length,
-                        separatorBuilder:
-                            (context, i) => const SizedBox(width: 16),
-                        itemBuilder: (context, index) {
-                          final location = locations[index];
-                          final isSelected =
-                              _selectedTimezone == location.timezone;
-                          return GestureDetector(
-                            onTap: () => _selectLocation(location),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 300),
-                              width: isSelected ? 85 : 75,
-                              height: isSelected ? 85 : 75,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient:
-                                    isSelected
-                                        ? LinearGradient(
-                                          colors: [
-                                            Theme.of(
-                                              context,
-                                            ).colorScheme.primary,
-                                            Theme.of(
-                                              context,
-                                            ).colorScheme.secondary,
-                                          ],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        )
-                                        : LinearGradient(
-                                          colors: [
-                                            Theme.of(context).cardColor,
-                                            Theme.of(context).cardColor,
-                                          ],
-                                        ),
-                                boxShadow:
-                                    isSelected
-                                        ? [
-                                          BoxShadow(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .primary
-                                                .withOpacity(0.25),
-                                            blurRadius: 12,
-                                            offset: const Offset(0, 3),
-                                          ),
-                                        ]
-                                        : null,
-                                border: Border.all(
-                                  color:
-                                      isSelected
-                                          ? Theme.of(
-                                            context,
-                                          ).colorScheme.primary.withOpacity(0.8)
-                                          : Theme.of(
-                                            context,
-                                          ).dividerColor.withOpacity(0.2),
-                                  width: isSelected ? 2.5 : 1.0,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'My Locations',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).textTheme.bodyLarge?.color,
                                 ),
                               ),
-                              child: Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  Center(
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        // Use FlagService for flags with error handling
-                                        if (location.countryCode != null)
-                                          Container(
-                                            width: 26,
-                                            height: 16,
-                                            constraints: const BoxConstraints(
-                                              maxWidth: 26,
-                                              maxHeight: 16,
-                                            ),
-                                            margin: const EdgeInsets.only(
-                                              bottom: 2,
-                                            ),
-                                            child: ClipRect(
-                                              child: Builder(
-                                                builder: (context) {
-                                                  try {
-                                                    return FlagService.getFlagWidget(
-                                                      location.countryCode!,
-                                                      size: FlagSize.small,
-                                                    );
-                                                  } catch (e) {
-                                                    // Fallback to emoji flag if FlagService fails
-                                                    return Text(
-                                                      location.flag,
-                                                      style: TextStyle(
-                                                        fontSize:
-                                                            isSelected
-                                                                ? 24
-                                                                : 20,
-                                                      ),
-                                                    );
-                                                  }
-                                                },
-                                              ),
-                                            ),
-                                          )
-                                        else
-                                          Text(
-                                            location.flag,
-                                            style: TextStyle(
-                                              fontSize: isSelected ? 26 : 22,
-                                              shadows:
-                                                  isSelected
-                                                      ? [
-                                                        Shadow(
-                                                          color: Colors.black
-                                                              .withOpacity(0.2),
-                                                          blurRadius: 2,
-                                                          offset: const Offset(
-                                                            0,
-                                                            1,
-                                                          ),
-                                                        ),
-                                                      ]
-                                                      : null,
-                                            ),
-                                          ),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          location.city,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: isSelected ? 12 : 10,
-                                            color:
-                                                isSelected
-                                                    ? Colors.white
-                                                    : Theme.of(context)
-                                                        .textTheme
-                                                        .bodyLarge
-                                                        ?.color,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        Text(
-                                          'UTC${location.utcOffset}',
-                                          style: TextStyle(
-                                            fontSize: isSelected ? 10 : 8,
-                                            color:
-                                                isSelected
-                                                    ? Colors.white.withOpacity(
-                                                      0.9,
-                                                    )
-                                                    : Theme.of(context)
-                                                        .textTheme
-                                                        .bodySmall
-                                                        ?.color,
-                                          ),
-                                        ),
+                              GestureDetector(
+                                onTap: _toggleAddLocation,
+                                child: Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        Theme.of(context).colorScheme.primary,
+                                        Theme.of(context).colorScheme.secondary,
                                       ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
                                     ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Theme.of(context).colorScheme.primary.withOpacity(0.18),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
                                   ),
-                                  if (isSelected)
-                                    Positioned(
-                                      top: -6,
-                                      right: -6,
-                                      child: GestureDetector(
-                                        onTap: () => _removeLocation(location),
-                                        child: Container(
-                                          width: 24,
-                                          height: 24,
-                                          decoration: BoxDecoration(
-                                            color: Colors.redAccent,
-                                            shape: BoxShape.circle,
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.redAccent
-                                                    .withOpacity(0.25),
-                                                blurRadius: 6,
-                                                offset: const Offset(0, 2),
-                                              ),
+                                  child: const Icon(
+                                    Icons.add,
+                                    color: Colors.white,
+                                    size: 28,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          height: 120,
+                          child: ListView.separated(
+                            controller: _scrollController,
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: locations.length,
+                            separatorBuilder: (context, i) => const SizedBox(width: 16),
+                            itemBuilder: (context, index) {
+                              final location = locations[index];
+                              final isSelected = _selectedTimezone == location.timezone;
+                              return GestureDetector(
+                                onTap: () => _selectLocation(location),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 300),
+                                  width: isSelected ? 85 : 75,
+                                  height: isSelected ? 85 : 75,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: isSelected
+                                        ? LinearGradient(
+                                            colors: [
+                                              Theme.of(context).colorScheme.primary,
+                                              Theme.of(context).colorScheme.secondary,
+                                            ],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          )
+                                        : LinearGradient(
+                                            colors: [
+                                              Theme.of(context).cardColor,
+                                              Theme.of(context).cardColor,
                                             ],
                                           ),
-                                          child: const Icon(
-                                            Icons.close,
-                                            size: 14,
-                                            color: Colors.white,
-                                          ),
+                                    boxShadow: isSelected
+                                        ? [
+                                            BoxShadow(
+                                              color: Theme.of(context).colorScheme.primary.withOpacity(0.25),
+                                              blurRadius: 12,
+                                              offset: const Offset(0, 3),
+                                            ),
+                                          ]
+                                        : null,
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? Theme.of(context).colorScheme.primary.withOpacity(0.8)
+                                          : Theme.of(context).dividerColor.withOpacity(0.2),
+                                      width: isSelected ? 2.5 : 1.0,
+                                    ),
+                                  ),
+                                  child: Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      Center(
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            if (location.countryCode != null)
+                                              Container(
+                                                width: 26,
+                                                height: 16,
+                                                constraints: const BoxConstraints(
+                                                  maxWidth: 26,
+                                                  maxHeight: 16,
+                                                ),
+                                                margin: const EdgeInsets.only(bottom: 2),
+                                                child: ClipRect(
+                                                  child: Builder(
+                                                    builder: (context) {
+                                                      try {
+                                                        return FlagService.getFlagWidget(
+                                                          location.countryCode!,
+                                                          size: FlagSize.small,
+                                                        );
+                                                      } catch (e) {
+                                                        return Text(
+                                                          location.flag,
+                                                          style: TextStyle(
+                                                            fontSize: isSelected ? 24 : 20,
+                                                          ),
+                                                        );
+                                                      }
+                                                    },
+                                                  ),
+                                                ),
+                                              )
+                                            else
+                                              Text(
+                                                location.flag,
+                                                style: TextStyle(
+                                                  fontSize: isSelected ? 26 : 22,
+                                                  shadows: isSelected
+                                                      ? [
+                                                          Shadow(
+                                                            color: Colors.black.withOpacity(0.2),
+                                                            blurRadius: 2,
+                                                            offset: const Offset(0, 1),
+                                                          ),
+                                                        ]
+                                                      : null,
+                                                ),
+                                              ),
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              location.city,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: isSelected ? 12 : 10,
+                                                color: isSelected
+                                                    ? Colors.white
+                                                    : Theme.of(context).textTheme.bodyLarge?.color,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            Text(
+                                              'UTC${location.utcOffset}',
+                                              style: TextStyle(
+                                                fontSize: isSelected ? 10 : 8,
+                                                color: isSelected
+                                                    ? Colors.white.withOpacity(0.9)
+                                                    : Theme.of(context).textTheme.bodySmall?.color,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-            if (_showAddLocation)
-              Positioned.fill(
-                child: GestureDetector(
-                  onTap: _toggleAddLocation,
-                  child: Container(
-                    color: Colors.black54,
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: Material(
-                          elevation: 8,
-                          borderRadius: BorderRadius.circular(16),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            constraints: BoxConstraints(
-                              maxHeight:
-                                  MediaQuery.of(context).size.height * 0.7,
-                            ),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Theme.of(
-                                    context,
-                                  ).colorScheme.primary.withOpacity(0.1),
-                                  Theme.of(context).cardColor,
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'Add Location',
-                                  style: Theme.of(context).textTheme.titleLarge,
-                                ),
-                                const SizedBox(height: 10),
-                                TextField(
-                                  decoration: InputDecoration(
-                                    hintText: 'Search cities...',
-                                    prefixIcon: const Icon(Icons.search),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    filled: true,
-                                    fillColor:
-                                        Theme.of(
-                                          context,
-                                        ).scaffoldBackgroundColor,
-                                  ),
-                                  onChanged: _searchLocations,
-                                ),
-                                const SizedBox(height: 16),
-                                Expanded(
-                                  child:
-                                      _searchResults.isNotEmpty
-                                          ? ListView.builder(
-                                            itemCount: _searchResults.length,
-                                            itemBuilder: (context, index) {
-                                              final location =
-                                                  _searchResults[index];
-                                              return _SearchResultItem(
-                                                location: location,
-                                                isAdded: locations.contains(
-                                                  location,
-                                                ),
-                                                onTap:
-                                                    () =>
-                                                        _addLocation(location),
-                                              );
-                                            },
-                                          )
-                                          : ListView.builder(
-                                            itemCount: allLocations.length,
-                                            itemBuilder: (context, index) {
-                                              final location =
-                                                  allLocations[index];
-                                              return _SearchResultItem(
-                                                location: location,
-                                                isAdded: locations.contains(
-                                                  location,
-                                                ),
-                                                onTap:
-                                                    location.status == 'active'
-                                                        ? () => _addLocation(
-                                                          location,
-                                                        )
-                                                        : () {
-                                                          ScaffoldMessenger.of(
-                                                            context,
-                                                          ).showSnackBar(
-                                                            SnackBar(
-                                                              content: Text(
-                                                                '${location.city} is temporarily unavailable',
-                                                              ),
-                                                              backgroundColor:
-                                                                  Colors.orange,
-                                                              duration:
-                                                                  const Duration(
-                                                                    seconds: 3,
-                                                                  ),
-                                                            ),
-                                                          );
-                                                        },
-                                              );
-                                            },
+                                      if (isSelected)
+                                        Positioned(
+                                          top: -6,
+                                          right: -6,
+                                          child: GestureDetector(
+                                            onTap: () => _removeLocation(location),
+                                            child: Container(
+                                              width: 24,
+                                              height: 24,
+                                              decoration: BoxDecoration(
+                                                color: Colors.redAccent,
+                                                shape: BoxShape.circle,
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: Colors.redAccent.withOpacity(0.25),
+                                                    blurRadius: 6,
+                                                    offset: const Offset(0, 2),
+                                                  ),
+                                                ],
+                                              ),
+                                              child: const Icon(
+                                                Icons.close,
+                                                size: 14,
+                                                color: Colors.white,
+                                              ),
+                                            ),
                                           ),
+                                        ),
+                                    ],
+                                  ),
                                 ),
-                                TextButton(
-                                  onPressed: _toggleAddLocation,
-                                  child: const Text('Close'),
-                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (_showAddLocation)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: _toggleAddLocation,
+                child: Container(
+                  color: Colors.black54,
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Material(
+                        elevation: 8,
+                        borderRadius: BorderRadius.circular(16),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          constraints: BoxConstraints(
+                            maxHeight: MediaQuery.of(context).size.height * 0.7,
+                          ),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                                Theme.of(context).cardColor,
                               ],
                             ),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Add Location',
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                              const SizedBox(height: 10),
+                              TextField(
+                                decoration: InputDecoration(
+                                  hintText: 'Search cities...',
+                                  prefixIcon: const Icon(Icons.search),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8.0),
+                                  ),
+                                  filled: true,
+                                  fillColor: Theme.of(context).scaffoldBackgroundColor,
+                                ),
+                                onChanged: _searchLocations,
+                              ),
+                              const SizedBox(height: 16),
+                              Expanded(
+                                child: _searchResults.isNotEmpty
+                                    ? ListView.builder(
+                                        itemCount: _searchResults.length,
+                                        itemBuilder: (context, index) {
+                                          final location = _searchResults[index];
+                                          return _SearchResultItem(
+                                            location: location,
+                                            isAdded: locations.contains(location),
+                                            onTap: () => _addLocation(location),
+                                          );
+                                        },
+                                      )
+                                    : ListView.builder(
+                                        itemCount: allLocations.length,
+                                        itemBuilder: (context, index) {
+                                          final location = allLocations[index];
+                                          return _SearchResultItem(
+                                            location: location,
+                                            isAdded: locations.contains(location),
+                                            onTap: location.status == 'active'
+                                                ? () => _addLocation(location)
+                                                : () {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      SnackBar(
+                                                        content: Text(
+                                                          '${location.city} is temporarily unavailable',
+                                                        ),
+                                                        backgroundColor: Colors.orange,
+                                                        duration: const Duration(seconds: 3),
+                                                      ),
+                                                    );
+                                                  },
+                                          );
+                                        },
+                                      ),
+                              ),
+                              TextButton(
+                                onPressed: _toggleAddLocation,
+                                child: const Text('Close'),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -1076,8 +951,8 @@ class _WorldClockPageState extends State<WorldClockPage>
                   ),
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
       floatingActionButton: ScaleTransition(
         scale: _fabController,
@@ -1094,83 +969,72 @@ class _WorldClockPageState extends State<WorldClockPage>
     return showDialog<void>(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Clock Settings'),
-          content: SingleChildScrollView(
-            child: ListBody(
-              children: <Widget>[
-                SwitchListTile(
-                  title: const Text('24-hour format'),
-                  value: is24HourFormat,
-                  onChanged: (value) async {
-                    setState(() => is24HourFormat = value);
-                    (await SharedPreferences.getInstance()).setBool(
-                      '24hour',
-                      value,
-                    );
-                    _updateAllTimes();
-                    Navigator.of(context).pop();
-                  },
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Clock Settings'),
+              content: SingleChildScrollView(
+                child: ListBody(
+                  children: <Widget>[
+                    SwitchListTile(
+                      title: const Text('24-hour format'),
+                      value: is24HourFormat,
+                      onChanged: (value) async {
+                        setState(() => is24HourFormat = value);
+                        setDialogState(() {});
+                        (await SharedPreferences.getInstance()).setBool('24hour', value);
+                        _updateAllTimes();
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Analog clocks'),
+                      value: showAnalog,
+                      onChanged: (value) async {
+                        setState(() => showAnalog = value);
+                        setDialogState(() {});
+                        (await SharedPreferences.getInstance()).setBool('analog', value);
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Show date'),
+                      value: showDate,
+                      onChanged: (value) async {
+                        setState(() => showDate = value);
+                        setDialogState(() {});
+                        (await SharedPreferences.getInstance()).setBool('showDate', value);
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Day progress'),
+                      value: showDayProgress,
+                      onChanged: (value) async {
+                        setState(() => showDayProgress = value);
+                        setDialogState(() {});
+                        (await SharedPreferences.getInstance()).setBool('showDayProgress', value);
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Weather info'),
+                      value: showWeather,
+                      onChanged: (value) async {
+                        setState(() => showWeather = value);
+                        setDialogState(() {});
+                        (await SharedPreferences.getInstance()).setBool('showWeather', value);
+                      },
+                    ),
+                  ],
                 ),
-                SwitchListTile(
-                  title: const Text('Analog clocks'),
-                  value: showAnalog,
-                  onChanged: (value) async {
-                    setState(() => showAnalog = value);
-                    (await SharedPreferences.getInstance()).setBool(
-                      'analog',
-                      value,
-                    );
-                    Navigator.of(context).pop();
-                  },
-                ),
-                SwitchListTile(
-                  title: const Text('Show date'),
-                  value: showDate,
-                  onChanged: (value) async {
-                    setState(() => showDate = value);
-                    (await SharedPreferences.getInstance()).setBool(
-                      'showDate',
-                      value,
-                    );
-                    Navigator.of(context).pop();
-                  },
-                ),
-                SwitchListTile(
-                  title: const Text('Day progress'),
-                  value: showDayProgress,
-                  onChanged: (value) async {
-                    setState(() => showDayProgress = value);
-                    (await SharedPreferences.getInstance()).setBool(
-                      'showDayProgress',
-                      value,
-                    );
-                    Navigator.of(context).pop();
-                  },
-                ),
-                SwitchListTile(
-                  title: const Text('Weather info'),
-                  value: showWeather,
-                  onChanged: (value) async {
-                    setState(() => showWeather = value);
-                    (await SharedPreferences.getInstance()).setBool(
-                      'showWeather',
-                      value,
-                    );
+              ),
+              actions: <Widget>[
+                TextButton(
+                  child: const Text('Close'),
+                  onPressed: () {
                     Navigator.of(context).pop();
                   },
                 ),
               ],
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Close'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
+            );
+          },
         );
       },
     );
@@ -1181,26 +1045,23 @@ class ClockLocation {
   final String timezone;
   final String city;
   final String utcOffset;
-  final String? flagUrl; // Firebase flag URL
-  final String? country; // Country name
-  final String status; // Status: 'active' or 'inactive'
+  final String? flagUrl;
+  final String? country;
+  final String status;
   String? time;
   String? date;
   DateTime? localTime;
 
-  // Use FlagService for flags, fallback to emoji
   String get flag {
     if (flagUrl != null && flagUrl!.isNotEmpty) {
-      return '🏳️'; // Placeholder - will be replaced with FlagService widget
+      return '🏳️';
     }
     return _getFlagForTimezone(timezone);
   }
 
-  // Extract country code from flag URL
   String? get countryCode {
     if (flagUrl != null && flagUrl!.isNotEmpty) {
       try {
-        // Extract country code from URL like "https://flagcdn.com/w40/us.png"
         final uri = Uri.parse(flagUrl!);
         final pathSegments = uri.pathSegments;
         if (pathSegments.isNotEmpty) {
@@ -1208,17 +1069,9 @@ class ClockLocation {
           final dotIndex = filename.lastIndexOf('.');
           if (dotIndex > 0) {
             final countryCode = filename.substring(0, dotIndex);
-            // Validate that it's a 2-letter country code
             if (countryCode.length == 2 &&
                 countryCode.contains(RegExp(r'^[a-z]{2}$'))) {
-              print(
-                '✅ Extracted country code: $countryCode from URL: $flagUrl',
-              );
               return countryCode;
-            } else {
-              print(
-                '⚠️ Invalid country code format: $countryCode from URL: $flagUrl',
-              );
             }
           }
         }
@@ -1235,7 +1088,7 @@ class ClockLocation {
     required this.utcOffset,
     this.flagUrl,
     this.country,
-    this.status = 'active', // Default to active
+    this.status = 'active',
     this.time,
     this.date,
     this.localTime,
@@ -1244,9 +1097,7 @@ class ClockLocation {
   void calculateLocalTime(bool is24HourFormat) {
     try {
       localTime = DateTime.now().toUtc().add(_getTimeZoneOffset());
-      time = (is24HourFormat ? DateFormat.Hms() : DateFormat.jms()).format(
-        localTime!,
-      );
+      time = (is24HourFormat ? DateFormat.Hms() : DateFormat.jms()).format(localTime!);
       date = DateFormat('EEE, MMM d').format(localTime!);
     } catch (e) {
       time = '--:--';
@@ -1276,7 +1127,6 @@ class ClockLocation {
       'Africa/Cairo': '🇪🇬',
       'Asia/Kolkata': '🇮🇳',
       'Asia/Karachi': '🇵🇰',
-      // ... (add more as needed)
     };
     return flagMap[timezone] ?? '🌐';
   }
@@ -1305,8 +1155,7 @@ class _ClockCard extends StatelessWidget {
 
   double _calculateDayProgress() {
     if (location.localTime == null) return 0.0;
-    return (location.localTime!.hour * 60 + location.localTime!.minute) /
-        (24 * 60);
+    return (location.localTime!.hour * 60 + location.localTime!.minute) / (24 * 60);
   }
 
   String _getWeatherIcon() {
@@ -1336,13 +1185,10 @@ class _ClockCard extends StatelessWidget {
     final theme = Theme.of(context);
     final progress = _calculateDayProgress();
     final cardColor = isNight ? Colors.grey[800]! : theme.cardColor;
-    final textColor =
-        isNight ? Colors.white : theme.textTheme.bodyLarge!.color!;
-    final secondaryTextColor =
-        isNight
-            ? Colors.grey[300]!
-            : theme.textTheme.bodyMedium?.color?.withOpacity(0.7) ??
-                Colors.grey[600]!;
+    final textColor = isNight ? Colors.white : theme.textTheme.bodyLarge!.color!;
+    final secondaryTextColor = isNight
+        ? Colors.grey[300]!
+        : theme.textTheme.bodyMedium?.color?.withOpacity(0.7) ?? Colors.grey[600]!;
 
     return Card(
       elevation: isMainClock ? 8 : 0,
@@ -1398,13 +1244,9 @@ class _ClockCard extends StatelessWidget {
                               try {
                                 return FlagService.getFlagWidget(
                                   location.countryCode!,
-                                  size:
-                                      isMainClock
-                                          ? FlagSize.medium
-                                          : FlagSize.small,
+                                  size: isMainClock ? FlagSize.medium : FlagSize.small,
                                 );
                               } catch (e) {
-                                // Fallback to emoji flag if FlagService fails
                                 return Text(
                                   location.flag,
                                   style: TextStyle(
@@ -1495,8 +1337,7 @@ class _ClockCard extends StatelessWidget {
                 child: LinearProgressIndicator(
                   value: progress,
                   minHeight: 4,
-                  backgroundColor:
-                      isNight ? Colors.grey[700]! : theme.dividerColor,
+                  backgroundColor: isNight ? Colors.grey[700]! : theme.dividerColor,
                   valueColor: AlwaysStoppedAnimation<Color>(
                     _getDayProgressColor(progress),
                   ),
@@ -1570,13 +1411,9 @@ class _AnalogClockPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width / 2;
 
-    // Use theme-aware colors for analog clock
-    final isDark =
-        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
-        Brightness.dark;
+    final isDark = WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark;
     final backgroundColor = isDark ? const Color(0xFF1F2937) : Colors.white;
     final borderColor = isDark ? const Color(0xFF4B5563) : Colors.grey;
-    final textColor = isDark ? Colors.white : Colors.black;
     final handColor = isDark ? Colors.white : Colors.black;
 
     canvas.drawCircle(center, radius, Paint()..color = backgroundColor);
@@ -1607,8 +1444,7 @@ class _AnalogClockPainter extends CustomPainter {
           ..strokeWidth = 2,
       );
     }
-    final hourAngle =
-        (time.hour % 12 + time.minute / 60) * math.pi / 6 - math.pi / 2;
+    final hourAngle = (time.hour % 12 + time.minute / 60) * math.pi / 6 - math.pi / 2;
     canvas.drawLine(
       center,
       Offset(
@@ -1665,32 +1501,30 @@ class _SearchResultItem extends StatelessWidget {
     final isInactive = location.status != 'active';
 
     return ListTile(
-      leading:
-          location.countryCode != null
-              ? Container(
-                width: 24,
-                height: 18,
-                constraints: const BoxConstraints(maxWidth: 24, maxHeight: 18),
-                child: ClipRect(
-                  child: Builder(
-                    builder: (context) {
-                      try {
-                        return FlagService.getFlagWidget(
-                          location.countryCode!,
-                          size: FlagSize.small,
-                        );
-                      } catch (e) {
-                        // Fallback to emoji flag if FlagService fails
-                        return Text(
-                          location.flag,
-                          style: const TextStyle(fontSize: 18),
-                        );
-                      }
-                    },
-                  ),
+      leading: location.countryCode != null
+          ? Container(
+              width: 24,
+              height: 18,
+              constraints: const BoxConstraints(maxWidth: 24, maxHeight: 18),
+              child: ClipRect(
+                child: Builder(
+                  builder: (context) {
+                    try {
+                      return FlagService.getFlagWidget(
+                        location.countryCode!,
+                        size: FlagSize.small,
+                      );
+                    } catch (e) {
+                      return Text(
+                        location.flag,
+                        style: const TextStyle(fontSize: 18),
+                      );
+                    }
+                  },
                 ),
-              )
-              : Text(location.flag, style: const TextStyle(fontSize: 20)),
+              ),
+            )
+          : Text(location.flag, style: const TextStyle(fontSize: 20)),
       title: Row(
         children: [
           Expanded(
@@ -1725,10 +1559,9 @@ class _SearchResultItem extends StatelessWidget {
         'UTC${location.utcOffset}',
         style: TextStyle(color: isInactive ? Colors.grey : null),
       ),
-      trailing:
-          isInactive
-              ? const Icon(Icons.block, color: Colors.orange)
-              : isAdded
+      trailing: isInactive
+          ? const Icon(Icons.block, color: Colors.orange)
+          : isAdded
               ? const Icon(Icons.check, color: Colors.green)
               : const Icon(Icons.add),
       onTap: onTap,
@@ -1738,5 +1571,3 @@ class _SearchResultItem extends StatelessWidget {
     );
   }
 }
-
-

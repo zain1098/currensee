@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'login.dart'; // For EmailService
+import 'services/email_service.dart';
 
 class ContactFormScreen extends StatefulWidget {
   const ContactFormScreen({super.key});

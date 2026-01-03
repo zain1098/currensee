@@ -918,7 +918,7 @@ class _CurrencySearchDropdownState extends State<CurrencySearchDropdown> {
         const SizedBox(height: 8),
         // Dropdown
         DropdownButtonFormField<String>(
-          value: validSelectedCurrency,
+          initialValue: validSelectedCurrency,
           isExpanded: true,
           decoration: const InputDecoration(
             border: OutlineInputBorder(),
@@ -1543,7 +1543,7 @@ class _UnitPriceCalculatorState extends State<UnitPriceCalculator> {
           CalculatorUtils.buildInputCard(
             title: 'Unit',
             child: DropdownButtonFormField<String>(
-              value: _unit,
+              initialValue: _unit,
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
                 contentPadding: EdgeInsets.symmetric(

@@ -1618,7 +1618,7 @@ class _CurrencyChartPageState extends State<CurrencyChartPage>
     required String label,
   }) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       decoration: InputDecoration(
         labelText: label,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),

@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "Curren.See"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "27.0.12077973"
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -22,7 +22,7 @@ android {
 
     defaultConfig {
         applicationId = "Curren.See"
-        minSdk = 23 // ✅ Updated from flutter.minSdkVersion to fix Firebase error
+        minSdk = flutter.minSdkVersion // ✅ Updated from flutter.minSdkVersion to fix Firebase error
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
